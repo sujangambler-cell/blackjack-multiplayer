@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: blackjack-web
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /health
+    autoDeploy: true
