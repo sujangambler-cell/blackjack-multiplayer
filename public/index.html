@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Blackjack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== JOIN SCREEN ==================== -->
+  <div id="screen-join" class="screen active">
+    <div class="join-card">
+      <div class="join-title">🂡 BLACKJACK</div>
+      <div class="join-sub">a colorful multiplayer table</div>
+      <div class="field">
+        <label for="input-name">Your name</label>
+        <input id="input-name" type="text" maxlength="16" placeholder="Alex" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="input-room">Table code</label>
+        <input id="input-room" type="text" maxlength="12" placeholder="e.g. LUCKY7 (blank = public table)" autocomplete="off" />
+      </div>
+      <div class="join-error" id="join-error"></div>
+      <button class="btn" id="btn-join">SIT DOWN</button>
+    </div>
+  </div>
+
+  <!-- ==================== TABLE SCREEN ==================== -->
+  <div id="screen-table" class="screen">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="balance-chip" id="balance-chip">$0</div>
+        <div class="room-chip" id="room-chip">TABLE</div>
+      </div>
+      <button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button>
+    </div>
+
+    <div class="table-wrap" id="table-wrap">
+      <canvas id="fx-canvas"></canvas>
+      <div id="flash"></div>
+
+      <div class="felt-table" id="felt-table">
+        <div class="table-rules">BLACKJACK PAYS 3:2 &nbsp;•&nbsp; DEALER STANDS ON 17</div>
+
+        <div class="shoe" id="shoe">
+          <div class="card-back"></div>
+          <div class="card-back"></div>
+          <div class="card-back"></div>
+          <div class="shoe-label">SHOE</div>
+        </div>
+
+        <div class="dealer-area">
+          <div class="seat-label">DEALER</div>
+          <div class="hand-value" id="dealer-value"></div>
+          <div class="hand" id="dealer-hand"></div>
+        </div>
+
+        <div class="seats-row" id="seats-row"></div>
+      </div>
+
+      <div id="turn-banner-slot"></div>
+    </div>
+
+    <!-- Betting controls -->
+    <div class="control-dock" id="betting-dock">
+      <div class="bet-hint" id="bet-hint">Tap a chip to build your bet</div>
+      <div class="chip-row" id="chip-row"></div>
+      <div class="bet-row">
+        <button class="btn panel-btn" id="btn-clear">CLEAR</button>
+        <div class="bet-amount" id="bet-amount">$0</div>
+        <button class="btn secondary" id="btn-allin">ALL IN</button>
+      </div>
+      <button class="btn good" id="btn-ready" style="width:220px">READY</button>
+    </div>
+
+    <!-- Action controls (hit/stand/double) -->
+    <div class="control-dock hidden" id="action-dock">
+      <div class="action-row">
+        <button class="btn" id="btn-hit">HIT</button>
+        <button class="btn good" id="btn-stand">STAND</button>
+        <button class="btn secondary" id="btn-double">DOUBLE</button>
+      </div>
+    </div>
+
+    <!-- Waiting / spectating note -->
+    <div class="control-dock hidden" id="waiting-dock">
+      <div class="waiting-note" id="waiting-note">Waiting…</div>
+    </div>
+  </div>
+
+  <!-- ==================== SETTINGS OVERLAY ==================== -->
+  <div class="overlay" id="settings-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title">Settings</div>
+      <div class="settings-row">
+        <label>Dark mode</label>
+        <div class="toggle" id="toggle-dark"><div class="toggle-knob"></div></div>
+      </div>
+      <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>SFX volume — <span id="volume-pct">60%</span></label>
+        <input type="range" id="slider-volume" min="0" max="100" value="60" />
+      </div>
+      <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>GUI scale — <span id="scale-pct">100%</span></label>
+        <input type="range" id="slider-scale" min="80" max="130" value="100" step="5" />
+      </div>
+      <button class="btn panel-btn" id="btn-settings-close">CLOSE</button>
+      <button class="btn panel-btn" id="btn-leave-table">LEAVE TABLE</button>
+    </div>
+  </div>
+
+</div>
+<script src="game.js"></script>
+</body>
+</html>
