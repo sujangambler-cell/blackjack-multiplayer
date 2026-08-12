@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Blackjack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div id="app">
+
+  <!-- ==================== ACCOUNT SCREEN ==================== -->
+  <div id="screen-join" class="screen active">
+    <div class="auth-card">
+      <div class="auth-logo">♠ BLACKJACK</div>
+      <div class="auth-sub">MULTIPLAYER TABLE</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login">LOGIN</button>
+        <button class="auth-tab" id="tab-signup">SIGN UP</button>
+      </div>
+      <div id="auth-form">
+        <div class="field"><label>Username</label><input id="auth-username" type="text" maxlength="16" autocomplete="username" placeholder="Your username"></div>
+        <div class="field"><label>Password</label><input id="auth-password" type="password" minlength="8" autocomplete="current-password" placeholder="Minimum 8 characters"></div>
+        <div class="field hidden" id="confirm-wrap"><label>Confirm password</label><input id="auth-confirm" type="password" minlength="8" autocomplete="new-password" placeholder="Repeat your password"></div>
+        <div class="auth-error" id="join-error"></div>
+        <button class="btn auth-submit" id="btn-auth">LOGIN</button>
+      </div>
+      <div id="room-form" class="hidden">
+        <div class="main-menu-title">BLACKJACK</div>
+        <div class="welcome-user" id="welcome-user"></div>
+        <div class="menu-balance" id="menu-balance">$5,000</div>
+        <div class="main-menu-buttons">
+          <button class="btn auth-submit menu-primary" id="btn-play">PLAY</button>
+          <button class="btn secondary auth-submit" id="btn-settings-menu">SETTINGS</button>
+          <button class="btn panel-btn auth-submit" id="btn-logout">LOG OUT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TABLE LOBBY SCREEN ==================== -->
+  <div id="screen-lobby" class="screen">
+    <div class="auth-card lobby-card">
+      <div class="main-menu-title">BLACKJACK</div>
+      <div class="auth-sub">JOIN A TABLE</div>
+      <div class="field">
+        <label>Table code</label>
+        <input id="input-room" type="text" maxlength="12" placeholder="e.g. LUCKY7 (blank = public)" autocomplete="off">
+      </div>
+      <div class="auth-error" id="room-error"></div>
+      <button class="btn auth-submit menu-primary" id="btn-join-table">JOIN TABLE</button>
+      <button class="btn secondary auth-submit" id="btn-back-menu">BACK</button>
+    </div>
+  </div>
+
+  <!-- ==================== TABLE SCREEN ==================== -->
+  <div id="screen-table" class="screen">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="profile-chip"><span id="profile-name">PLAYER</span><span class="balance-chip" id="balance-chip">$0</span><button class="refresh-btn" id="btn-refresh-balance" title="Refresh balance">↻</button></div>
+        <div class="room-chip" id="room-chip">TABLE</div>
+      </div>
+      <div class="top-actions"><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
+    </div>
+
+    <div class="table-wrap" id="table-wrap">
+      <canvas id="fx-canvas"></canvas>
+      <div id="flash"></div>
+
+      <div class="felt-table" id="felt-table">
+        <div class="table-rules">BLACKJACK PAYS 3:2 &nbsp;•&nbsp; DEALER STANDS ON 17</div>
+
+        <div class="shoe" id="shoe">
+          <div class="card-back"></div>
+          <div class="card-back"></div>
+          <div class="card-back"></div>
+          <div class="shoe-label">SHOE</div>
+        </div>
+
+        <div class="dealer-area">
+          <div class="seat-label">DEALER</div>
+          <div class="hand-value" id="dealer-value"></div>
+          <div class="hand" id="dealer-hand"></div>
+        </div>
+
+        <div class="seats-row" id="seats-row"></div>
+      </div>
+
+      <div id="turn-banner-slot"></div>
+    </div>
+
+    <!-- Betting controls -->
+    <div class="control-dock" id="betting-dock">
+      <div class="bet-hint" id="bet-hint">Tap a chip to build your bet</div>
+      <div class="chip-row" id="chip-row"></div>
+      <div class="bet-row">
+        <button class="btn panel-btn" id="btn-clear">CLEAR</button>
+        <div class="bet-amount" id="bet-amount">$0</div>
+        <button class="btn secondary" id="btn-allin">ALL IN</button>
+      </div>
+      <button class="btn good" id="btn-ready" style="width:220px">READY</button>
+    </div>
+
+    <!-- Action controls (hit/stand/double) -->
+    <div class="control-dock hidden" id="action-dock">
+      <div class="action-row">
+        <button class="btn" id="btn-hit">HIT</button>
+        <button class="btn good" id="btn-stand">STAND</button>
+        <button class="btn secondary" id="btn-double">DOUBLE</button>
+      </div>
+    </div>
+
+    <!-- Waiting / spectating note -->
+    <div class="control-dock hidden" id="waiting-dock">
+      <div class="waiting-note" id="waiting-note">Waiting…</div>
+    </div>
+    <button class="admin-float hidden" id="btn-admin-float">ADMIN</button>
+  </div>
+
+  <!-- ==================== CLAIM OVERLAY ==================== -->
+  <div class="overlay" id="claim-overlay">
+    <div class="overlay-card claim-card">
+      <div class="overlay-title">OUT OF FUNDS</div>
+      <div class="claim-icon">💰</div>
+      <p>Your balance reached zero. Claim a starter bonus to keep playing.</p>
+      <button class="btn" id="btn-claim-100">CLAIM 100</button>
+    </div>
+  </div>
+
+  <!-- ==================== HOST OVERLAY ==================== -->
+  <div class="overlay" id="host-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title">HOST CONTROLS</div>
+      <div id="host-list" class="host-list"></div>
+      <button class="btn panel-btn" id="btn-host-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== ADMIN OVERLAY ==================== -->
+  <div class="overlay" id="admin-overlay">
+    <div class="overlay-card admin-card">
+      <div class="overlay-title">ADMIN PANEL</div>
+      <div id="admin-login-box">
+        <div class="field"><label>Admin password</label><input id="admin-password" type="password" placeholder="Password"></div>
+        <div class="auth-error" id="admin-error"></div>
+        <button class="btn" id="btn-admin-login">ENTER ADMIN</button>
+      </div>
+      <div id="admin-dashboard" class="hidden">
+        <div class="admin-actions"><button class="btn secondary" id="btn-admin-refresh">REFRESH</button><button class="btn secondary" id="admin-preview-toggle">DEALER PREVIEW</button></div>
+        <div id="admin-preview"></div>
+        <div id="admin-users"></div>
+      </div>
+      <button class="btn panel-btn" id="btn-admin-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== SETTINGS OVERLAY ==================== -->
+  <div class="overlay" id="settings-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title">Settings</div>
+      <div class="settings-row">
+        <label>Dark mode</label>
+        <div class="toggle" id="toggle-dark"><div class="toggle-knob"></div></div>
+      </div>
+      <div class="settings-row">
+        <label>Sound effects</label>
+        <div class="toggle on" id="toggle-sound"><div class="toggle-knob"></div></div>
+      </div>
+      <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>SFX volume — <span id="volume-pct">60%</span></label>
+        <input type="range" id="slider-volume" min="0" max="100" value="60" />
+      </div>
+      <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>GUI scale — <span id="scale-pct">100%</span></label>
+        <input type="range" id="slider-scale" min="80" max="130" value="100" step="5" />
+      </div>
+      <button class="btn secondary panel-btn" id="btn-settings-admin">ADMIN</button>
+      <button class="btn panel-btn" id="btn-settings-close">CLOSE</button>
+      <button class="btn panel-btn" id="btn-leave-table">LEAVE TABLE</button>
+    </div>
+  </div>
+
+</div>
+<script src="game.js"></script>
+</body>
+</html>
