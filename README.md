@@ -1,33 +1,25 @@
-# Blackjack — public multiplayer web edition
+# Multiplayer Blackjack
 
-A real-time multiplayer Blackjack table for up to 5 players. The website and WebSocket multiplayer server now share **one port**, which makes the project compatible with public cloud hosts such as Render.
+Python + WebSocket multiplayer Blackjack game.
 
-## Run locally
+## Local testing
 
-```bash
-pip install -r requirements.txt
-python server.py
-```
+1. Install dependencies:
+   `pip install -r requirements.txt`
+2. Optional admin password:
+   - Linux/macOS: `ADMIN_PASSWORD='your-password' python server.py`
+   - Windows PowerShell: `$env:ADMIN_PASSWORD='your-password'; python server.py`
+3. Open `http://localhost:8080`.
 
-Open `http://localhost:8080`. The port can be changed with the `PORT` environment variable.
+## Current update
 
-## Deploy publicly on Render
+- Login now leads to a persistent Main Menu.
+- Leaving a table returns to Main Menu without logging out.
+- Settings include GUI scale, theme, sound toggle and SFX volume.
+- Premium animated space/casino backgrounds are rendered locally in the browser, including floating cards, casino chips, money and stars on the account/menu screens.
+- Admin authentication is server-side and is accessed from Settings → ADMIN; the password dialog opens above Settings and the dashboard appears after successful authentication.
+- Admin panel supports table-player money grants, per-player Lucky Mode and protected Dealer Preview.
+- Dealer Preview data is never included in normal player state messages.
+- Additional synthesized game/UI sound effects are included without external audio assets.
 
-1. Put the contents of this folder in a GitHub repository.
-2. In Render, create a **Web Service** and connect that repository.
-3. Build Command: `pip install -r requirements.txt`
-4. Start Command: `python server.py`
-5. Render supplies the `PORT` environment variable automatically.
-6. Deploy. Render will give you an `https://...onrender.com` URL.
-
-The browser automatically uses `wss://` for the multiplayer connection when the public site uses HTTPS.
-
-## Game rules
-
-- Enter a name and a table code, then sit down.
-- Up to 5 players can share a table.
-- Build a bet and press READY.
-- HIT / STAND / DOUBLE appear on the active player's turn.
-- Dealer plays automatically after all players act.
-- Blackjack pays 3:2.
-- Dealer stands on soft 17.
+Do not commit `ADMIN_PASSWORD` to source code; configure it as an environment variable in deployment.

@@ -94,18 +94,25 @@ rooms: dict[str, dict] = {}
 ACCOUNTS: dict[str, dict] = {}
 TOKENS: dict[str, str] = {}
 ADMIN_SOCKETS = set()
+USER_SOCKETS = {}
 BANNED_WORDS = {
     "fuck", "shit", "bitch", "asshole", "nigger", "nigga", "cunt",
     "dick", "pussy", "porn", "sex", "rape", "slut", "whore"
 }
 
 def load_accounts():
-    global ACCOUNTS
+    global ACCOUNTS, TOKENS
     try:
         if ACCOUNTS_FILE.exists():
             ACCOUNTS = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
+            TOKENS = {}
+            for key, account in ACCOUNTS.items():
+                tok = account.get("session_token")
+                if tok:
+                    TOKENS[tok] = key
     except Exception:
         ACCOUNTS = {}
+        TOKENS = {}
 
 def save_accounts():
     try:
@@ -136,13 +143,172 @@ def new_token():
 
 load_accounts()
 
-def get_room(code: str) -> dict:
+# ---------------------------------------------------------------------------
+# Progression / daily systems
+# ---------------------------------------------------------------------------
+ACHIEVEMENT_DEFS = {
+    "first_blackjack": {"title": "FIRST BLACKJACK", "desc": "Get your first Blackjack.", "icon": "🃏"},
+    "five_streak": {"title": "ON FIRE", "desc": "Reach a 5-win streak.", "icon": "🔥"},
+    "ten_blackjacks": {"title": "BLACKJACK HUNTER", "desc": "Get 10 Blackjacks.", "icon": "♠"},
+    "ten_k": {"title": "10K CLUB", "desc": "Reach 10,000 chips.", "icon": "💰"},
+    "fifty_k": {"title": "HIGH ROLLER", "desc": "Reach 50,000 chips.", "icon": "👑"},
+    "hundred_wins": {"title": "CENTURY", "desc": "Win 100 hands.", "icon": "🏆"},
+}
+LEVELS = [
+    (0, "Rookie"), (100, "Card Shark"), (500, "High Roller"),
+    (1500, "Blackjack Master"), (4000, "Casino Legend"),
+]
+
+def ensure_account_progress(account):
+    defaults = {
+        "money": STARTING_MONEY, "games_played": 0, "wins": 0, "losses": 0,
+        "pushes": 0, "blackjacks": 0, "best_win_streak": 0, "current_win_streak": 0,
+        "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
+        "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
+        "friends": [], "session_token": account.get("session_token"),
+    }
+    changed = False
+    for k, v in defaults.items():
+        if k not in account:
+            account[k] = v
+            changed = True
+    if changed:
+        save_accounts()
+    return account
+
+def account_level(xp):
+    level = 1
+    title = LEVELS[0][1]
+    for threshold, name in LEVELS:
+        if xp >= threshold:
+            level = LEVELS.index((threshold, name)) + 1
+            title = name
+    return level, title
+
+def today_key():
+    return time.strftime("%Y-%m-%d", time.localtime())
+
+def ensure_daily(account):
+    ensure_account_progress(account)
+    today = today_key()
+    if account.get("daily_challenge_date") != today:
+        account["daily_challenge_date"] = today
+        account["daily_challenges"] = {"play10": 0, "win3": 0, "blackjack1": 0}
+        account["daily_challenge_claimed"] = []
+        save_accounts()
+
+def unlock_achievements(account):
+    ensure_account_progress(account)
+    earned = set(account.get("achievements", []))
+    checks = {
+        "first_blackjack": account["blackjacks"] >= 1,
+        "five_streak": account["best_win_streak"] >= 5,
+        "ten_blackjacks": account["blackjacks"] >= 10,
+        "ten_k": account["money"] >= 10000,
+        "fifty_k": account["money"] >= 50000,
+        "hundred_wins": account["wins"] >= 100,
+    }
+    new = [k for k, ok in checks.items() if ok and k not in earned]
+    if new:
+        earned.update(new)
+        account["achievements"] = sorted(earned)
+        save_accounts()
+    return new
+
+def is_user_online(username_key):
+    for room in rooms.values():
+        for p in room.get("players", []):
+            if p.get("username_key") == username_key and p.get("connected"):
+                return True
+    return False
+
+def friends_payload(account):
+    out = []
+    for key in account.get("friends", []):
+        friend = ACCOUNTS.get(key)
+        if friend:
+            out.append({"username": friend["username"], "online": is_user_online(key), "level": account_level(int(friend.get("xp",0)))[0]})
+    return out
+
+def profile_payload(account):
+    ensure_account_progress(account)
+    ensure_daily(account)
+    level, title = account_level(int(account.get("xp", 0)))
+    games = int(account.get("games_played", 0))
+    wins = int(account.get("wins", 0))
+    return {
+        "username": account["username"], "balance": int(account.get("money", 0)),
+        "stats": {
+            "gamesPlayed": games, "wins": wins, "losses": int(account.get("losses", 0)),
+            "pushes": int(account.get("pushes", 0)), "blackjacks": int(account.get("blackjacks", 0)),
+            "winRate": round((wins / games * 100), 1) if games else 0,
+            "bestWinStreak": int(account.get("best_win_streak", 0)),
+            "biggestWin": int(account.get("biggest_win", 0)),
+        },
+        "xp": int(account.get("xp", 0)), "level": level, "levelTitle": title,
+        "achievements": list(account.get("achievements", [])),
+        "friends": friends_payload(account),
+        "dailyClaimed": account.get("daily_claim") == today_key(),
+        "dailyChallenges": account.get("daily_challenges", {}),
+    }
+
+def leaderboard_payload():
+    rows = []
+    for a in ACCOUNTS.values():
+        ensure_account_progress(a)
+        level, title = account_level(int(a.get("xp", 0)))
+        rows.append({"username": a["username"], "balance": int(a.get("money", 0)),
+                     "wins": int(a.get("wins", 0)), "blackjacks": int(a.get("blackjacks", 0)),
+                     "winRate": round((a.get("wins", 0) / a.get("games_played", 0) * 100), 1) if a.get("games_played", 0) else 0,
+                     "streak": int(a.get("best_win_streak", 0)), "games": int(a.get("games_played", 0)),
+                     "level": level, "levelTitle": title})
+    def top(key): return sorted(rows, key=lambda x: (x[key], x["username"].lower()), reverse=True)[:20]
+    return {"balance": top("balance"), "wins": top("wins"), "blackjacks": top("blackjacks"),
+            "winRate": top("winRate"), "streak": top("streak"), "games": top("games")}
+
+def challenge_defs():
+    return [
+        {"id": "play10", "title": "TABLE REGULAR", "desc": "Play 10 hands today.", "target": 10, "reward": 250},
+        {"id": "win3", "title": "WINNER'S RUN", "desc": "Win 3 hands today.", "target": 3, "reward": 300},
+        {"id": "blackjack1", "title": "NATURAL", "desc": "Get a Blackjack today.", "target": 1, "reward": 400},
+    ]
+
+def challenge_payload(account):
+    ensure_daily(account)
+    vals = account.get("daily_challenges", {})
+    claimed = set(account.get("daily_challenge_claimed", []))
+    return [{**d, "progress": min(d["target"], int(vals.get(d["id"], 0))),
+             "complete": int(vals.get(d["id"], 0)) >= d["target"], "rewarded": d["id"] in claimed} for d in challenge_defs()]
+
+def update_daily_progress(account, result):
+    ensure_daily(account)
+    vals = account["daily_challenges"]
+    vals["play10"] = int(vals.get("play10", 0)) + 1
+    if result == "win" or result == "blackjack": vals["win3"] = int(vals.get("win3", 0)) + 1
+    if result == "blackjack": vals["blackjack1"] = 1
+    claimed = set(account.get("daily_challenge_claimed", []))
+    for d in challenge_defs():
+        if vals.get(d["id"], 0) >= d["target"] and d["id"] not in claimed:
+            account["money"] = int(account.get("money", 0)) + d["reward"]
+            add_xp(account, 30)
+            claimed.add(d["id"])
+    account["daily_challenge_claimed"] = sorted(claimed)
+    save_accounts()
+
+def add_xp(account, amount):
+    ensure_account_progress(account)
+    account["xp"] = max(0, int(account.get("xp", 0)) + int(amount))
+
+
+def get_room(code: str, public=False) -> dict:
     if code not in rooms:
         rooms[code] = {
             "code": code,
+            "public": bool(public),
             "phase": "LOBBY",
             "players": [],
             "host_id": None,
+            "created_at": time.time(),
             "kicked": [],
             "deck": fresh_shoe(),
             "dealer_hand": [],
@@ -162,7 +328,34 @@ def draw_card(room):
     return room["deck"].pop()
 
 def active_players(room):
-    return [p for p in room["players"] if p["connected"]]
+    return [p for p in room["players"] if p["connected"] and not p.get("spectator")]
+
+def connected_spectators(room):
+    return [p for p in room["players"] if p["connected"] and p.get("spectator")]
+
+def public_tables_payload():
+    rows = []
+    for room in rooms.values():
+        if not room.get("public"):
+            continue
+        players = active_players(room)
+        spectators = connected_spectators(room)
+        host = find_player(room, room.get("host_id")) if room.get("host_id") else None
+        rows.append({
+            "code": room["code"], "players": len(players), "maxPlayers": MAX_PLAYERS,
+            "spectators": len(spectators), "host": host.get("username") if host else "—",
+            "phase": room.get("phase", "LOBBY"), "canJoin": len(players) < MAX_PLAYERS,
+            "canSpectate": bool(players) and room.get("phase") in ("PLAYING", "ROUND_OVER"),
+        })
+    rows.sort(key=lambda r: (r["players"] >= r["maxPlayers"], -r["players"], r["code"]))
+    return rows
+
+def random_room_code():
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    while True:
+        code = "".join(random.choice(alphabet) for _ in range(6))
+        if code not in rooms:
+            return code
 
 def find_player(room, pid):
     return next((p for p in room["players"] if p["id"] == pid), None)
@@ -207,6 +400,9 @@ def serialise(room) -> dict:
             {
                 "id":        p["id"],
                 "name":      p["name"],
+                "username":  p["username"],
+                "isHost":    p["id"] == room.get("host_id"),
+                "canClaim":  int(p.get("money", 0)) <= 0,
                 "money":     p["money"],
                 "bet":       p["bet"],
                 "hand":      p["hand"],
@@ -214,6 +410,7 @@ def serialise(room) -> dict:
                 "status":    p["status"],
                 "result":    p["result"],
                 "connected": p["connected"],
+                "spectator": bool(p.get("spectator")),
                 "pity":      p.get("pity_banner", False),
                 "lucky":     p.get("username_key") in room.get("lucky_players", set()),
             }
@@ -236,6 +433,30 @@ async def broadcast(room):
                 await ws.send(payload)
             except Exception:
                 pass
+
+async def broadcast_public_tables():
+    payload = json.dumps({"type": "public_tables", "tables": public_tables_payload()})
+    sockets = set()
+    for room in rooms.values():
+        for p in room.get("players", []):
+            if p.get("ws"):
+                sockets.add(p["ws"])
+    for ws in sockets:
+        try:
+            await ws.send(payload)
+        except Exception:
+            pass
+
+async def send_public_tables(websocket):
+    await websocket.send(json.dumps({"type": "public_tables", "tables": public_tables_payload()}))
+
+def chat_clean(text):
+    text = " ".join(str(text or "").split())[:180]
+    low = text.lower()
+    for word in BANNED_WORDS:
+        if word in low:
+            return None
+    return text
 
 # ---------------------------------------------------------------------------
 # Admin helpers
@@ -312,7 +533,7 @@ async def reset_for_betting(room):
     for p in room["players"]:
         p["hand"] = []
         p["bet"] = 0
-        p["status"] = "betting"
+        p["status"] = "spectating" if p.get("spectator") else "betting"
         p["result"] = None
         p["pity_banner"] = False
         p["double_used"] = False
@@ -472,6 +693,33 @@ async def finish_round(room):
                 p["consecutive_losses"] = 0
 
         p["money"] = max(0, int(p["money"]))
+        account = ACCOUNTS.get(p.get("username_key"))
+        if account is not None:
+            ensure_account_progress(account)
+            account["games_played"] += 1
+            if p["result"] == "win":
+                account["wins"] += 1
+                account["current_win_streak"] += 1
+                account["best_win_streak"] = max(account["best_win_streak"], account["current_win_streak"])
+                account["biggest_win"] = max(account["biggest_win"], int(p["bet"]))
+                add_xp(account, 15)
+            elif p["result"] == "blackjack":
+                account["wins"] += 1
+                account["blackjacks"] += 1
+                account["current_win_streak"] += 1
+                account["best_win_streak"] = max(account["best_win_streak"], account["current_win_streak"])
+                account["biggest_win"] = max(account["biggest_win"], int(round(p["bet"] * 1.5)))
+                add_xp(account, 25)
+            elif p["result"] in ("lose", "bust"):
+                account["losses"] += 1
+                account["current_win_streak"] = 0
+                add_xp(account, 5)
+            elif p["result"] == "push":
+                account["pushes"] += 1
+                add_xp(account, 8)
+            update_daily_progress(account, p["result"])
+            unlock_achievements(account)
+            save_accounts()
         persist_player_money(p)
         p["status"] = "done"
 
@@ -485,6 +733,13 @@ async def finish_round(room):
     room["phase"] = "ROUND_OVER"
     room["active_player_id"] = None
     await broadcast(room)
+    for p in active_players(room):
+        account = ACCOUNTS.get(p.get("username_key"))
+        if account and p.get("ws"):
+            try:
+                await p["ws"].send(json.dumps({"type":"profile", "profile": profile_payload(account)}))
+            except Exception:
+                pass
 
     await asyncio.sleep(ROUND_OVER_S)
     await reset_for_betting(room)
@@ -523,10 +778,14 @@ async def ws_handler(websocket):
                 continue
             salt, digest = hash_password(password)
             ACCOUNTS[key] = {"username": username, "salt": salt, "password": digest, "money": STARTING_MONEY, "created": time.time()}
+            ensure_account_progress(ACCOUNTS[key])
             save_accounts()
             token = new_token()
             TOKENS[token] = key
-            await websocket.send(json.dumps({"type": "auth_ok", "mode": "signup", "username": username, "balance": STARTING_MONEY, "token": token}))
+            ACCOUNTS[key]["session_token"] = token
+            USER_SOCKETS[key] = websocket
+            save_accounts()
+            await websocket.send(json.dumps({"type": "auth_ok", "mode": "signup", "username": username, "balance": STARTING_MONEY, "token": token, "profile": profile_payload(ACCOUNTS[key])}))
             continue
 
         if kind == "login":
@@ -534,12 +793,160 @@ async def ws_handler(websocket):
             password = msg.get("password") or ""
             key = username_key(username)
             account = ACCOUNTS.get(key)
+            if account:
+                ensure_account_progress(account)
             if not account or not verify_password(password, account["salt"], account["password"]):
                 await websocket.send(json.dumps({"type": "error", "scope": "auth", "message": "Incorrect username or password."}))
                 continue
             token = new_token()
+            old = account.get("session_token")
+            if old: TOKENS.pop(old, None)
             TOKENS[token] = key
-            await websocket.send(json.dumps({"type": "auth_ok", "mode": "login", "username": account["username"], "balance": account["money"], "token": token}))
+            account["session_token"] = token
+            USER_SOCKETS[key] = websocket
+            save_accounts()
+            await websocket.send(json.dumps({"type": "auth_ok", "mode": "login", "username": account["username"], "balance": account["money"], "token": token, "profile": profile_payload(account)}))
+            continue
+
+        if kind == "resume":
+            token = msg.get("token")
+            key = TOKENS.get(token)
+            if key in ACCOUNTS and ACCOUNTS[key].get("session_token") == token:
+                account = ACCOUNTS[key]
+                ensure_account_progress(account)
+                USER_SOCKETS[key] = websocket
+                await websocket.send(json.dumps({"type": "auth_ok", "mode": "resume", "username": account["username"], "balance": account.get("money",0), "token": token, "profile": profile_payload(account)}))
+            else:
+                await websocket.send(json.dumps({"type": "session_invalid"}))
+            continue
+
+        if kind == "logout":
+            token = msg.get("token")
+            key = TOKENS.pop(token, None)
+            if key in ACCOUNTS and ACCOUNTS[key].get("session_token") == token:
+                ACCOUNTS[key]["session_token"] = None
+                if USER_SOCKETS.get(key) is websocket: USER_SOCKETS.pop(key, None)
+                save_accounts()
+            continue
+
+        if kind == "public_tables":
+            await send_public_tables(websocket)
+            continue
+
+        if kind == "create_public":
+            token = msg.get("token")
+            key = TOKENS.get(token)
+            if key not in ACCOUNTS:
+                await websocket.send(json.dumps({"type":"error","message":"Please log in first."}))
+                continue
+            code = random_room_code()
+            get_room(code, public=True)
+            await websocket.send(json.dumps({"type":"public_created","code":code}))
+            await send_public_tables(websocket)
+            continue
+
+        if kind == "friends":
+            key = TOKENS.get(msg.get("token"))
+            if key in ACCOUNTS:
+                await websocket.send(json.dumps({"type":"friends","friends":friends_payload(ACCOUNTS[key])}))
+            continue
+
+        if kind == "add_friend":
+            key = TOKENS.get(msg.get("token"))
+            target_key = username_key(msg.get("username"))
+            if key not in ACCOUNTS or target_key not in ACCOUNTS:
+                await websocket.send(json.dumps({"type":"error","scope":"friends","message":"Player not found."}))
+                continue
+            if target_key == key:
+                await websocket.send(json.dumps({"type":"error","scope":"friends","message":"You cannot add yourself."}))
+                continue
+            friends = set(ACCOUNTS[key].get("friends", []))
+            if target_key in friends:
+                await websocket.send(json.dumps({"type":"error","scope":"friends","message":"Already in your friends list."}))
+                continue
+            friends.add(target_key)
+            ACCOUNTS[key]["friends"] = sorted(friends)
+            save_accounts()
+            await websocket.send(json.dumps({"type":"friends","friends":friends_payload(ACCOUNTS[key])}))
+            continue
+
+        if kind == "remove_friend":
+            key = TOKENS.get(msg.get("token"))
+            target_key = username_key(msg.get("username"))
+            if key in ACCOUNTS:
+                ACCOUNTS[key]["friends"] = [x for x in ACCOUNTS[key].get("friends", []) if x != target_key]
+                save_accounts()
+                await websocket.send(json.dumps({"type":"friends","friends":friends_payload(ACCOUNTS[key])}))
+            continue
+
+        if kind == "invite_friend":
+            key = TOKENS.get(msg.get("token"))
+            target_key = username_key(msg.get("username"))
+            if key in ACCOUNTS and target_key in set(ACCOUNTS[key].get("friends", [])) and room:
+                target_ws = USER_SOCKETS.get(target_key)
+                if target_ws:
+                    await target_ws.send(json.dumps({"type":"table_invite","from":ACCOUNTS[key]["username"],"room":room["code"]}))
+                else:
+                    await websocket.send(json.dumps({"type":"error","scope":"friends","message":"That friend is offline."}))
+            continue
+
+        if kind == "chat":
+            if room is not None and player is not None:
+                text = chat_clean(msg.get("text"))
+                if text:
+                    payload = json.dumps({"type":"chat","username":player["username"],"text":text,"ts":int(time.time()*1000)})
+                    for rp in room.get("players", []):
+                        if rp.get("ws"):
+                            try: await rp["ws"].send(payload)
+                            except Exception: pass
+                elif player:
+                    await websocket.send(json.dumps({"type":"error","scope":"chat","message":"That message isn't allowed."}))
+            continue
+
+        if kind == "profile":
+            token = msg.get("token")
+            key = TOKENS.get(token)
+            if key in ACCOUNTS:
+                await websocket.send(json.dumps({"type":"profile", "profile": profile_payload(ACCOUNTS[key])}))
+                await websocket.send(json.dumps({"type":"leaderboard", "leaderboard": leaderboard_payload()}))
+            continue
+
+        if kind == "leaderboard":
+            await websocket.send(json.dumps({"type":"leaderboard", "leaderboard": leaderboard_payload()}))
+            continue
+
+        if kind == "achievements":
+            token = msg.get("token")
+            key = TOKENS.get(token)
+            if key in ACCOUNTS:
+                account = ACCOUNTS[key]
+                new = unlock_achievements(account)
+                await websocket.send(json.dumps({"type":"achievements", "achievements": ACHIEVEMENT_DEFS, "earned": account.get("achievements", []), "new": new}))
+            continue
+
+        if kind == "daily":
+            token = msg.get("token")
+            key = TOKENS.get(token)
+            if key in ACCOUNTS:
+                account = ACCOUNTS[key]
+                await websocket.send(json.dumps({"type":"daily", "claimed": account.get("daily_claim") == today_key(), "challenges": challenge_payload(account)}))
+            continue
+
+        if kind == "claim_daily":
+            token = msg.get("token")
+            key = TOKENS.get(token)
+            if key in ACCOUNTS:
+                account = ACCOUNTS[key]
+                ensure_daily(account)
+                if account.get("daily_claim") != today_key():
+                    account["money"] = int(account.get("money", 0)) + 250
+                    account["daily_claim"] = today_key()
+                    add_xp(account, 25)
+                    unlock_achievements(account)
+                    save_accounts()
+                    await websocket.send(json.dumps({"type":"daily_claimed", "amount":250, "profile":profile_payload(account)}))
+                else:
+                    await websocket.send(json.dumps({"type":"error", "scope":"daily", "message":"Today's reward has already been claimed."}))
             continue
 
         if kind == "join":
@@ -549,19 +956,29 @@ async def ws_handler(websocket):
                 await websocket.send(json.dumps({"type": "error", "scope": "auth", "message": "Please log in first."}))
                 continue
             code = (msg.get("room") or "PUBLIC").strip().upper()[:12] or "PUBLIC"
+            spectate = bool(msg.get("spectate"))
+            if spectate and code not in rooms:
+                await websocket.send(json.dumps({"type":"error","message":"That table does not exist."}))
+                room = None
+                continue
             room = get_room(code)
+            if spectate and not room.get("players"):
+                await websocket.send(json.dumps({"type":"error","message":"There is nobody to spectate yet."}))
+                room = None
+                continue
             if account_key in room.get("kicked", []):
                 await websocket.send(json.dumps({"type": "error", "message": "You were kicked from this table. Create/use another table."}))
                 room = None
                 continue
-            connected_count = sum(1 for p in room["players"] if p["connected"])
-            if connected_count >= MAX_PLAYERS:
+            connected_count = sum(1 for p in room["players"] if p["connected"] and not p.get("spectator"))
+            if not spectate and connected_count >= MAX_PLAYERS:
                 await websocket.send(json.dumps({"type": "error", "message": "Table is full."}))
                 room = None
                 continue
 
             pid = new_id()
             account = ACCOUNTS[account_key]
+            ensure_account_progress(account)
             player = {
                 "id": pid,
                 "ws": websocket,
@@ -571,7 +988,8 @@ async def ws_handler(websocket):
                 "money": int(account.get("money", STARTING_MONEY)),
                 "bet": 0,
                 "hand": [],
-                "status": "betting" if room["phase"] in ("LOBBY", "BETTING") else "spectating",
+                "status": "spectating" if spectate or room["phase"] not in ("LOBBY", "BETTING") else "betting",
+                "spectator": spectate or room["phase"] not in ("LOBBY", "BETTING"),
                 "result": None,
                 "connected": True,
                 "consecutive_losses": 0,
@@ -587,6 +1005,7 @@ async def ws_handler(websocket):
 
             await websocket.send(json.dumps({"type": "joined", "id": pid, "room": code, "username": account["username"], "balance": player["money"], "isHost": room["host_id"] == pid}))
             await broadcast(room)
+            await broadcast_public_tables()
             continue
 
         if kind == "admin_login":
@@ -614,6 +1033,7 @@ async def ws_handler(websocket):
                         room["active_player_id"] = None
                         await move_to_next_or_dealer(room)
                     await broadcast(room)
+            await broadcast_public_tables()
             await websocket.send(json.dumps({"type": "left_table"}))
             await send_admin_data(websocket, room)
             continue
@@ -691,12 +1111,14 @@ async def ws_handler(websocket):
                 player["status"] = "betting"
                 persist_player_money(player)
                 await broadcast(room)
+                await websocket.send(json.dumps({"type":"profile", "profile": profile_payload(ACCOUNTS[player["username_key"]])}))
 
         elif kind == "refresh_balance":
             account = ACCOUNTS.get(player["username_key"])
             if account:
                 player["money"] = int(account.get("money", 0))
                 await websocket.send(json.dumps({"type": "balance", "balance": player["money"]}))
+                await websocket.send(json.dumps({"type":"profile", "profile": profile_payload(account)}))
                 await broadcast(room)
 
         elif kind == "kick":
@@ -835,8 +1257,12 @@ async def ws_handler(websocket):
                 room["active_player_id"] = None
                 await move_to_next_or_dealer(room)
             await broadcast(room)
+        await broadcast_public_tables()
 
     ADMIN_SOCKETS.discard(websocket)
+    for key, sock in list(USER_SOCKETS.items()):
+        if sock is websocket:
+            USER_SOCKETS.pop(key, None)
 
 # ---------------------------------------------------------------------------
 # Combined HTTP + WebSocket server
