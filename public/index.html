@@ -32,10 +32,20 @@
       <div id="room-form" class="hidden">
         <div class="main-menu-title">BLACKJACK</div>
         <div class="welcome-user" id="welcome-user"></div>
+        <div class="menu-level" id="menu-level">LEVEL 1 • ROOKIE</div>
         <div class="menu-balance" id="menu-balance">$5,000</div>
+        <div class="menu-xp" id="menu-xp">0 XP</div>
         <div class="main-menu-buttons">
           <button class="btn auth-submit menu-primary" id="btn-play">PLAY</button>
-          <button class="btn secondary auth-submit" id="btn-settings-menu">SETTINGS</button>
+          <div class="menu-grid">
+            <button class="btn secondary" id="btn-profile">PROFILE</button>
+            <button class="btn secondary" id="btn-friends">FRIENDS</button>
+            <button class="btn secondary" id="btn-stats">STATS</button>
+            <button class="btn secondary" id="btn-rankings">RANKINGS</button>
+            <button class="btn secondary" id="btn-achievements">ACHIEVEMENTS</button>
+            <button class="btn secondary" id="btn-daily">DAILY</button>
+          </div>
+          <button class="btn panel-btn auth-submit" id="btn-settings-menu">SETTINGS</button>
           <button class="btn panel-btn auth-submit" id="btn-logout">LOG OUT</button>
         </div>
       </div>
@@ -52,8 +62,10 @@
         <input id="input-room" type="text" maxlength="12" placeholder="e.g. LUCKY7 (blank = public)" autocomplete="off">
       </div>
       <div class="auth-error" id="room-error"></div>
+      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-public-tables">PUBLIC TABLES</button><button class="btn secondary" id="btn-create-public">CREATE PUBLIC</button></div>
       <button class="btn auth-submit menu-primary" id="btn-join-table">JOIN TABLE</button>
       <button class="btn secondary auth-submit" id="btn-back-menu">BACK</button>
+      <div id="public-table-list" class="public-table-list"></div>
     </div>
   </div>
 
@@ -118,7 +130,78 @@
     <div class="control-dock hidden" id="waiting-dock">
       <div class="waiting-note" id="waiting-note">Waiting…</div>
     </div>
+    <div class="chat-panel" id="chat-panel">
+      <div class="chat-head"><span>TABLE CHAT</span><div><button class="chat-close" id="btn-chat-mute">🔊</button><button class="chat-close" id="btn-chat-toggle">×</button></div></div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-compose"><input id="chat-input" maxlength="180" placeholder="Say something…"><button class="btn" id="btn-chat-send">SEND</button></div>
+    </div>
+    <button class="chat-float" id="btn-chat-open">CHAT</button>
     <button class="admin-float hidden" id="btn-admin-float">ADMIN</button>
+  </div>
+
+  <div class="overlay" id="profile-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">PLAYER PROFILE</div>
+      <div class="profile-hero" id="profile-hero"></div>
+      <div class="profile-stats-grid" id="profile-stats-grid"></div>
+      <div class="section-mini-title">FRIENDS</div>
+      <div id="profile-friends" class="friend-list"></div>
+      <button class="btn panel-btn" id="btn-profile-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="friends-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">FRIENDS</div>
+      <div class="friend-add"><input id="friend-username" maxlength="16" placeholder="Username"><button class="btn" id="btn-add-friend">ADD</button></div>
+      <div class="auth-error" id="friends-error"></div>
+      <div id="friends-list" class="friend-list"></div>
+      <button class="btn panel-btn" id="btn-friends-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== PROGRESS OVERLAYS ==================== -->
+  <div class="overlay" id="stats-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">PLAYER STATS</div>
+      <div class="progress-hero" id="stats-hero"></div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <button class="btn panel-btn" id="btn-stats-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="leaderboard-overlay">
+    <div class="overlay-card progress-card leaderboard-card">
+      <div class="overlay-title">GLOBAL RANKINGS</div>
+      <div class="rank-tabs" id="rank-tabs">
+        <button class="rank-tab active" data-rank="balance">BALANCE</button>
+        <button class="rank-tab" data-rank="wins">WINS</button>
+        <button class="rank-tab" data-rank="blackjacks">BLACKJACKS</button>
+        <button class="rank-tab" data-rank="winRate">WIN RATE</button>
+        <button class="rank-tab" data-rank="streak">STREAK</button>
+        <button class="rank-tab" data-rank="games">GAMES</button>
+      </div>
+      <div id="leaderboard-list" class="leaderboard-list"></div>
+      <button class="btn panel-btn" id="btn-rankings-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="achievements-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">ACHIEVEMENTS</div>
+      <div id="achievement-list" class="achievement-list"></div>
+      <button class="btn panel-btn" id="btn-achievements-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="daily-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">DAILY HUB</div>
+      <div class="daily-reward-box" id="daily-reward-box"></div>
+      <div class="section-mini-title">TODAY'S CHALLENGES</div>
+      <div id="challenge-list" class="challenge-list"></div>
+      <button class="btn panel-btn" id="btn-daily-close">CLOSE</button>
+    </div>
   </div>
 
   <!-- ==================== CLAIM OVERLAY ==================== -->

@@ -20,6 +20,12 @@ let authToken = null;
 let loggedUsername = null;
 let authMode = "login";
 let isAdmin = false;
+let myProfile = null;
+let leaderboardData = null;
+let activeRank = "balance";
+let publicTables = [];
+let friendsData = [];
+let chatMuted = localStorage.getItem("bj_chat_muted") === "1";
 
 // ---------------------------------------------------------------------------
 // Audio — synthesized SFX (no asset files needed), same idea as the desktop build
@@ -411,7 +417,11 @@ function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${proto}://${location.host}`);
   ws.addEventListener("open", () => {
-    if (authMode === "login") {
+    const saved = localStorage.getItem("bj_session_token");
+    if (saved && !authToken) {
+      authToken = saved;
+      send({ type: "resume", token: saved });
+    } else if (authMode === "login") {
       send({ type: "login", username: $("#auth-username").value.trim(), password: $("#auth-password").value });
     } else {
       send({ type: "signup", username: $("#auth-username").value.trim(), password: $("#auth-password").value });
@@ -421,6 +431,7 @@ function connect() {
     const msg = JSON.parse(evt.data);
     if (msg.type === "auth_ok") {
       authToken = msg.token;
+      if (msg.token) localStorage.setItem("bj_session_token", msg.token);
       loggedUsername = msg.username;
       $("#welcome-user").textContent = `Welcome, ${loggedUsername}`;
       $("#auth-form").classList.add("hidden");
@@ -428,7 +439,42 @@ function connect() {
       $("#menu-balance").textContent = "$" + msg.balance;
       $("#join-error").textContent = "";
       showMainMenu();
+      if (msg.profile) updateProfileUI(msg.profile);
       localStorage.setItem("bj_username_hint", loggedUsername);
+      return;
+    }
+    if (msg.type === "session_invalid") {
+      authToken = null;
+      localStorage.removeItem("bj_session_token");
+      showScreen("#screen-join");
+      return;
+    }
+    if (msg.type === "public_tables") {
+      publicTables = msg.tables || [];
+      renderPublicTables();
+      return;
+    }
+    if (msg.type === "public_created") {
+      $("#input-room").value = msg.code;
+      send({type:"join", token:authToken, room:msg.code});
+      return;
+    }
+    if (msg.type === "friends") {
+      friendsData = msg.friends || [];
+      renderFriends();
+      renderProfileFriends();
+      return;
+    }
+    if (msg.type === "chat") {
+      appendChat(msg.username, msg.text);
+      return;
+    }
+    if (msg.type === "table_invite") {
+      if (confirm(`${msg.from} invited you to table ${msg.room}. Join now?`)) {
+        $("#input-room").value = msg.room;
+        showScreen("#screen-lobby");
+        send({type:"join",token:authToken,room:msg.room});
+      }
       return;
     }
     if (msg.type === "joined") {
@@ -438,6 +484,8 @@ function connect() {
       $("#profile-name").textContent = msg.username || loggedUsername || "PLAYER";
       $("#menu-balance").textContent = "$" + msg.balance;
       $("#btn-admin-float").classList.toggle("hidden", !isAdmin);
+      $("#chat-messages").innerHTML = "";
+      toggleChat(false);
       showScreen("#screen-table");
       play("join");
       return;
@@ -448,6 +496,7 @@ function connect() {
       $("#claim-overlay").classList.remove("open");
       $("#admin-overlay").classList.remove("open");
       $("#menu-balance").textContent = $("#balance-chip").textContent || "$0";
+      toggleChat(false);
       showMainMenu();
       play("leave");
       return;
@@ -463,6 +512,32 @@ function connect() {
       $("#menu-balance").textContent = "$" + msg.balance;
       return;
     }
+    if (msg.type === "profile") {
+      updateProfileUI(msg.profile);
+      friendsData = msg.profile?.friends || friendsData;
+      renderFriends();
+      renderProfileFriends();
+      return;
+    }
+    if (msg.type === "leaderboard") {
+      leaderboardData = msg.leaderboard || {};
+      renderLeaderboard();
+      return;
+    }
+    if (msg.type === "achievements") {
+      renderAchievements(msg.achievements || {}, msg.earned || [], msg.new || []);
+      return;
+    }
+    if (msg.type === "daily") {
+      renderDaily(msg.claimed, msg.challenges || []);
+      return;
+    }
+    if (msg.type === "daily_claimed") {
+      updateProfileUI(msg.profile);
+      SFX.win();
+      renderDaily(false, msg.profile.dailyChallenges ? buildChallengeObjects(msg.profile.dailyChallenges) : []);
+      return;
+    }
     if (msg.type === "admin_ok") {
       isAdmin = true;
       $("#admin-login-box").classList.add("hidden");
@@ -475,8 +550,9 @@ function connect() {
       return;
     }
     if (msg.type === "error") {
-      const target = msg.scope === "auth" ? $("#join-error") : (msg.scope === "admin" ? $("#admin-error") : $("#room-error"));
-      target.textContent = msg.message;
+      const target = msg.scope === "auth" ? $("#join-error") : (msg.scope === "admin" ? $("#admin-error") : (msg.scope === "daily" ? $("#daily-reward-box") : (msg.scope === "friends" ? $("#friends-error") : $("#room-error"))));
+      if (msg.scope === "daily") target.innerHTML = `<strong>NOT AVAILABLE</strong><span>${msg.message}</span>`;
+      else target.textContent = msg.message;
       return;
     }
     if (msg.type === "state") onState(msg.state);
@@ -554,7 +630,7 @@ function onState(state) {
   actionDock.classList.add("hidden");
   waitingDock.classList.add("hidden");
 
-  if (state.phase === "BETTING" && me) {
+  if (state.phase === "BETTING" && me && !me.spectator) {
     bettingDock.classList.remove("hidden");
     $("#bet-amount").textContent = "$" + me.bet;
     $("#bet-hint").style.visibility = me.bet === 0 ? "visible" : "hidden";
@@ -570,7 +646,9 @@ function onState(state) {
   } else {
     waitingDock.classList.remove("hidden");
     const note = $("#waiting-note");
-    if (state.phase === "PLAYING") {
+    if (me && me.spectator) {
+      note.textContent = "Spectating — watching this table";
+    } else if (state.phase === "PLAYING") {
       const active = state.players.find((p) => p.id === state.activePlayerId);
       note.textContent = active ? `Waiting for ${active.name}…` : "Dealer is playing…";
     } else if (state.phase === "ROUND_OVER") {
@@ -692,6 +770,115 @@ function renderAdminUsers(users, tablePlayers = [], previewActive = false, previ
 
 
 // ---------------------------------------------------------------------------
+// Progression UI — stats, rankings, achievements, daily rewards/challenges
+// ---------------------------------------------------------------------------
+function updateProfileUI(profile) {
+  if (!profile) return;
+  myProfile = profile;
+  $("#menu-balance").textContent = "$" + Number(profile.balance || 0).toLocaleString();
+  $("#menu-level").textContent = `LEVEL ${profile.level || 1} • ${(profile.levelTitle || "Rookie").toUpperCase()}`;
+  $("#menu-xp").textContent = `${Number(profile.xp || 0).toLocaleString()} XP`;
+  if (profile.username) {
+    loggedUsername = profile.username;
+    $("#welcome-user").textContent = `Welcome, ${loggedUsername}`;
+  }
+  renderStats();
+  if (profile.dailyChallenges) renderDaily(profile.dailyClaimed, buildChallengeObjects(profile.dailyChallenges));
+}
+
+function renderStats() {
+  if (!myProfile) return;
+  const s = myProfile.stats || {};
+  $("#stats-hero").innerHTML = `<strong>LEVEL ${myProfile.level || 1}</strong><span>${myProfile.levelTitle || "Rookie"} • ${Number(myProfile.xp || 0).toLocaleString()} XP</span>`;
+  const items = [
+    ["GAMES", s.gamesPlayed || 0], ["WINS", s.wins || 0], ["LOSSES", s.losses || 0],
+    ["PUSHES", s.pushes || 0], ["BLACKJACKS", s.blackjacks || 0], ["WIN RATE", `${s.winRate || 0}%`],
+    ["BEST STREAK", s.bestWinStreak || 0], ["BIGGEST WIN", "$" + Number(s.biggestWin || 0).toLocaleString()]
+  ];
+  $("#stats-grid").innerHTML = items.map(([a,b]) => `<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
+}
+
+function rankValue(row, key) {
+  if (key === "winRate") return `${row.winRate}%`;
+  if (key === "balance") return "$" + Number(row.balance || 0).toLocaleString();
+  return Number(row[key] || 0).toLocaleString();
+}
+function renderLeaderboard() {
+  if (!leaderboardData) return;
+  const rows = leaderboardData[activeRank] || [];
+  $("#leaderboard-list").innerHTML = rows.length ? rows.map((r,i) => {
+    const medal = i < 3 ? ["🥇","🥈","🥉"][i] : `#${i+1}`;
+    const me = r.username.toLowerCase() === (loggedUsername || "").toLowerCase();
+    return `<div class="rank-row ${me ? "me" : ""}"><span class="rank-place">${medal}</span><div class="rank-name"><strong>${r.username}</strong><small>Lv ${r.level} • ${r.levelTitle}</small></div><strong>${rankValue(r, activeRank)}</strong></div>`;
+  }).join("") : '<div class="admin-empty">No players yet.</div>';
+}
+
+function renderAchievements(defs, earned, fresh) {
+  const box = $("#achievement-list");
+  const earnedSet = new Set(earned);
+  box.innerHTML = Object.entries(defs).map(([id,a]) => `<div class="achievement ${earnedSet.has(id) ? "earned" : "locked"}"><div class="achievement-icon">${a.icon}</div><div><strong>${a.title}</strong><span>${a.desc}</span></div><div class="achievement-check">${earnedSet.has(id) ? "✓" : "🔒"}</div></div>`).join("");
+  if (fresh.length) centerBanner(`ACHIEVEMENT${fresh.length > 1 ? "S" : ""} UNLOCKED!`, "win");
+}
+
+function buildChallengeObjects(values) {
+  const defs = [
+    {id:"play10",title:"TABLE REGULAR",desc:"Play 10 hands today.",target:10,reward:250},
+    {id:"win3",title:"WINNER'S RUN",desc:"Win 3 hands today.",target:3,reward:300},
+    {id:"blackjack1",title:"NATURAL",desc:"Get a Blackjack today.",target:1,reward:400}
+  ];
+  return defs.map(d => ({...d, progress: Math.min(d.target, Number(values[d.id] || 0)), complete: Number(values[d.id] || 0) >= d.target}));
+}
+function renderDaily(claimed, challenges) {
+  $("#daily-reward-box").innerHTML = claimed ? '<strong>✓ CLAIMED</strong><span>Come back tomorrow for +250 chips.</span>' : '<strong>+250 CHIPS</strong><span>Daily free reward</span><button class="btn" id="btn-claim-daily">CLAIM REWARD</button>';
+  const btn = $("#btn-claim-daily");
+  if (btn) wireButton(btn, () => { send({type:"claim_daily", token:authToken}); btn.disabled=true; });
+  $("#challenge-list").innerHTML = challenges.length ? challenges.map(c => `<div class="challenge ${c.complete ? "complete" : ""}"><div><strong>${c.title}</strong><span>${c.desc}</span></div><div class="challenge-right"><b>${c.progress}/${c.target}</b><small>+${c.reward} chips</small></div></div>`).join("") : '<div class="admin-empty">No challenges today.</div>';
+}
+
+function openProgress(id) { $(id).classList.add("open"); }
+function closeProgress(id) { $(id).classList.remove("open"); }
+
+function sendChat(){ const input=$("#chat-input"); const text=input.value.trim(); if(!text) return; send({type:"chat",text}); input.value=""; }
+
+// ---------------------------------------------------------------------------
+// Profile / friends / public tables / chat
+// ---------------------------------------------------------------------------
+function renderProfile() {
+  const p = myProfile;
+  if (!p) return;
+  $("#profile-hero").innerHTML = `<div><strong>${escapeHtml(p.username)}</strong><span>LEVEL ${p.level} • ${escapeHtml(p.levelTitle)}</span></div><b>$${Number(p.balance||0).toLocaleString()}</b>`;
+  const st = p.stats || {};
+  const vals = [["GAMES",st.gamesPlayed],["WINS",st.wins],["LOSSES",st.losses],["PUSHES",st.pushes],["BLACKJACKS",st.blackjacks],["WIN RATE",(st.winRate||0)+"%"],["BEST STREAK",st.bestWinStreak],["BIGGEST WIN","$"+Number(st.biggestWin||0).toLocaleString()]];
+  $("#profile-stats-grid").innerHTML = vals.map(([a,b])=>`<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
+  renderProfileFriends();
+}
+function renderProfileFriends(){
+  const box=$("#profile-friends"); if(!box) return;
+  box.innerHTML = friendsData.length ? friendsData.slice(0,8).map(f=>`<div class="friend-row"><span class="online-dot ${f.online?'online':''}"></span><strong>${escapeHtml(f.username)}</strong><small>Lv ${f.level}</small></div>`).join("") : '<div class="admin-empty">No friends yet.</div>';
+}
+function renderFriends(){
+  const box=$("#friends-list"); if(!box) return;
+  box.innerHTML = friendsData.length ? friendsData.map(f=>`<div class="friend-row"><span class="online-dot ${f.online?'online':''}"></span><strong>${escapeHtml(f.username)}</strong><small>Lv ${f.level} • ${f.online?'ONLINE':'OFFLINE'}</small><button class="btn secondary friend-invite" data-user="${escapeAttr(f.username)}">INVITE</button><button class="btn secondary friend-remove" data-user="${escapeAttr(f.username)}">REMOVE</button></div>`).join("") : '<div class="admin-empty">No friends yet. Add someone by username.</div>';
+  box.querySelectorAll('.friend-remove').forEach(b=>wireButton(b,()=>send({type:'remove_friend',token:authToken,username:b.dataset.user})));
+  box.querySelectorAll('.friend-invite').forEach(b=>wireButton(b,()=>send({type:'invite_friend',token:authToken,username:b.dataset.user})));
+}
+
+function renderPublicTables(){
+  const box=$("#public-table-list"); if(!box) return;
+  box.innerHTML = publicTables.length ? publicTables.map(t=>`<div class="public-table-row"><div><strong>TABLE ${escapeHtml(t.code)}</strong><small>${escapeHtml(t.host)} • ${t.phase === 'PLAYING' ? 'IN GAME' : 'WAITING'} • ${t.players}/${t.maxPlayers} players</small></div><div class="public-table-actions">${t.canJoin?`<button class="btn" data-join="${t.code}">JOIN</button>`:''}${t.canSpectate?`<button class="btn secondary" data-spec="${t.code}">WATCH</button>`:''}</div></div>`).join("") : '<div class="admin-empty">No public tables yet. Create one!</div>';
+  box.querySelectorAll('[data-join]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.join})));
+  box.querySelectorAll('[data-spec]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.spec,spectate:true})));
+}
+function appendChat(username,text){
+  if(chatMuted) return;
+  const box=$("#chat-messages"); if(!box) return;
+  const row=el('div','chat-line'); row.innerHTML=`<strong>${escapeHtml(username)}</strong><span>${escapeHtml(text)}</span>`; box.appendChild(row); box.scrollTop=box.scrollHeight;
+}
+function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function escapeAttr(v){return escapeHtml(v);}
+function toggleChat(open){$("#chat-panel").classList.toggle('open',open);$("#btn-chat-open").classList.toggle('hidden',open);if(open) $("#chat-input").focus();}
+
+// ---------------------------------------------------------------------------
 // Settings (dark mode + volume) — persisted locally for convenience
 // ---------------------------------------------------------------------------
 function applyTheme(dark) {
@@ -779,6 +966,7 @@ function initJoin() {
   wireButton($("#btn-play"), () => {
     $("#room-error").textContent = "";
     showScreen("#screen-lobby");
+    send({type:"public_tables"});
   });
   wireButton($("#btn-join-table"), () => {
     const room = $("#input-room").value.trim() || "public";
@@ -790,9 +978,13 @@ function initJoin() {
     showMainMenu();
   });
   wireButton($("#btn-logout"), () => {
+    if (authToken) send({type:"logout", token:authToken});
+    localStorage.removeItem("bj_session_token");
     authToken = null; loggedUsername = null; myId = null; myRoom = null; isAdmin = false;
     document.querySelector("#screen-join .auth-card").classList.remove("main-menu-mode");
     $("#btn-admin-float").classList.add("hidden");
+    ["#stats-overlay","#leaderboard-overlay","#achievements-overlay","#daily-overlay"].forEach(id => $(id).classList.remove("open"));
+    myProfile = null; leaderboardData = null;
     $("#auth-form").classList.remove("hidden"); $("#room-form").classList.add("hidden");
     $("#auth-password").value = ""; $("#auth-confirm").value = "";
     if (ws) { try { ws.close(); } catch(e) {} }
@@ -827,8 +1019,37 @@ function initJoin() {
     if (isAdmin) send({type:"admin_login", password:$("#admin-password").value});
   });
   wireButton($("#btn-admin-close"), () => $("#admin-overlay").classList.remove("open"));
+
+  wireButton($("#btn-profile"), () => { openProgress("#profile-overlay"); renderProfile(); send({type:"profile", token:authToken}); });
+  wireButton($("#btn-profile-close"), () => closeProgress("#profile-overlay"));
+  wireButton($("#btn-friends"), () => { openProgress("#friends-overlay"); $("#friends-error").textContent=""; send({type:"friends",token:authToken}); });
+  wireButton($("#btn-friends-close"), () => closeProgress("#friends-overlay"));
+  wireButton($("#btn-add-friend"), () => { $("#friends-error").textContent=""; send({type:"add_friend",token:authToken,username:$("#friend-username").value.trim()}); });
+  wireButton($("#btn-public-tables"), () => { send({type:"public_tables"}); renderPublicTables(); });
+  wireButton($("#btn-create-public"), () => send({type:"create_public",token:authToken}));
+  wireButton($("#btn-chat-open"), () => toggleChat(true));
+  wireButton($("#btn-chat-toggle"), () => toggleChat(false));
+  wireButton($("#btn-chat-mute"), () => { chatMuted=!chatMuted; localStorage.setItem('bj_chat_muted',chatMuted?'1':'0'); $("#btn-chat-mute").textContent=chatMuted?'🔇':'🔊'; });
+  wireButton($("#btn-chat-send"), () => sendChat());
+  $("#chat-input").addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+
+  wireButton($("#btn-stats"), () => { renderStats(); openProgress("#stats-overlay"); send({type:"profile", token:authToken}); });
+  wireButton($("#btn-rankings"), () => { openProgress("#leaderboard-overlay"); send({type:"leaderboard"}); });
+  wireButton($("#btn-achievements"), () => { openProgress("#achievements-overlay"); send({type:"achievements", token:authToken}); });
+  wireButton($("#btn-daily"), () => { openProgress("#daily-overlay"); send({type:"daily", token:authToken}); });
+  wireButton($("#btn-stats-close"), () => closeProgress("#stats-overlay"));
+  wireButton($("#btn-rankings-close"), () => closeProgress("#leaderboard-overlay"));
+  wireButton($("#btn-achievements-close"), () => closeProgress("#achievements-overlay"));
+  wireButton($("#btn-daily-close"), () => closeProgress("#daily-overlay"));
+  document.querySelectorAll(".rank-tab").forEach(btn => btn.addEventListener("click", () => {
+    activeRank = btn.dataset.rank;
+    document.querySelectorAll(".rank-tab").forEach(x => x.classList.toggle("active", x === btn));
+    renderLeaderboard();
+  }));
 }
 
 initSettings();
 initControls();
 initJoin();
+$("#btn-chat-mute").textContent = chatMuted ? "🔇" : "🔊";
+if (localStorage.getItem("bj_session_token")) { setTimeout(() => { if (!ws || ws.readyState === WebSocket.CLOSED) connect(); }, 50); }
