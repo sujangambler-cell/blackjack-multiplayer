@@ -94,6 +94,7 @@ rooms: dict[str, dict] = {}
 ACCOUNTS: dict[str, dict] = {}
 TOKENS: dict[str, str] = {}
 ADMIN_SOCKETS = set()
+ADMIN_EVENTS = {"double_xp": False, "bonus_cash": False}
 USER_SOCKETS = {}
 BANNED_WORDS = {
     "fuck", "shit", "bitch", "asshole", "nigger", "nigga", "cunt",
@@ -165,7 +166,7 @@ def ensure_account_progress(account):
         "pushes": 0, "blackjacks": 0, "best_win_streak": 0, "current_win_streak": 0,
         "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
         "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
-        "friends": [], "session_token": account.get("session_token"),
+        "friends": [], "friend_requests": [], "session_token": account.get("session_token"),
     }
     changed = False
     for k, v in defaults.items():
@@ -297,7 +298,8 @@ def update_daily_progress(account, result):
 
 def add_xp(account, amount):
     ensure_account_progress(account)
-    account["xp"] = max(0, int(account.get("xp", 0)) + int(amount))
+    mult = 2 if ADMIN_EVENTS.get("double_xp") else 1
+    account["xp"] = max(0, int(account.get("xp", 0)) + int(amount) * mult)
 
 
 def get_room(code: str, public=False) -> dict:
@@ -314,6 +316,8 @@ def get_room(code: str, public=False) -> dict:
             "dealer_hand": [],
             "active_player_id": None,
             "lucky_players": set(),
+            "muted_users": set(),
+            "paused": False,
             "dealer_preview_active": False,
             "dealer_preview_cards": [],
             # asyncio task handles for cancellation
@@ -392,6 +396,7 @@ def serialise(room) -> dict:
     return {
         "code": room["code"],
         "phase": room["phase"],
+        "paused": bool(room.get("paused", False)),
         "activePlayerId": room["active_player_id"],
         "hostId": room.get("host_id"),
         "dealerHand": dealer_hand,
@@ -462,20 +467,29 @@ def chat_clean(text):
 # Admin helpers
 # ---------------------------------------------------------------------------
 def admin_payload(room):
-    users = [{"username": a["username"], "money": int(a.get("money", 0))}
+    users = [{"username": a["username"], "money": int(a.get("money", 0)), "xp": int(a.get("xp", 0)),
+              "wins": int(a.get("wins", 0)), "games": int(a.get("games_played", 0))}
              for a in ACCOUNTS.values()]
     table_players = []
     if room:
         table_players = [{
             "id": p["id"], "username": p["username"], "money": int(p["money"]),
             "lucky": p.get("username_key") in room.get("lucky_players", set()),
+            "muted": p.get("username_key") in room.get("muted_users", set()),
             "connected": p.get("connected", False),
         } for p in room.get("players", [])]
     preview = None
     if room and room.get("dealer_preview_active") and room.get("dealer_preview_cards"):
         preview = [{"rank": c["rank"], "suit": c["suit"], "faceUp": True}
                    for c in room["dealer_preview_cards"]]
-    return {"users": users, "tablePlayers": table_players, "dealerPreviewActive": bool(room and room.get("dealer_preview_active")), "dealerPreview": preview}
+    connected = sum(1 for r in rooms.values() for p in r.get("players", []) if p.get("connected"))
+    active_tables = len(rooms)
+    total_money = sum(int(a.get("money", 0)) for a in ACCOUNTS.values())
+    return {"users": users, "tablePlayers": table_players,
+            "dealerPreviewActive": bool(room and room.get("dealer_preview_active")),
+            "dealerPreview": preview,
+            "metrics": {"accounts": len(ACCOUNTS), "online": connected, "tables": active_tables, "money": total_money},
+            "events": dict(ADMIN_EVENTS), "paused": bool(room and room.get("paused", False))}
 
 async def send_admin_data(websocket, room):
     if websocket in ADMIN_SOCKETS:
@@ -692,6 +706,10 @@ async def finish_round(room):
                 p["result"] = "push"
                 p["consecutive_losses"] = 0
 
+        if ADMIN_EVENTS.get("bonus_cash") and p["result"] in ("win", "blackjack"):
+            bonus = max(10, int(round(p["bet"] * 0.25)))
+            p["money"] += bonus
+            p["admin_bonus"] = bonus
         p["money"] = max(0, int(p["money"]))
         account = ACCOUNTS.get(p.get("username_key"))
         if account is not None:
@@ -892,8 +910,16 @@ async def ws_handler(websocket):
 
         if kind == "chat":
             if room is not None and player is not None:
+                if player.get("username_key") in room.get("muted_users", set()):
+                    await websocket.send(json.dumps({"type":"error","scope":"chat","message":"You are muted by the admin for this table."}))
+                    continue
+                now = time.monotonic()
+                if now - float(player.get("last_chat_at", 0.0)) < 0.75:
+                    await websocket.send(json.dumps({"type":"error","scope":"chat","message":"Slow down a little — chat is limited to prevent spam."}))
+                    continue
                 text = chat_clean(msg.get("text"))
                 if text:
+                    player["last_chat_at"] = now
                     payload = json.dumps({"type":"chat","username":player["username"],"text":text,"ts":int(time.time()*1000)})
                     for rp in room.get("players", []):
                         if rp.get("ws"):
@@ -995,6 +1021,7 @@ async def ws_handler(websocket):
                 "consecutive_losses": 0,
                 "pity_banner": False,
                 "double_used": False,
+                "last_chat_at": 0.0,
             }
             if room.get("host_id") is None:
                 room["host_id"] = pid
@@ -1042,9 +1069,16 @@ async def ws_handler(websocket):
             continue
 
         # ---- betting actions ----
+        if room.get("paused") and kind in {"chip","clear_bet","all_in","ready","hit","stand","double"}:
+            continue
         if kind == "chip":
             if player["status"] not in ("betting", "ready"): continue
-            amt = int(msg.get("amount", 0))
+            try:
+                amt = int(msg.get("amount", 0))
+            except (TypeError, ValueError):
+                amt = 0
+            if amt <= 0 or amt > 1000000:
+                continue
             player["bet"] = min(player["money"], player["bet"] + amt)
             player["status"] = "betting"
             await broadcast(room)
@@ -1138,6 +1172,77 @@ async def ws_handler(websocket):
             except Exception:
                 pass
 
+        elif kind == "admin_kick":
+            if websocket not in ADMIN_SOCKETS or not room:
+                continue
+            target = find_player(room, msg.get("targetId"))
+            if not target:
+                continue
+            target_ws = target.get("ws")
+            try:
+                if target_ws:
+                    await target_ws.send(json.dumps({"type":"kicked", "message":"Removed by the admin."}))
+                    await target_ws.close()
+            except Exception:
+                pass
+
+        elif kind == "admin_mute":
+            if websocket not in ADMIN_SOCKETS or not room:
+                continue
+            target = find_player(room, msg.get("targetId"))
+            if target:
+                key = target.get("username_key")
+                if bool(msg.get("muted")):
+                    room.setdefault("muted_users", set()).add(key)
+                else:
+                    room.setdefault("muted_users", set()).discard(key)
+                await broadcast(room)
+                await send_admin_data(websocket, room)
+
+        elif kind == "admin_reshuffle":
+            if websocket not in ADMIN_SOCKETS or not room or room.get("phase") == "PLAYING":
+                continue
+            invalidate_dealer_preview(room)
+            room["deck"] = fresh_shoe()
+            await broadcast(room)
+            await send_admin_data(websocket, room)
+
+        elif kind == "admin_reset_round":
+            if websocket not in ADMIN_SOCKETS or not room or room.get("phase") == "PLAYING":
+                continue
+            await reset_for_betting(room)
+            await send_admin_data(websocket, room)
+
+        elif kind == "admin_bonus_table":
+            if websocket not in ADMIN_SOCKETS or not room:
+                continue
+            amount = max(0, min(100000, int(msg.get("amount", 0))))
+            if amount:
+                for p in active_players(room):
+                    p["money"] += amount
+                    persist_player_money(p)
+                await broadcast(room)
+                await send_admin_data(websocket, room)
+
+        elif kind == "admin_event":
+            if websocket not in ADMIN_SOCKETS:
+                continue
+            event = str(msg.get("event", ""))
+            if event in ADMIN_EVENTS:
+                ADMIN_EVENTS[event] = bool(msg.get("enabled"))
+                await websocket.send(json.dumps({"type":"admin_event_state", "events": dict(ADMIN_EVENTS), "paused": bool(room and room.get("paused", False))}))
+                await send_admin_data(websocket, room)
+
+        elif kind == "admin_pause":
+            if websocket not in ADMIN_SOCKETS or not room:
+                continue
+            if room.get("phase") == "PLAYING":
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Pause is available between rounds only."}))
+                continue
+            room["paused"] = bool(msg.get("paused"))
+            await broadcast(room)
+            await send_admin_data(websocket, room)
+
         elif kind == "admin_data":
             await send_admin_data(websocket, room)
 
@@ -1220,6 +1325,30 @@ async def ws_handler(websocket):
                     {"username": a["username"], "money": int(a.get("money", 0))}
                     for a in ACCOUNTS.values()
                 ]}))
+
+        elif kind == "admin_reset_account":
+            if websocket not in ADMIN_SOCKETS:
+                continue
+            key = username_key(msg.get("username"))
+            if key in ACCOUNTS:
+                account = ACCOUNTS[key]
+                password = account.get("password")
+                salt = account.get("salt")
+                username = account.get("username")
+                friends = account.get("friends", [])
+                requests = account.get("friend_requests", [])
+                created = account.get("created", time.time())
+                account.clear()
+                account.update({"username": username, "salt": salt, "password": password, "money": STARTING_MONEY,
+                                "friends": friends, "friend_requests": requests, "created": created})
+                ensure_account_progress(account)
+                save_accounts()
+                for r in rooms.values():
+                    for p in r["players"]:
+                        if p.get("username_key") == key:
+                            p["money"] = STARTING_MONEY
+                            await broadcast(r)
+                await send_admin_data(websocket, room)
 
         elif kind == "admin_reset_money":
             if not websocket in ADMIN_SOCKETS:

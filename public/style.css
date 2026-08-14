@@ -1001,6 +1001,29 @@ body::after {
 .host-list { display:flex; flex-direction:column; gap:8px; max-height:55vh; overflow:auto; margin:14px 0; }
 .host-player { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; border-radius:12px; background:rgba(127,127,127,.1); }
 .host-player .kick-btn { padding:7px 12px; border-radius:10px; background:transparent; color:var(--text); border:1px solid currentColor; }
+
+/* Authentication settings entry + graphics profile selector */
+.auth-settings-btn { width:100%; margin-top:10px; }
+.graphics-row { flex-direction:column; align-items:stretch; gap:9px; }
+.graphics-choice { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.graphics-option {
+  padding:11px 10px; border-radius:12px; cursor:pointer;
+  background:transparent; color:var(--text);
+  border:1px solid rgba(127,127,127,.28);
+  font:700 11px var(--font-display); letter-spacing:.7px;
+  transition:transform .18s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+}
+.graphics-option:hover { transform:translateY(-1px); }
+.graphics-option.active {
+  background:var(--text); color:var(--panel); border-color:var(--text);
+  box-shadow:0 0 18px rgba(255,255,255,.12);
+}
+.settings-help { font-size:10px; line-height:1.45; opacity:.55; }
+@media (max-width:560px) {
+  .graphics-choice { grid-template-columns:1fr; }
+  .top-actions { gap:6px; }
+  .admin-table-btn { min-width:64px; padding:8px 9px; font-size:9px; }
+}
 .admin-card { max-height:85vh; overflow:auto; }
 .admin-actions { display:flex; gap:8px; margin-bottom:10px; }
 .admin-user { display:grid; grid-template-columns:1fr auto; gap:8px; padding:10px 0; border-bottom:1px solid rgba(127,127,127,.18); }
@@ -1059,22 +1082,13 @@ body { background: #050505; }
 [data-theme="dark"] .btn:hover,
 [data-theme="dark"] .icon-btn:hover,
 [data-theme="dark"] .chip:hover { box-shadow: 0 0 24px rgba(255,255,255,.13); }
-.admin-float {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 50;
-  padding: 9px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.45);
-  background: rgba(0,0,0,.78);
-  color: #fff;
-  font: 700 11px var(--font-display);
-  letter-spacing: 1.5px;
-  box-shadow: 0 0 22px rgba(255,255,255,.12);
-  backdrop-filter: blur(10px);
+.admin-table-btn {
+  min-width:72px;
+  padding:9px 12px;
+  border-radius:12px;
+  font:700 10px var(--font-display);
+  letter-spacing:1px;
 }
-[data-theme="light"] .admin-float { background: rgba(255,255,255,.88); color:#111; border-color:rgba(0,0,0,.18); }
 .admin-card { width:min(760px,94vw); max-height:88vh; }
 .admin-actions { flex-wrap:wrap; }
 .admin-section-title { font:700 11px var(--font-display); letter-spacing:1.5px; opacity:.65; margin:12px 0 7px; }
@@ -1105,8 +1119,6 @@ body { background: #050505; }
   .admin-user-actions input { flex:1; }
 }
 
-/* Admin is accessed securely through Settings. */
-#btn-admin-float { display: none !important; }
 .main-menu-title {
   font-family: var(--font-display);
   font-size: clamp(2.2rem, 7vw, 3.15rem);
@@ -1306,3 +1318,538 @@ body { background: #050505; }
     max-height: calc(100dvh - 16px);
   }
 }
+
+/* ======================================================================
+   V2 TABLE / SOCIAL POLISH — luxury black & white casino
+   ====================================================================== */
+.felt-table {
+  width: min(980px, 95vw);
+  height: min(70vh, 600px);
+  padding: 30px 28px 24px;
+  border-radius: 46% / 40%;
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(255,255,255,.055), transparent 48%),
+    radial-gradient(ellipse at center, #151517 0%, #070709 72%, #020203 100%);
+  border: 7px solid #1c1c20;
+  box-shadow:
+    0 26px 70px rgba(0,0,0,.65),
+    0 0 0 3px rgba(255,255,255,.10),
+    0 0 45px rgba(255,255,255,.08),
+    inset 0 0 80px rgba(255,255,255,.035);
+}
+.felt-table::after {
+  content:"";
+  position:absolute;
+  inset:14px;
+  border-radius:inherit;
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:inset 0 0 25px rgba(255,255,255,.025);
+  pointer-events:none;
+}
+.table-rules {
+  z-index:2;
+  padding:7px 18px;
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 0 18px rgba(255,255,255,.04);
+  letter-spacing:.12em;
+}
+.dealer-area {
+  z-index:2;
+  width:min(500px,78%);
+  padding:10px 26px 14px;
+  margin-top:14px;
+  border-radius:22px;
+  background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.018));
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:inset 0 0 22px rgba(255,255,255,.025),0 12px 30px rgba(0,0,0,.18);
+}
+.seats-row { z-index:2; width:100%; justify-content:center; gap:14px; }
+.seat {
+  min-width:128px;
+  padding:10px 12px;
+  background:linear-gradient(180deg,rgba(255,255,255,.105),rgba(255,255,255,.035));
+  border:1px solid rgba(255,255,255,.11);
+  box-shadow:inset 0 0 16px rgba(255,255,255,.02),0 8px 18px rgba(0,0,0,.18);
+}
+.seat.me { border-color:rgba(255,255,255,.35); }
+.seat::before {
+  content:"";
+  position:absolute;
+  inset:4px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.045);
+  pointer-events:none;
+}
+.shoe { z-index:3; opacity:.9; }
+
+/* Real casino-style chips: layered rings, edge marks and denomination glow. */
+.chip {
+  width:64px;
+  height:64px;
+  border:3px solid rgba(255,255,255,.95);
+  background:
+    radial-gradient(circle at 34% 27%,rgba(255,255,255,.28),transparent 23%),
+    radial-gradient(circle, #1d1d20 0 49%, #09090b 50% 64%, #343438 65% 72%, #0a0a0c 73% 100%);
+  color:#fff;
+  text-shadow:0 1px 3px #000;
+  box-shadow:0 7px 0 #000,0 12px 24px rgba(0,0,0,.38),0 0 16px rgba(255,255,255,.08);
+}
+.chip::before {
+  inset:5px;
+  border:2px dashed rgba(255,255,255,.55);
+  box-shadow:inset 0 0 0 3px rgba(0,0,0,.28);
+}
+.chip::after {
+  content:"";
+  position:absolute;
+  inset:12px;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.18);
+  pointer-events:none;
+}
+.chip:nth-child(1) { background:radial-gradient(circle,#fff 0 46%,#bdbdc2 47% 62%,#fff 63% 68%,#77777c 69% 100%); color:#080808; }
+.chip:nth-child(2) { background:radial-gradient(circle,#29292d 0 46%,#fff 47% 62%,#141416 63% 68%,#77777c 69% 100%); }
+.chip:nth-child(3) { background:radial-gradient(circle,#121214 0 46%,#d8d8dc 47% 62%,#070709 63% 68%,#77777c 69% 100%); }
+.chip:nth-child(4) { background:radial-gradient(circle,#f2f2f4 0 46%,#333338 47% 62%,#111114 63% 68%,#fff 69% 100%); color:#080808; }
+.chip:nth-child(5) { background:radial-gradient(circle,#050507 0 46%,#fff 47% 62%,#151519 63% 68%,#aaaab0 69% 100%); }
+[data-theme="dark"] .chip { --chip-color:transparent !important; }
+
+/* Profile gets a real progression header. */
+.profile-hero { position:relative; overflow:hidden; }
+.profile-hero::after { content:"";position:absolute;inset:auto 0 0;height:3px;background:linear-gradient(90deg,transparent,#fff,transparent);opacity:.55; }
+.profile-xp { margin:10px 0 14px;padding:10px 12px;border-radius:14px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.13); }
+.profile-xp-head { display:flex;justify-content:space-between;font-size:10px;opacity:.7;margin-bottom:6px; }
+.profile-xp-bar { height:7px;border-radius:99px;background:rgba(127,127,127,.16);overflow:hidden; }
+.profile-xp-bar > i { display:block;height:100%;border-radius:inherit;background:#fff;box-shadow:0 0 14px rgba(255,255,255,.45); }
+
+/* Better public-table rows and chat hierarchy. */
+.public-table-row { background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025)); box-shadow:inset 0 0 18px rgba(255,255,255,.02),0 8px 22px rgba(0,0,0,.12); }
+.public-table-row:hover { border-color:rgba(255,255,255,.32); transform:translateY(-1px); }
+.chat-line { padding:7px 9px;border-radius:10px;background:rgba(255,255,255,.035); }
+.chat-line strong { color:#fff; }
+[data-theme="light"] .felt-table { background:radial-gradient(ellipse at center,#5b4c46 0%,#2b2422 72%,#171414 100%);border-color:#403632; }
+[data-theme="light"] .seat { background:rgba(255,255,255,.12); }
+
+@media (max-height:760px) and (min-width:700px) {
+  .felt-table { height:min(62vh,520px); padding-top:20px; }
+  .dealer-area { margin-top:6px;padding-bottom:8px; }
+  .seat { min-width:116px;padding:7px 9px; }
+  .card { width:50px;height:70px; }
+}
+
+
+/* Light-mode animated cloud/sky layer: gives the light theme depth without
+   losing the existing cards/chips animation. */
+html[data-theme="light"] #bg-canvas{
+  background:
+    radial-gradient(ellipse 38% 18% at 12% 22%,rgba(255,255,255,.52),transparent 68%),
+    radial-gradient(ellipse 42% 20% at 72% 30%,rgba(255,255,255,.42),transparent 70%),
+    radial-gradient(ellipse 34% 16% at 42% 72%,rgba(255,255,255,.34),transparent 70%);
+}
+html[data-theme="light"] #bg-canvas::after{content:"";display:block}
+
+#btn-admin-table {
+  min-width:72px;
+  padding:8px 10px;
+  border-radius:12px;
+  font:700 10px var(--font-display);
+  letter-spacing:1px;
+}
+
+/* ======================================================================
+   FINAL TABLE REDESIGN — theme-specific felt, aligned layout, clean chips
+   ====================================================================== */
+
+/* The table owns a fixed visual stage. Dealer, shoe and player seats stay
+   inside it while the betting dock remains below it. */
+#screen-table .table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 2px 12px 0;
+  align-items: center;
+}
+
+#screen-table .felt-table {
+  width: min(1000px, 94vw);
+  height: min(58vh, 570px);
+  min-height: 390px;
+  padding: 18px 28px 22px;
+  border-radius: 48% / 42%;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Inner casino rail + subtle betting lanes. */
+#screen-table .felt-table::before {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border-radius: 48% / 42%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 0 42%, rgba(255,255,255,.035) 42.2% 42.5%, transparent 42.8%),
+    radial-gradient(ellipse at center, transparent 0 61%, rgba(255,255,255,.028) 61.2% 61.5%, transparent 61.8%);
+}
+
+#screen-table .felt-table::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: inherit;
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: inset 0 0 50px rgba(0,0,0,.28);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#screen-table .table-rules {
+  position: relative;
+  z-index: 4;
+  margin: 0 auto;
+}
+
+#screen-table .shoe {
+  z-index: 5;
+  top: 70px;
+  right: 7%;
+}
+
+#screen-table .dealer-area {
+  position: absolute;
+  z-index: 3;
+  top: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, 62%);
+  min-height: 150px;
+  margin: 0;
+  padding: 12px 24px 16px;
+  justify-content: flex-start;
+}
+
+#screen-table .dealer-area .hand {
+  min-height: 86px;
+  margin-top: 2px;
+}
+
+#screen-table .seats-row {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 25px;
+  transform: translateX(-50%);
+  width: min(90%, 850px);
+  margin: 0;
+  padding: 6px 4px;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+#screen-table .seat {
+  min-width: 118px;
+  max-width: 150px;
+  flex: 0 1 140px;
+  padding: 8px 10px;
+}
+
+#screen-table .control-dock {
+  flex: 0 0 auto;
+  padding-top: 5px;
+  gap: 8px;
+}
+
+#screen-table .chip-row {
+  gap: 10px;
+}
+
+#screen-table .chip {
+  width: 60px;
+  height: 60px;
+  flex: 0 0 60px;
+  border-width: 3px;
+  box-shadow: 0 4px 0 rgba(0,0,0,.35), 0 8px 16px rgba(0,0,0,.24);
+  overflow: visible;
+}
+
+#screen-table .chip::before {
+  inset: 5px;
+}
+
+#screen-table .chip::after {
+  inset: 11px;
+}
+
+/* ------------------------------- DARK -------------------------------- */
+[data-theme="dark"] #screen-table .felt-table {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(255,255,255,.065), transparent 45%),
+    radial-gradient(ellipse at center, #111114 0%, #050507 66%, #010102 100%);
+  border-color: #3b3b40;
+  box-shadow:
+    0 22px 55px rgba(0,0,0,.8),
+    0 0 0 3px rgba(255,255,255,.10),
+    0 0 50px rgba(255,255,255,.11),
+    inset 0 0 80px rgba(255,255,255,.025);
+}
+
+[data-theme="dark"] #screen-table .dealer-area {
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.018));
+  border: 1px solid rgba(255,255,255,.13);
+  box-shadow: inset 0 0 25px rgba(255,255,255,.025), 0 12px 25px rgba(0,0,0,.24);
+}
+
+[data-theme="dark"] #screen-table .seat {
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+  border: 1px solid rgba(255,255,255,.13);
+  color: #fff;
+}
+
+[data-theme="dark"] #screen-table .seat-name,
+[data-theme="dark"] #screen-table .seat-money,
+[data-theme="dark"] #screen-table .shoe-label,
+[data-theme="dark"] #screen-table .seat-label {
+  color: #fff;
+}
+
+[data-theme="dark"] #screen-table .chip {
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+  border-color: #fff;
+  background:
+    radial-gradient(circle at 34% 27%, rgba(255,255,255,.16), transparent 22%),
+    radial-gradient(circle, #151518 0 45%, #050506 46% 60%, #77777c 61% 66%, #09090b 67% 100%);
+  box-shadow: 0 4px 0 #000, 0 8px 18px rgba(0,0,0,.55), 0 0 15px rgba(255,255,255,.10);
+}
+[data-theme="dark"] #screen-table .chip:nth-child(1) {
+  background: radial-gradient(circle, #f6f6f6 0 45%, #bdbdc2 46% 59%, #fff 60% 66%, #555 67% 100%);
+  color: #050505;
+}
+[data-theme="dark"] #screen-table .chip:nth-child(2) {
+  background: radial-gradient(circle, #202024 0 45%, #e8e8ea 46% 59%, #111 60% 66%, #777 67% 100%);
+}
+[data-theme="dark"] #screen-table .chip:nth-child(3) {
+  background: radial-gradient(circle, #0c0c0f 0 45%, #cfcfd3 46% 59%, #070709 60% 66%, #68686d 67% 100%);
+}
+[data-theme="dark"] #screen-table .chip:nth-child(4) {
+  background: radial-gradient(circle, #ededf0 0 45%, #303035 46% 59%, #101014 60% 66%, #fff 67% 100%);
+  color: #050505;
+}
+[data-theme="dark"] #screen-table .chip:nth-child(5) {
+  background: radial-gradient(circle, #08080a 0 45%, #f7f7f8 46% 59%, #111114 60% 66%, #a7a7ac 67% 100%);
+}
+
+/* ------------------------------- LIGHT ------------------------------- */
+[data-theme="light"] #screen-table .table-wrap {
+  background:
+    radial-gradient(ellipse at center, rgba(255,255,255,.55), transparent 64%),
+    linear-gradient(180deg, rgba(255,249,242,.35), rgba(244,232,220,.45));
+}
+
+[data-theme="light"] #screen-table .felt-table {
+  background:
+    radial-gradient(ellipse at 50% 32%, rgba(255,255,255,.25), transparent 42%),
+    radial-gradient(ellipse at center, #4f9a73 0%, #286c4f 62%, #174a38 100%);
+  border-color: #d3b77d;
+  box-shadow:
+    0 22px 55px rgba(72,50,30,.24),
+    0 0 0 3px rgba(255,255,255,.72),
+    0 0 42px rgba(214,180,100,.28),
+    inset 0 0 80px rgba(0,0,0,.10);
+}
+
+[data-theme="light"] #screen-table .felt-table::before {
+  background:
+    radial-gradient(ellipse at center, transparent 0 42%, rgba(255,255,255,.20) 42.2% 42.5%, transparent 42.8%),
+    radial-gradient(ellipse at center, transparent 0 61%, rgba(255,255,255,.13) 61.2% 61.5%, transparent 61.8%);
+}
+
+[data-theme="light"] #screen-table .dealer-area {
+  background: linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,.10));
+  border: 1px solid rgba(255,255,255,.58);
+  box-shadow: inset 0 0 25px rgba(255,255,255,.12), 0 10px 25px rgba(40,70,50,.12);
+}
+
+[data-theme="light"] #screen-table .table-rules {
+  color: #173d2d;
+  background: rgba(255,255,255,.82);
+  border-color: rgba(112,79,30,.22);
+  box-shadow: 0 5px 16px rgba(60,40,20,.12);
+}
+
+[data-theme="light"] #screen-table .seat {
+  background: linear-gradient(180deg, rgba(255,255,255,.76), rgba(244,249,245,.52));
+  border: 1px solid rgba(255,255,255,.9);
+  box-shadow: 0 8px 18px rgba(35,70,50,.14), inset 0 0 12px rgba(255,255,255,.42);
+  color: #183629;
+}
+
+[data-theme="light"] #screen-table .seat-name,
+[data-theme="light"] #screen-table .seat-money,
+[data-theme="light"] #screen-table .shoe-label,
+[data-theme="light"] #screen-table .seat-label {
+  color: #173d2d;
+}
+
+[data-theme="light"] #screen-table .seat-money { color: #466656; }
+[data-theme="light"] #screen-table .seat-bet,
+[data-theme="light"] #screen-table .seat-value,
+[data-theme="light"] #screen-table .hand-value,
+[data-theme="light"] #screen-table .bet-amount { color: #a26c08; }
+
+[data-theme="light"] #screen-table .chip {
+  color: #241d16;
+  text-shadow: none;
+  border-color: #fff;
+  background: radial-gradient(circle, #fff 0 43%, #d9b65f 44% 57%, #fffaf0 58% 66%, #b28a31 67% 100%);
+  box-shadow: 0 4px 0 #b28a31, 0 8px 18px rgba(93,69,30,.22), 0 0 15px rgba(255,218,120,.22);
+}
+[data-theme="light"] #screen-table .chip:nth-child(1) {
+  background: radial-gradient(circle, #fff 0 43%, #e5c978 44% 57%, #fff 58% 66%, #b28a31 67% 100%);
+}
+[data-theme="light"] #screen-table .chip:nth-child(2) {
+  background: radial-gradient(circle, #f9fbf9 0 43%, #5c9877 44% 57%, #fff 58% 66%, #3e7057 67% 100%);
+}
+[data-theme="light"] #screen-table .chip:nth-child(3) {
+  background: radial-gradient(circle, #fff 0 43%, #d3a948 44% 57%, #fff8df 58% 66%, #a47819 67% 100%);
+}
+[data-theme="light"] #screen-table .chip:nth-child(4) {
+  background: radial-gradient(circle, #fff 0 43%, #b86b55 44% 57%, #fff5ee 58% 66%, #914733 67% 100%);
+}
+[data-theme="light"] #screen-table .chip:nth-child(5) {
+  background: radial-gradient(circle, #fff 0 43%, #557da0 44% 57%, #f8fbff 58% 66%, #385a78 67% 100%);
+}
+
+/* Keep the control area attached visually to the table, not floating away. */
+[data-theme="light"] #screen-table .bet-hint { color: #5d675f; }
+[data-theme="light"] #screen-table .control-dock .btn {
+  border-color: rgba(80,64,38,.24);
+}
+
+/* Smaller screens: shrink the table stage rather than letting its contents
+   escape the rail. */
+@media (max-width: 700px) {
+  #screen-table .felt-table {
+    width: 96vw;
+    height: min(54vh, 470px);
+    min-height: 340px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  #screen-table .dealer-area {
+    top: 60px;
+    width: 68%;
+    min-height: 120px;
+    padding: 8px 12px 10px;
+  }
+  #screen-table .shoe { top: 62px; right: 5%; transform: scale(.82); transform-origin: top right; }
+  #screen-table .seats-row { bottom: 18px; width: 94%; gap: 7px; }
+  #screen-table .seat { min-width: 96px; max-width: 118px; padding: 7px 6px; }
+  #screen-table .seat-hand .card { width: 24px; height: 34px; margin: 0 -7px; }
+  #screen-table .chip { width: 52px; height: 52px; flex-basis: 52px; font-size: 11px; }
+  #screen-table .chip-row { gap: 7px; }
+}
+
+@media (max-width: 460px) {
+  #screen-table .felt-table { height: min(50vh, 400px); min-height: 310px; }
+  #screen-table .dealer-area { width: 64%; }
+  #screen-table .dealer-area .hand { min-height: 68px; }
+  #screen-table .card { width: 46px; height: 64px; }
+  #screen-table .seats-row { bottom: 13px; }
+  #screen-table .seat { min-width: 82px; font-size: 9px; }
+  #screen-table .chip { width: 48px; height: 48px; flex-basis: 48px; }
+}
+
+/* ======================================================================
+   ADMIN TABLE ACCESS — compact premium control beside Host
+   ====================================================================== */
+#screen-table .top-actions {
+  align-items: center;
+  gap: 8px;
+}
+#screen-table .top-actions .admin-table-btn,
+#screen-table .top-actions .host-table-btn {
+  min-width: 86px;
+  height: 38px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 13px;
+  font: 800 10px var(--font-display);
+  letter-spacing: 1.2px;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
+}
+#screen-table .top-actions .admin-table-btn span,
+#screen-table .top-actions .host-table-btn span { line-height: 1; }
+#screen-table .top-actions .admin-table-btn:hover,
+#screen-table .top-actions .host-table-btn:hover { transform: translateY(-2px); }
+
+[data-theme="dark"] #screen-table .top-actions .admin-table-btn {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.045));
+  border: 1px solid rgba(255,255,255,.28);
+  box-shadow: 0 0 18px rgba(255,255,255,.08), inset 0 0 14px rgba(255,255,255,.025);
+}
+[data-theme="dark"] #screen-table .top-actions .admin-table-btn:hover {
+  border-color: rgba(255,255,255,.65);
+  box-shadow: 0 0 24px rgba(255,255,255,.16), inset 0 0 14px rgba(255,255,255,.05);
+}
+[data-theme="dark"] #screen-table .top-actions .host-table-btn {
+  color: #fff;
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.20);
+}
+[data-theme="light"] #screen-table .top-actions .admin-table-btn {
+  color: #5b4214;
+  background: linear-gradient(180deg, #fffaf0, #f3dfaa);
+  border: 1px solid rgba(156,113,31,.34);
+  box-shadow: 0 5px 16px rgba(92,66,25,.14), inset 0 0 12px rgba(255,255,255,.65);
+}
+[data-theme="light"] #screen-table .top-actions .admin-table-btn:hover {
+  border-color: rgba(156,113,31,.65);
+  box-shadow: 0 7px 20px rgba(92,66,25,.18), 0 0 18px rgba(218,180,87,.20);
+}
+[data-theme="light"] #screen-table .top-actions .host-table-btn {
+  color: #173d2d;
+  background: rgba(255,255,255,.72);
+  border-color: rgba(52,101,73,.24);
+}
+.admin-subtitle {
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: .9px;
+  opacity: .55;
+  margin: -7px 0 14px;
+}
+.admin-card .overlay-title { margin-bottom: 4px; }
+
+@media (max-width: 600px) {
+  #screen-table .top-actions .admin-table-btn,
+  #screen-table .top-actions .host-table-btn {
+    min-width: 42px;
+    width: 42px;
+    padding: 0;
+  }
+  #screen-table .top-actions .admin-table-btn span,
+  #screen-table .top-actions .host-table-btn span { display:none; }
+  #screen-table .top-actions { gap: 5px; }
+}
+
+
+/* Final admin command center */
+.admin-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 14px}
+.admin-metrics>div{padding:10px 9px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.035);text-align:center}
+.admin-metrics span{display:block;font-size:9px;letter-spacing:1.2px;opacity:.55}.admin-metrics strong{display:block;margin-top:3px;font-size:16px}
+.admin-primary-actions{display:flex;gap:7px;flex-wrap:wrap}.admin-primary-actions .btn{flex:1;min-width:130px}
+.admin-event-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px}
+.admin-event{border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--text);border-radius:12px;padding:11px;font:700 11px var(--font-display);cursor:pointer;text-align:left}.admin-event span{float:right;opacity:.55}.admin-event.on{box-shadow:0 0 20px rgba(255,255,255,.16);border-color:rgba(255,255,255,.7)}
+.admin-bonus-row{display:flex;gap:8px;margin-bottom:12px}.admin-bonus-row input{flex:1;min-width:0}.admin-bonus-row .btn{white-space:nowrap}
+.admin-account{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px 0;border-bottom:1px solid rgba(127,127,127,.18)}
+.admin-user-info strong{display:block}.admin-user-info span{display:block;font-size:11px;opacity:.58;margin-top:3px}.admin-account .admin-user-actions,.admin-user .admin-user-actions{justify-content:flex-end}
+@media(max-width:720px){.admin-metrics{grid-template-columns:repeat(2,1fr)}.admin-event-grid{grid-template-columns:1fr}.admin-account{grid-template-columns:1fr}.admin-bonus-row{flex-direction:column}.admin-primary-actions .btn{min-width:100px}}
+[data-theme="light"] .admin-metrics>div,[data-theme="light"] .admin-event{background:rgba(255,255,255,.5)}

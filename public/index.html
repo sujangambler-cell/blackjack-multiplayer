@@ -13,6 +13,7 @@
 <canvas id="bg-canvas" aria-hidden="true"></canvas>
 <div id="app">
 
+
   <!-- ==================== ACCOUNT SCREEN ==================== -->
   <div id="screen-join" class="screen active">
     <div class="auth-card">
@@ -28,6 +29,7 @@
         <div class="field hidden" id="confirm-wrap"><label>Confirm password</label><input id="auth-confirm" type="password" minlength="8" autocomplete="new-password" placeholder="Repeat your password"></div>
         <div class="auth-error" id="join-error"></div>
         <button class="btn auth-submit" id="btn-auth">LOGIN</button>
+        <button class="btn secondary auth-settings-btn" id="btn-settings-auth">⚙ SETTINGS</button>
       </div>
       <div id="room-form" class="hidden">
         <div class="main-menu-title">BLACKJACK</div>
@@ -76,7 +78,7 @@
         <div class="profile-chip"><span id="profile-name">PLAYER</span><span class="balance-chip" id="balance-chip">$0</span><button class="refresh-btn" id="btn-refresh-balance" title="Refresh balance">↻</button></div>
         <div class="room-chip" id="room-chip">TABLE</div>
       </div>
-      <div class="top-actions"><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
+      <div class="top-actions"><button class="icon-btn hidden host-table-btn" id="btn-host" aria-label="Host controls" title="Host controls">♛ <span>HOST</span></button><button class="icon-btn admin-table-btn" id="btn-admin-table" aria-label="Admin panel" title="Admin panel">♛ <span>ADMIN</span></button><button class="icon-btn" id="btn-settings" aria-label="Settings" title="Settings">⚙</button></div>
     </div>
 
     <div class="table-wrap" id="table-wrap">
@@ -136,13 +138,13 @@
       <div class="chat-compose"><input id="chat-input" maxlength="180" placeholder="Say something…"><button class="btn" id="btn-chat-send">SEND</button></div>
     </div>
     <button class="chat-float" id="btn-chat-open">CHAT</button>
-    <button class="admin-float hidden" id="btn-admin-float">ADMIN</button>
   </div>
 
   <div class="overlay" id="profile-overlay">
     <div class="overlay-card progress-card">
       <div class="overlay-title">PLAYER PROFILE</div>
       <div class="profile-hero" id="profile-hero"></div>
+      <div class="profile-xp" id="profile-xp"></div>
       <div class="profile-stats-grid" id="profile-stats-grid"></div>
       <div class="section-mini-title">FRIENDS</div>
       <div id="profile-friends" class="friend-list"></div>
@@ -226,16 +228,31 @@
   <!-- ==================== ADMIN OVERLAY ==================== -->
   <div class="overlay" id="admin-overlay">
     <div class="overlay-card admin-card">
-      <div class="overlay-title">ADMIN PANEL</div>
+      <div class="overlay-title">♛ ADMIN PANEL</div><div class="admin-subtitle">Restricted controls • Password protected</div>
       <div id="admin-login-box">
         <div class="field"><label>Admin password</label><input id="admin-password" type="password" placeholder="Password"></div>
         <div class="auth-error" id="admin-error"></div>
         <button class="btn" id="btn-admin-login">ENTER ADMIN</button>
       </div>
       <div id="admin-dashboard" class="hidden">
-        <div class="admin-actions"><button class="btn secondary" id="btn-admin-refresh">REFRESH</button><button class="btn secondary" id="admin-preview-toggle">DEALER PREVIEW</button></div>
+        <div class="admin-metrics" id="admin-metrics"></div>
+        <div class="admin-actions admin-primary-actions">
+          <button class="btn secondary" id="btn-admin-refresh">REFRESH</button>
+          <button class="btn secondary" id="admin-preview-toggle">DEALER PREVIEW</button>
+          <button class="btn secondary" id="admin-reshuffle">RESHUFFLE SHOE</button>
+          <button class="btn secondary" id="admin-reset-round">RESET ROUND</button><button class="btn secondary" id="admin-pause">PAUSE TABLE</button>
+        </div>
+        <div class="admin-section-title">LIVE EVENTS</div>
+        <div class="admin-event-grid">
+          <button class="admin-event" id="admin-double-xp">⚡ DOUBLE XP <span>OFF</span></button>
+          <button class="admin-event" id="admin-bonus-event">💰 BONUS CASH <span>OFF</span></button>
+        </div>
+        <div class="admin-bonus-row"><input id="admin-bonus-amount" type="number" min="1" max="100000" placeholder="Table bonus amount"><button class="btn" id="admin-bonus-table">GIVE TABLE BONUS</button></div>
         <div id="admin-preview"></div>
+        <div class="admin-section-title">TABLE PLAYERS</div>
         <div id="admin-users"></div>
+        <div class="admin-section-title">ALL ACCOUNTS</div>
+        <div id="admin-accounts"></div>
       </div>
       <button class="btn panel-btn" id="btn-admin-close">CLOSE</button>
     </div>
@@ -261,9 +278,16 @@
         <label>GUI scale — <span id="scale-pct">100%</span></label>
         <input type="range" id="slider-scale" min="80" max="130" value="100" step="5" />
       </div>
-      <button class="btn secondary panel-btn" id="btn-settings-admin">ADMIN</button>
+      <div class="settings-row graphics-row">
+        <label>Graphics profile</label>
+        <div class="graphics-choice" id="graphics-choice">
+          <button class="graphics-option" id="graphics-pc" data-device="pc">🖥️ PC</button>
+          <button class="graphics-option" id="graphics-phone" data-device="phone">📱 PHONE</button>
+        </div>
+        <small class="settings-help">PC uses full visual effects. Phone reduces heavy effects and optimizes the GUI.</small>
+      </div>
       <button class="btn panel-btn" id="btn-settings-close">CLOSE</button>
-      <button class="btn panel-btn" id="btn-leave-table">LEAVE TABLE</button>
+      <button class="btn panel-btn hidden" id="btn-leave-table">LEAVE TABLE</button>
     </div>
   </div>
 
