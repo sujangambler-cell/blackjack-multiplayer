@@ -54,20 +54,43 @@ function tone(freq, duration, kind = "sine", sweep = 0, vol = 0.5) {
 }
 
 const SFX = {
-  click: () => tone(700, 0.06, "square", 0, 0.4),
-  hover: () => tone(500, 0.03, "sine", 0, 0.12),
-  chip: () => tone(900, 0.05, "sine", -200, 0.3),
-  deal: () => tone(320, 0.08, "sine", 180, 0.35),
-  flip: () => tone(500, 0.07, "sine", 150, 0.3),
-  hit: () => tone(420, 0.09, "triangle", 100, 0.32),
-  stand: () => tone(250, 0.12, "triangle", -40, 0.28),
-  blackjack: () => { tone(660, 0.16, "sine", 180, 0.42); setTimeout(() => tone(990, 0.28, "sine", 80, 0.35), 90); },
-  join: () => tone(560, 0.12, "sine", 160, 0.3),
-  leave: () => tone(300, 0.14, "sine", -100, 0.25),
-  win: () => { tone(660, 0.35, "sine", 220, 0.45); },
-  lose: () => tone(180, 0.4, "sine", -80, 0.45),
-  bust: () => tone(140, 0.35, "square", -60, 0.45),
-  push: () => tone(420, 0.2, "sine", 0, 0.3),
+  click: () => tone(680, 0.055, "square", 40, 0.24),
+  hover: () => tone(520, 0.025, "sine", 20, 0.08),
+  chip: () => { tone(760, 0.045, "triangle", 90, 0.24); setTimeout(() => tone(1080, 0.035, "sine", -60, 0.12), 38); },
+  deal: () => { tone(230, 0.045, "triangle", 80, 0.22); setTimeout(() => tone(390, 0.07, "sine", 120, 0.18), 35); },
+  flip: () => { tone(360, 0.05, "triangle", 180, 0.18); setTimeout(() => tone(620, 0.07, "sine", 100, 0.16), 35); },
+  hit: () => { tone(310, 0.055, "triangle", 140, 0.22); setTimeout(() => tone(520, 0.08, "sine", 80, 0.16), 45); },
+  stand: () => { tone(250, 0.08, "triangle", -30, 0.2); setTimeout(() => tone(190, 0.1, "sine", -20, 0.12), 55); },
+  shuffle: () => { [0,70,140,210].forEach((d,i)=>setTimeout(()=>tone(260+i*55,0.055,"triangle",35,0.14),d)); },
+  join: () => { tone(440,0.08,"sine",120,0.18); setTimeout(()=>tone(660,0.12,"sine",140,0.2),70); },
+  leave: () => { tone(420,0.09,"sine",-120,0.16); setTimeout(()=>tone(260,0.13,"sine",-80,0.12),70); },
+  chat: () => { tone(720,0.045,"sine",60,0.11); setTimeout(()=>tone(900,0.055,"sine",0,0.08),45); },
+  notify: () => { tone(580,0.07,"sine",90,0.15); setTimeout(()=>tone(760,0.1,"sine",60,0.14),70); },
+  blackjack: () => {
+    [660,780,920,1100].forEach((f,i)=>setTimeout(()=>tone(f,0.16,"sine",80,0.24),i*85));
+    setTimeout(()=>tone(1320,0.35,"sine",0,0.2),350);
+  },
+  win: () => {
+    [520,660,820].forEach((f,i)=>setTimeout(()=>tone(f,0.18,"sine",100,0.22),i*85));
+    setTimeout(()=>tone(1040,0.34,"sine",160,0.24),270);
+  },
+  lose: () => {
+    tone(260,0.18,"triangle",-50,0.22);
+    setTimeout(()=>tone(205,0.2,"triangle",-60,0.2),130);
+    setTimeout(()=>tone(155,0.3,"sine",-30,0.16),270);
+  },
+  bust: () => {
+    tone(240,0.12,"square",-40,0.2);
+    setTimeout(()=>tone(145,0.28,"triangle",-60,0.2),100);
+  },
+  push: () => {
+    tone(420,0.12,"sine",60,0.18);
+    setTimeout(()=>tone(560,0.14,"sine",80,0.16),110);
+    setTimeout(()=>tone(700,0.18,"sine",40,0.14),240);
+  },
+  payout: () => {
+    [720,860,1020].forEach((f,i)=>setTimeout(()=>tone(f,0.08,"triangle",50,0.12),i*55));
+  },
   pity: () => { tone(500, 0.15, "sine", 100, 0.4); setTimeout(() => tone(700, 0.25, "sine", 150, 0.4), 120); },
 };
 function play(name) {
@@ -435,12 +458,14 @@ function shakeTable() {
   void tw.offsetWidth;
   tw.classList.add("shake");
 }
-function centerBanner(text, kind) {
+function centerBanner(text, kind, subtitle = "") {
   const slot = $("#turn-banner-slot");
   slot.innerHTML = "";
-  const b = el("div", "center-banner " + (kind || ""), text);
+  const b = el("div", "center-banner " + (kind || ""));
+  b.appendChild(el("div", "banner-title", text));
+  if (subtitle) b.appendChild(el("div", "banner-subtitle", subtitle));
   slot.appendChild(b);
-  setTimeout(() => { if (slot.contains(b)) b.remove(); }, 1800);
+  setTimeout(() => { if (slot.contains(b)) b.remove(); }, 2100);
 }
 function pityBanner() {
   const slot = $("#turn-banner-slot");
@@ -737,25 +762,36 @@ function onState(state) {
   }
 }
 
+function pulsePayout() {
+  const balance = $("#balance-chip");
+  if (!balance) return;
+  balance.classList.remove("payout-pulse");
+  void balance.offsetWidth;
+  balance.classList.add("payout-pulse");
+  setTimeout(() => balance.classList.remove("payout-pulse"), 900);
+}
+
 function handleResult(result) {
+  pulsePayout();
   if (result === "win" || result === "blackjack") {
     play(result === "blackjack" ? "blackjack" : "win");
+    play("payout");
     flash("win");
     burstConfetti();
-    centerBanner(result === "blackjack" ? "BLACKJACK!" : "YOU WIN!", "win");
+    centerBanner(result === "blackjack" ? "BLACKJACK!" : "YOU WIN!", "win", result === "blackjack" ? "NATURAL • 3:2 PAYOUT" : "NICE HAND • PAYOUT SECURED");
   } else if (result === "push") {
     play("push");
-    centerBanner("PUSH", "push");
+    centerBanner("PUSH", "push", "SECOND CHANCE • YOUR BET IS RETURNED");
   } else if (result === "lose") {
     play("lose");
     flash("lose");
     shakeTable();
-    centerBanner("DEALER WINS", "lose");
+    centerBanner("DEALER WINS", "lose", "NEXT HAND IS WAITING");
   } else if (result === "bust") {
     play("bust");
     flash("lose");
     shakeTable();
-    centerBanner("BUST!", "bust");
+    centerBanner("BUST!", "bust", "RESET • NEXT HAND");
   }
 }
 
