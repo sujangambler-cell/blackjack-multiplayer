@@ -1244,3 +1244,170 @@ body { background: #050505; }
 .roulette-result{font:700 14px var(--font-display);letter-spacing:.14em;min-height:20px}.roulette-bets-grid{width:min(760px,100%);display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.roulette-bet{min-height:54px;border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;background:#222;font:700 12px var(--font-display);letter-spacing:.05em;cursor:pointer}.roulette-bet small{opacity:.55}.roulette-bet.red{background:#8d2639}.roulette-bet.black{background:#151515}.roulette-bet.green{background:#1f7650}.roulette-bet.neutral,.roulette-bet.dozen{background:rgba(255,255,255,.08)}.roulette-number-strip{width:min(920px,100%);display:grid;grid-template-columns:repeat(19,1fr);gap:4px}.roulette-number{min-height:30px;border:0;border-radius:5px;color:#fff;font:700 10px var(--font-display);cursor:pointer}.roulette-number.red{background:#8d2639}.roulette-number.black{background:#151515}.roulette-number.green{background:#1f7650}.roulette-controls{width:min(760px,100%);display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap}.roulette-chip-amount{min-width:86px;text-align:center;font:700 14px var(--font-display);padding:11px 12px;border-radius:10px;background:rgba(255,255,255,.08)}.roulette-seat-info{font-size:11px;color:var(--text-soft);letter-spacing:.08em}
 @media(max-width:760px){.casino-home{min-height:auto;height:100%;justify-content:flex-start;overflow:auto;padding:22px 12px}.game-picker{grid-template-columns:1fr;width:min(440px,100%);gap:10px}.game-card{min-height:124px;display:grid;grid-template-columns:58px 1fr auto;grid-template-rows:1fr 1fr;text-align:left;padding:14px 16px}.game-card-icon{grid-row:1/3;width:56px;height:56px;margin:0}.game-card-name{align-self:end}.game-card-desc{align-self:start}.game-card-action{grid-column:3;grid-row:1/3;align-self:center;margin:0}.home-tools{width:min(440px,100%)}#screen-lobby,#screen-roulette-lobby{padding:12px}#screen-lobby .lobby-card,#screen-roulette-lobby .lobby-card{max-height:calc(100vh - 24px);width:100%}.roulette-stage{width:100%;max-height:calc(100vh - 65px);padding:8px 8px 18px}.roulette-bets-grid{grid-template-columns:repeat(3,1fr)}.roulette-number-strip{grid-template-columns:repeat(9,1fr)}.roulette-controls .btn{min-height:46px}.roulette-number{min-height:36px}}
 @media(max-width:420px){.home-tools{grid-template-columns:1fr;width:min(320px,100%)}.roulette-bets-grid{grid-template-columns:repeat(2,1fr)}.roulette-wheel-wrap{width:170px;height:170px}}
+
+/* ==================== CASINO HUB LAYOUT HOTFIX ====================
+   The game selector is wider than the old login card by design.  Keep the
+   login card compact, but expand the same card when it becomes the hub. */
+.auth-card.main-menu-mode {
+  width: min(1120px, 96vw);
+  max-width: 1120px;
+  min-height: min(760px, 92vh);
+  padding: 24px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.auth-card.main-menu-mode .casino-home {
+  width: 100%;
+  max-width: 1060px;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 18px 12px;
+  box-sizing: border-box;
+}
+.auth-card.main-menu-mode .game-picker { width: 100%; }
+.auth-card.main-menu-mode .home-footer { width: 100%; }
+@media (max-width: 760px) {
+  .auth-card.main-menu-mode {
+    width: 96vw;
+    min-height: calc(100dvh - 24px);
+    padding: 12px;
+    overflow: auto;
+  }
+  .auth-card.main-menu-mode .casino-home {
+    width: 100%;
+    padding: 10px 4px 16px;
+  }
+}
+
+
+/* ======================================================================
+   CASINO X SYSTEMS PATCH — appearance, premium roulette, admin controls
+   ====================================================================== */
+:root { --casino-accent:#d7b56d; }
+[data-cosmetic-theme="midnight"] { --accent:#7fc7ff; }
+[data-cosmetic-theme="royal"] { --accent:#c78cff; }
+[data-cosmetic-theme="neon"] { --accent:#4ce0c0; }
+[data-cosmetic-theme="orbit"] { --accent:#5dd6ff; }
+[data-cosmetic-theme="admin_star"] { --accent:#ffd36e; }
+
+[data-cosmetic-theme="midnight"] body::after {
+  background: radial-gradient(circle at 20% 25%, rgba(40,150,220,.18), transparent 22%), radial-gradient(circle at 80% 70%, rgba(60,110,180,.14), transparent 24%);
+}
+[data-cosmetic-theme="royal"] body::after {
+  background: radial-gradient(circle at 25% 30%, rgba(180,80,220,.18), transparent 22%), radial-gradient(circle at 75% 70%, rgba(110,50,170,.15), transparent 25%);
+}
+[data-cosmetic-theme="neon"] body::after {
+  background: radial-gradient(circle at 20% 30%, rgba(40,220,190,.15), transparent 20%), radial-gradient(circle at 80% 65%, rgba(40,160,190,.13), transparent 25%);
+}
+[data-cosmetic-theme="orbit"] body::after {
+  background: radial-gradient(circle at 25% 20%, rgba(70,180,255,.18), transparent 20%), radial-gradient(circle at 75% 75%, rgba(80,100,255,.16), transparent 25%);
+}
+
+.appearance-card { width:min(680px,94vw); max-height:88vh; overflow:auto; }
+.appearance-subtitle { font-size:12px; opacity:.65; margin-top:-10px; }
+.appearance-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.appearance-item {
+  display:grid; grid-template-columns:72px 1fr auto; align-items:center; gap:10px;
+  padding:10px; border:1px solid rgba(255,255,255,.12); border-radius:14px;
+  background:rgba(255,255,255,.035);
+}
+.appearance-item.equipped { border-color:var(--accent); box-shadow:0 0 20px rgba(255,255,255,.08); }
+.appearance-item.locked { opacity:.68; }
+.appearance-item small { display:block; opacity:.58; margin-top:3px; font-size:10px; letter-spacing:.06em; }
+.appearance-preview {
+  height:52px; border-radius:11px; display:grid; place-items:center; text-align:center; padding:5px;
+  color:#fff; font-size:9px; font-weight:800; letter-spacing:.08em;
+  background:linear-gradient(145deg,var(--preview-a),var(--preview-b));
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.2), 0 8px 20px rgba(0,0,0,.22);
+}
+.limited-badge { display:inline-block; margin-top:5px; padding:3px 6px; border-radius:999px; border:1px solid currentColor; font-size:8px; letter-spacing:.1em; }
+
+.admin-section { border-top:1px solid rgba(127,127,127,.16); padding-top:12px; }
+.admin-section h3 { font:700 11px var(--font-display); letter-spacing:.18em; opacity:.65; margin:0 0 9px; }
+.admin-control-row { display:grid; grid-template-columns:minmax(100px,1fr) minmax(90px,160px) auto; gap:7px; align-items:center; padding:7px 0; }
+.admin-control-row strong { overflow:hidden; text-overflow:ellipsis; }
+.admin-number,.admin-select,.admin-user-actions input {
+  width:100%; box-sizing:border-box; border:1px solid rgba(255,255,255,.18); border-radius:9px;
+  background:rgba(0,0,0,.45); color:var(--text); padding:9px 10px; outline:none;
+}
+.admin-number:focus,.admin-select:focus,.admin-user-actions input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(255,255,255,.05); }
+.admin-select option { background:#0b0b0d; color:#fff; }
+.admin-user-actions .btn { min-height:38px; padding:8px 10px; }
+.admin-actions { flex-wrap:wrap; }
+
+.roulette-stage { position:relative; }
+.roulette-header span { display:block; }
+.roulette-wheel-wrap { position:relative; width:clamp(230px,31vw,360px); height:clamp(230px,31vw,360px); }
+.roulette-wheel {
+  width:100%; height:100%; border:10px solid rgba(255,255,255,.18);
+  background:radial-gradient(circle at center,#d5b26a 0 4%,#171717 4.5% 13%,#080808 13.5% 78%,#c8a55e 78.5% 81%,#101010 81.5%);
+  box-shadow:0 20px 60px rgba(0,0,0,.55), inset 0 0 0 7px rgba(255,255,255,.08);
+  transition:transform 5.2s cubic-bezier(.12,.66,.17,1); position:relative; overflow:hidden;
+}
+.roulette-pockets { position:absolute; inset:7%; border-radius:50%; }
+.wheel-pocket {
+  position:absolute; left:50%; top:50%; width:34px; height:50%; transform-origin:50% 100%;
+  margin-left:-17px; margin-top:-50%; display:flex; justify-content:center; align-items:flex-start;
+  padding-top:7px; box-sizing:border-box; font:700 9px var(--font-display); color:#fff;
+}
+.wheel-pocket::after { content:""; position:absolute; inset:2px 2px 7px; border-radius:4px; z-index:-1; opacity:.9; }
+.wheel-pocket.red::after { background:#8d2639; }
+.wheel-pocket.black::after { background:#111; }
+.wheel-pocket.green::after { background:#1f7650; }
+.wheel-pocket { transform:rotate(calc(var(--i) * 9.7297deg)); }
+.roulette-hub { position:absolute; inset:31%; border-radius:50%; display:grid; place-items:center; z-index:4; background:radial-gradient(circle,#d7b56d 0 8%,#171717 9% 57%,#c8a55e 58% 63%,#080808 64%); border:3px solid rgba(255,255,255,.25); box-shadow:0 0 30px rgba(0,0,0,.7); }
+.roulette-hub span { font:700 10px var(--font-display); letter-spacing:.14em; color:#fff; }
+.roulette-pointer {
+  position:absolute; top:-4px; left:50%; transform:translateX(-50%); z-index:8; width:0; height:0;
+  border-left:10px solid transparent; border-right:10px solid transparent; border-top:0;
+  border-bottom:18px solid var(--accent); filter:drop-shadow(0 2px 5px #000);
+}
+.roulette-ball {
+  position:absolute; width:15px; height:15px; border-radius:50%; background:#fff; border:2px solid #bbb;
+  box-shadow:0 2px 8px #000, 0 0 10px rgba(255,255,255,.65); left:50%; top:8%; margin-left:-7.5px; z-index:6;
+}
+.roulette-spinning { transform:rotate(var(--target-rotation)); }
+.ball-spinning { animation:ballTravel 5.2s cubic-bezier(.15,.7,.17,1) forwards; }
+@keyframes ballTravel {
+  0% { transform:rotate(0deg) translateY(0) translateX(0); }
+  35% { transform:rotate(900deg) translateY(2px) translateX(0); }
+  75% { transform:rotate(2200deg) translateY(7px) translateX(0); }
+  100% { transform:rotate(2800deg) translateY(12px) translateX(0); }
+}
+.roulette-meta { width:min(760px,100%); display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.roulette-meta > div { padding:9px 10px; border:1px solid rgba(255,255,255,.11); border-radius:10px; background:rgba(0,0,0,.18); text-align:center; }
+.roulette-meta span { display:block; font-size:8px; letter-spacing:.15em; opacity:.55; }
+.roulette-meta strong { display:block; margin-top:3px; font:700 12px var(--font-display); }
+.roulette-history { display:flex; gap:5px; min-height:28px; flex-wrap:wrap; justify-content:center; }
+.history-number { min-width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font-size:10px; font-weight:800; border:1px solid rgba(255,255,255,.18); }
+.history-number.red { background:#8d2639; color:#fff; }
+.history-number.black { background:#111; color:#fff; }
+.history-number.green { background:#1f7650; color:#fff; }
+.roulette-number-board { width:min(920px,100%); display:grid; grid-template-columns:44px 1fr; gap:6px; }
+.roulette-zero-bet { min-height:100%; border-radius:7px; background:#1f7650; color:#fff; display:grid; place-items:center; font:800 13px var(--font-display); cursor:pointer; border:1px solid rgba(255,255,255,.18); }
+.roulette-zero-bet:disabled { opacity:.45; cursor:not-allowed; }
+.roulette-number-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+.roulette-number { min-height:34px; border:1px solid rgba(255,255,255,.12); }
+.roulette-chip-amount.selected-chip { border:1px solid var(--accent); box-shadow:0 0 18px rgba(255,255,255,.16); }
+#roulette-admin { font-size:10px; letter-spacing:.08em; }
+
+@media(max-width:760px){
+  .appearance-grid { grid-template-columns:1fr; }
+  .appearance-item { grid-template-columns:64px 1fr auto; }
+  .roulette-wheel-wrap { width:220px; height:220px; }
+  .roulette-number-board { grid-template-columns:34px 1fr; }
+  .roulette-number-grid { grid-template-columns:repeat(3,1fr); }
+  .roulette-meta { grid-template-columns:repeat(3,1fr); }
+  .admin-control-row { grid-template-columns:1fr 1fr; }
+  .admin-control-row strong { grid-column:1/-1; }
+  .admin-control-row .btn { width:100%; }
+}
+@media(max-width:420px){
+  .roulette-wheel-wrap { width:185px; height:185px; }
+  .roulette-meta > div { padding:7px 4px; }
+  .roulette-meta span { font-size:7px; }
+  .roulette-number { min-height:36px; }
+}

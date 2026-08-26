@@ -64,7 +64,7 @@
         <input id="input-room" type="text" maxlength="12" placeholder="e.g. LUCKY7 (blank = public)" autocomplete="off">
       </div>
       <div class="auth-error" id="room-error"></div>
-      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-public-tables">PUBLIC TABLES</button><button class="btn secondary" id="btn-create-public">CREATE PUBLIC</button></div>
+      <div class="lobby-actions"><button class="btn secondary" id="btn-create-public">CREATE PUBLIC</button></div>
       <button class="btn auth-submit menu-primary" id="btn-join-table">JOIN TABLE</button>
       <button class="btn secondary auth-submit" id="btn-back-menu">BACK</button>
       <div id="public-table-list" class="public-table-list"></div>
@@ -77,7 +77,7 @@
       <div class="roulette-mark">◉</div><div class="main-menu-title">ROULETTE</div><div class="auth-sub">EUROPEAN WHEEL • 0–36</div>
       <div class="field"><label>Table code</label><input id="roulette-room" maxlength="12" placeholder="Blank = public" autocomplete="off"></div>
       <div class="auth-error" id="roulette-room-error"></div>
-      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-roulette-public">PUBLIC TABLES</button><button class="btn secondary" id="btn-roulette-create">CREATE PUBLIC</button></div>
+      <div class="lobby-actions"><button class="btn secondary" id="btn-roulette-create">CREATE PUBLIC</button></div>
       <button class="btn auth-submit menu-primary" id="btn-roulette-join">JOIN TABLE</button><button class="btn secondary" id="btn-roulette-back">BACK TO CASINO</button>
       <div id="roulette-table-list" class="public-table-list"></div>
     </div>
@@ -85,16 +85,18 @@
 
   <!-- ==================== ROULETTE TABLE ==================== -->
   <div id="screen-roulette" class="screen">
-    <div class="top-bar"><div class="top-left"><div class="profile-chip"><span id="roulette-profile-name">PLAYER</span><span class="balance-chip" id="roulette-balance">$0</span></div><div class="room-chip" id="roulette-room-chip">ROULETTE</div></div><div class="top-actions"><button class="icon-btn" id="roulette-settings" aria-label="Settings">⚙</button></div></div>
+    <div class="top-bar"><div class="top-left"><div class="profile-chip"><span id="roulette-profile-name">PLAYER</span><span class="balance-chip" id="roulette-balance">$0</span></div><div class="room-chip" id="roulette-room-chip">ROULETTE</div><span class="room-chip" id="roulette-player-count">0/5</span><span class="room-chip" id="roulette-status">BETTING</span></div><div class="top-actions"><button class="icon-btn hidden" id="roulette-host" aria-label="Host controls">♛</button><button class="icon-btn hidden" id="roulette-admin" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="roulette-settings" aria-label="Settings">⚙</button></div></div>
     <div class="roulette-stage">
-      <div class="roulette-header"><span>ROULETTE</span><small>EUROPEAN WHEEL</small></div>
-      <div class="roulette-wheel-wrap"><div class="roulette-wheel" id="roulette-wheel"><div class="roulette-zero">0</div><div class="roulette-wheel-ring">CASINO X</div></div></div>
+      <div class="roulette-header"><span>CASINO X ROULETTE</span><small>EUROPEAN • 0–36 • SERVER-SETTLED</small></div>
+      <div class="roulette-wheel-wrap"><div class="roulette-pointer"></div><div class="roulette-wheel" id="roulette-wheel"><div class="roulette-pockets" id="roulette-pockets"></div><div class="roulette-hub"><span>CASINO X</span></div><div class="roulette-ball" id="roulette-ball"></div></div></div>
       <div class="roulette-result" id="roulette-result">PLACE YOUR BETS</div>
+      <div class="roulette-history" id="roulette-history"></div>
+      <div class="roulette-meta"><div><span>BALANCE</span><strong id="roulette-balance-meta">$0</strong></div><div><span>TOTAL BETS</span><strong id="roulette-total-bets">$0</strong></div><div><span>ROUND</span><strong id="roulette-round-state">BETTING</strong></div></div>
       <div class="roulette-bets-grid">
         <button class="roulette-bet red" data-bet="red">RED<br><small>1:1</small></button><button class="roulette-bet black" data-bet="black">BLACK<br><small>1:1</small></button><button class="roulette-bet green" data-bet="odd">ODD<br><small>1:1</small></button><button class="roulette-bet black" data-bet="even">EVEN<br><small>1:1</small></button><button class="roulette-bet neutral" data-bet="low">1–18<br><small>1:1</small></button><button class="roulette-bet neutral" data-bet="high">19–36<br><small>1:1</small></button>
         <button class="roulette-bet dozen" data-bet="dozen1">1–12<br><small>2:1</small></button><button class="roulette-bet dozen" data-bet="dozen2">13–24<br><small>2:1</small></button><button class="roulette-bet dozen" data-bet="dozen3">25–36<br><small>2:1</small></button>
       </div>
-      <div class="roulette-number-strip" id="roulette-number-strip"></div>
+      <div class="roulette-number-board"><div class="roulette-zero-bet" id="roulette-zero-bet">0</div><div class="roulette-number-grid" id="roulette-number-strip"></div></div>
       <div class="roulette-controls"><div class="roulette-chip-amount" id="roulette-chip-amount">$100</div><button class="btn secondary" id="roulette-clear">CLEAR</button><button class="btn good" id="roulette-spin">SPIN</button><button class="btn panel-btn" id="roulette-leave">LEAVE</button></div>
       <div class="roulette-seat-info" id="roulette-seat-info"></div>
     </div>
@@ -286,10 +288,27 @@
       </div>
       <div id="admin-dashboard" class="hidden">
         <div class="admin-actions"><button class="btn secondary" id="btn-admin-refresh">REFRESH</button><button class="btn secondary" id="admin-preview-toggle">DEALER PREVIEW</button></div>
+        <section class="admin-section"><h3>ECONOMY</h3><div id="admin-economy"></div></section>
+        <section class="admin-section"><h3>PLAYER CONTROLS</h3><div id="admin-users"></div></section>
+        <section class="admin-section"><h3>SEASON</h3><div id="admin-season-controls"></div></section>
+        <section class="admin-section"><h3>ADMIN ITEMS</h3><div id="admin-item-controls"></div></section>
         <div id="admin-preview"></div>
-        <div id="admin-users"></div>
       </div>
       <button class="btn panel-btn" id="btn-admin-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== APPEARANCE OVERLAY ==================== -->
+  <div class="overlay" id="appearance-overlay">
+    <div class="overlay-card appearance-card">
+      <div class="overlay-title">APPEARANCE</div>
+      <div class="appearance-subtitle">Only items in your permanent inventory can be equipped.</div>
+      <div class="store-section-title">THEMES</div>
+      <div id="appearance-themes" class="appearance-grid"></div>
+      <div class="store-section-title">COSMETICS</div>
+      <div id="appearance-chips" class="appearance-grid"></div>
+      <button class="btn secondary panel-btn" id="btn-appearance-store">BUY AT SHOP</button>
+      <button class="btn panel-btn" id="btn-appearance-close">CLOSE</button>
     </div>
   </div>
 
@@ -313,7 +332,7 @@
         <label>GUI scale — <span id="scale-pct">100%</span></label>
         <input type="range" id="slider-scale" min="80" max="130" value="100" step="5" />
       </div>
-      <button class="btn secondary panel-btn" id="btn-settings-admin">ADMIN</button>
+      <button class="btn secondary panel-btn" id="btn-settings-appearance">APPEARANCE</button>
       <button class="btn panel-btn" id="btn-settings-close">CLOSE</button>
       <button class="btn panel-btn" id="btn-leave-table">LEAVE TABLE</button>
     </div>

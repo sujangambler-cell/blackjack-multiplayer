@@ -30,3 +30,17 @@ If `DATABASE_URL` is configured but PostgreSQL cannot be reached, the server int
 The player wallet, XP/levels, Season 1 progression, inventory/cosmetics, Store and Profile are shared across all games. Blackjack and Roulette write to the same account and progression records. Store items are tagged with a scope (`GLOBAL`, `BLACKJACK`, or `ROULETTE`) so future games can be added without duplicating the economy.
 
 Roulette is a server-authoritative European wheel (0–36) with red/black, odd/even, low/high, dozens and straight-number bets. The host controls the spin; bets are deducted server-side and winnings are returned server-side.
+
+
+## Casino X quality/security updates
+
+- Store ownership/equipment is server-authoritative and persisted with the existing account/PostgreSQL JSONB data.
+- Appearance is available from Settings and only owned cosmetics can be equipped.
+- Limited Season 1 rewards are permanent after acquisition; the catalog does not delete ownership at season rollover.
+- Admin access is only exposed inside an authenticated game table and server authorization is required for admin actions.
+- Public tables are shown directly in each Join/Create lobby and refreshed through WebSocket updates.
+- Roulette uses a server-selected European 0–36 result; the client animation receives that result and animates toward it.
+- Roulette validates bet type, number, amount, balance, phase, and limits server-side and clears settled wagers before the result phase can refund them.
+- Admin Roulette luck is bounded and server-side, with temporary table luck and per-player luck controls.
+- Season XP is shared across Blackjack and Roulette through the existing account progression state.
+- Responsive layouts were added for Appearance, Admin, Season, and Roulette.
