@@ -20,7 +20,18 @@
     "daily_challenge_date": "",
     "daily_challenge_claimed": [],
     "friends": [],
-    "session_token": null
+    "session_token": null,
+    "owned_themes": [
+      "classic"
+    ],
+    "owned_chips": [
+      "classic"
+    ],
+    "equipped_theme": "classic",
+    "equipped_chip": "classic",
+    "season_xp": 0,
+    "season_claimed": [],
+    "season_title": ""
   },
   "testejnjts": {
     "username": "testejnjts",

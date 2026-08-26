@@ -23,6 +23,13 @@ from websockets.asyncio.server import serve
 from websockets.http11 import Response
 from websockets.datastructures import Headers
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -89,25 +96,8 @@ def new_id():
 rooms: dict[str, dict] = {}
 
 # ---------------------------------------------------------------------------
-# Persistent account storage
-#
-# Production: PostgreSQL via DATABASE_URL.
-# Local development: accounts.json fallback when DATABASE_URL is not set.
-#
-# The current Casino X version actually stores accounts in accounts.json
-# (not SQLite). PostgreSQL replaces that ephemeral file storage on Render.
+# Simple account storage (intentionally lightweight for the current version)
 # ---------------------------------------------------------------------------
-try:
-    import psycopg
-    from psycopg.rows import dict_row
-except ImportError:
-    psycopg = None
-    dict_row = None
-
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
-
 ACCOUNTS: dict[str, dict] = {}
 TOKENS: dict[str, str] = {}
 ADMIN_SOCKETS = set()
@@ -117,6 +107,10 @@ BANNED_WORDS = {
     "dick", "pussy", "porn", "sex", "rape", "slut", "whore"
 }
 
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+
 def _db_enabled():
     return bool(DATABASE_URL)
 
@@ -124,7 +118,7 @@ def _db_connect():
     if not _db_enabled():
         raise RuntimeError("DATABASE_URL is not configured")
     if psycopg is None:
-        raise RuntimeError("psycopg is not installed. Add psycopg[binary] to requirements.txt")
+        raise RuntimeError("psycopg is not installed")
     return psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=10)
 
 def _ensure_db():
@@ -142,17 +136,13 @@ def _ensure_db():
 
 def _load_accounts_from_db():
     global ACCOUNTS, TOKENS
-    _ensure_db()
     with _db_connect() as conn:
-        rows = conn.execute(
-            "SELECT username_key, data FROM accounts"
-        ).fetchall()
+        rows = conn.execute("SELECT username_key, data FROM accounts").fetchall()
     ACCOUNTS = {}
     TOKENS = {}
     for row in rows:
         key = row["username_key"]
         account = dict(row["data"])
-        # Keep the canonical username key even if an older record omitted it.
         ACCOUNTS[key] = account
         tok = account.get("session_token")
         if tok:
@@ -160,32 +150,30 @@ def _load_accounts_from_db():
 
 def _migrate_json_accounts_to_db():
     if not ACCOUNTS_FILE.exists():
-        return False
+        return
     try:
         raw = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
-            return False
+            return
     except Exception as exc:
         print("Could not read accounts.json for migration:", exc)
-        return False
+        return
 
     with _db_connect() as conn:
         count = conn.execute("SELECT COUNT(*) AS n FROM accounts").fetchone()["n"]
     if count:
-        return False
+        return
 
     global ACCOUNTS, TOKENS
     ACCOUNTS = raw
     TOKENS = {}
     for key, account in ACCOUNTS.items():
-        tok = account.get("session_token")
-        if tok:
-            TOKENS[tok] = key
-    for account in ACCOUNTS.values():
+        # Existing session tokens are deliberately invalidated during migration.
+        account["session_token"] = None
+        TOKENS.pop(account.get("session_token"), None)
         ensure_account_progress(account)
     save_accounts()
     print(f"Migrated {len(ACCOUNTS)} account(s) from accounts.json to PostgreSQL.")
-    return True
 
 def load_accounts():
     global ACCOUNTS, TOKENS
@@ -195,11 +183,10 @@ def load_accounts():
             _load_accounts_from_db()
             if not ACCOUNTS:
                 _migrate_json_accounts_to_db()
+                _load_accounts_from_db()
             print(f"PostgreSQL account storage enabled ({len(ACCOUNTS)} account(s)).")
             return
         except Exception as exc:
-            # Do not silently fall back in production: running with local file
-            # storage on Render would reintroduce the data-loss problem.
             print("FATAL: PostgreSQL is configured but unavailable:", exc)
             raise
 
@@ -219,31 +206,19 @@ def load_accounts():
 
 def save_accounts():
     if _db_enabled():
-        try:
-            with _db_connect() as conn:
-                for key, account in ACCOUNTS.items():
-                    conn.execute("""
-                        INSERT INTO accounts
-                            (username_key, username, salt, password, data, updated_at)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
-                        ON CONFLICT (username_key) DO UPDATE SET
-                            username = EXCLUDED.username,
-                            salt = EXCLUDED.salt,
-                            password = EXCLUDED.password,
-                            data = EXCLUDED.data,
-                            updated_at = NOW()
-                    """, (
-                        key,
-                        account.get("username", key),
-                        account.get("salt", ""),
-                        account.get("password", ""),
-                        json.dumps(account),
-                    ))
-            return
-        except Exception as exc:
-            print("Could not save accounts to PostgreSQL:", exc)
-            raise
-
+        with _db_connect() as conn:
+            for key, account in ACCOUNTS.items():
+                conn.execute("""
+                    INSERT INTO accounts (username_key, username, salt, password, data, updated_at)
+                    VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
+                    ON CONFLICT (username_key) DO UPDATE SET
+                        username = EXCLUDED.username,
+                        salt = EXCLUDED.salt,
+                        password = EXCLUDED.password,
+                        data = EXCLUDED.data,
+                        updated_at = NOW()
+                """, (key, account.get("username", key), account.get("salt", ""), account.get("password", ""), json.dumps(account)))
+        return
     try:
         tmp = ACCOUNTS_FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps(ACCOUNTS, indent=2), encoding="utf-8")
@@ -269,8 +244,6 @@ def verify_password(password, salt, digest):
 
 def new_token():
     return os.urandom(24).hex()
-
-load_accounts()
 
 # ---------------------------------------------------------------------------
 # Progression / daily systems
@@ -350,6 +323,10 @@ def ensure_account_progress(account):
     if changed:
         save_accounts()
     return account
+
+# Database loading is intentionally performed only after all account helper
+# functions are defined. This prevents startup-time NameError during migration.
+load_accounts()
 
 def account_level(xp):
     level = 1
@@ -1218,20 +1195,13 @@ async def ws_handler(websocket):
             account = ACCOUNTS[account_key]
             ensure_account_progress(account)
 
-            # A player may only occupy one seat at a time. Without this guard,
-            # refreshing/reconnecting can create duplicate seats for one account.
-            existing = None
-            for existing_room in rooms.values():
-                existing = next((ep for ep in existing_room.get("players", [])
-                                 if ep.get("username_key") == account_key and ep.get("connected")), None)
-                if existing:
-                    break
-            if existing:
-                await websocket.send(json.dumps({
-                    "type": "error",
-                    "scope": "table",
-                    "message": "You are already connected to a table. Leave that table before joining another."
-                }))
+            # Prevent reconnect/refresh from creating duplicate active seats.
+            already_seated = any(
+                any(p.get("username_key") == account_key and p.get("connected") for p in r.get("players", []))
+                for r in rooms.values()
+            )
+            if already_seated:
+                await websocket.send(json.dumps({"type": "error", "scope": "table", "message": "You are already connected to a table. Leave that table before joining another."}))
                 continue
 
             player = {
