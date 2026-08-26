@@ -31,7 +31,20 @@
     "equipped_chip": "classic",
     "season_xp": 0,
     "season_claimed": [],
-    "season_title": ""
+    "season_title": "",
+    "roulette_games": 0,
+    "roulette_wins": 0,
+    "roulette_biggest_win": 0,
+    "game_stats": {
+      "blackjack": {
+        "games": 0,
+        "wins": 0
+      },
+      "roulette": {
+        "games": 0,
+        "wins": 0
+      }
+    }
   },
   "testejnjts": {
     "username": "testejnjts",
@@ -58,7 +71,31 @@
     "daily_challenge_date": "2026-08-13",
     "daily_challenge_claimed": [],
     "friends": [],
-    "session_token": null
+    "session_token": null,
+    "owned_themes": [
+      "classic"
+    ],
+    "owned_chips": [
+      "classic"
+    ],
+    "equipped_theme": "classic",
+    "equipped_chip": "classic",
+    "season_xp": 0,
+    "season_claimed": [],
+    "season_title": "",
+    "roulette_games": 0,
+    "roulette_wins": 0,
+    "roulette_biggest_win": 0,
+    "game_stats": {
+      "blackjack": {
+        "games": 0,
+        "wins": 0
+      },
+      "roulette": {
+        "games": 0,
+        "wins": 0
+      }
+    }
   },
   "ajvrffpkc": {
     "username": "ajvrffpkc",
@@ -87,7 +124,31 @@
     "friends": [
       "bjvrffpkc"
     ],
-    "session_token": null
+    "session_token": null,
+    "owned_themes": [
+      "classic"
+    ],
+    "owned_chips": [
+      "classic"
+    ],
+    "equipped_theme": "classic",
+    "equipped_chip": "classic",
+    "season_xp": 0,
+    "season_claimed": [],
+    "season_title": "",
+    "roulette_games": 0,
+    "roulette_wins": 0,
+    "roulette_biggest_win": 0,
+    "game_stats": {
+      "blackjack": {
+        "games": 0,
+        "wins": 0
+      },
+      "roulette": {
+        "games": 0,
+        "wins": 0
+      }
+    }
   },
   "bjvrffpkc": {
     "username": "bjvrffpkc",
@@ -114,6 +175,30 @@
     "daily_challenge_date": "2026-08-13",
     "daily_challenge_claimed": [],
     "friends": [],
-    "session_token": null
+    "session_token": null,
+    "owned_themes": [
+      "classic"
+    ],
+    "owned_chips": [
+      "classic"
+    ],
+    "equipped_theme": "classic",
+    "equipped_chip": "classic",
+    "season_xp": 0,
+    "season_claimed": [],
+    "season_title": "",
+    "roulette_games": 0,
+    "roulette_wins": 0,
+    "roulette_biggest_win": 0,
+    "game_stats": {
+      "blackjack": {
+        "games": 0,
+        "wins": 0
+      },
+      "roulette": {
+        "games": 0,
+        "wins": 0
+      }
+    }
   }
 }

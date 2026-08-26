@@ -23,3 +23,10 @@ If `DATABASE_URL` is configured but PostgreSQL cannot be reached, the server int
 - Fixed paid Store item purchase validation.
 - Prevented one account from occupying multiple active table seats.
 - Kept local `accounts.json` fallback for development only.
+
+
+## Universal Casino X systems
+
+The player wallet, XP/levels, Season 1 progression, inventory/cosmetics, Store and Profile are shared across all games. Blackjack and Roulette write to the same account and progression records. Store items are tagged with a scope (`GLOBAL`, `BLACKJACK`, or `ROULETTE`) so future games can be added without duplicating the economy.
+
+Roulette is a server-authoritative European wheel (0–36) with red/black, odd/even, low/high, dozens and straight-number bets. The host controls the spin; bets are deducted server-side and winnings are returned server-side.

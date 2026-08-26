@@ -24,6 +24,10 @@ let myProfile = null;
 let leaderboardData = null;
 let activeRank = "balance";
 let publicTables = [];
+let rouletteTables = [];
+let rouletteState = null;
+let rouletteBetAmount = 100;
+let currentGame = "blackjack";
 let friendsData = [];
 let chatMuted = localStorage.getItem("bj_chat_muted") === "1";
 let storeData = null;
@@ -452,13 +456,13 @@ function connect() {
       return;
     }
     if (msg.type === "public_tables") {
-      publicTables = msg.tables || [];
-      renderPublicTables();
+      if (msg.game === "roulette") { rouletteTables = msg.tables || []; renderRouletteTables(); }
+      else { publicTables = msg.tables || []; renderPublicTables(); }
       return;
     }
     if (msg.type === "public_created") {
-      $("#input-room").value = msg.code;
-      send({type:"join", token:authToken, room:msg.code});
+      if (msg.game === "roulette") { $("#roulette-room").value = msg.code; send({type:"join", token:authToken, room:msg.code, game:"roulette"}); }
+      else { $("#input-room").value = msg.code; send({type:"join", token:authToken, room:msg.code, game:"blackjack"}); }
       return;
     }
     if (msg.type === "friends") {
@@ -482,13 +486,22 @@ function connect() {
     if (msg.type === "joined") {
       myId = msg.id;
       myRoom = msg.room;
+      currentGame = msg.game || "blackjack";
       $("#room-chip").textContent = "TABLE " + myRoom;
       $("#profile-name").textContent = msg.username || loggedUsername || "PLAYER";
       $("#menu-balance").textContent = "$" + msg.balance;
       $("#btn-admin-float").classList.toggle("hidden", !isAdmin);
       $("#chat-messages").innerHTML = "";
       toggleChat(false);
-      showScreen("#screen-table");
+      if (currentGame === "roulette") {
+        $("#roulette-profile-name").textContent = msg.username || loggedUsername || "PLAYER";
+        $("#roulette-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
+        $("#roulette-room-chip").textContent = "ROULETTE " + myRoom;
+        showScreen("#screen-roulette");
+        send({type:"roulette_state"});
+      } else {
+        showScreen("#screen-table");
+      }
       play("join");
       return;
     }
@@ -512,6 +525,7 @@ function connect() {
     if (msg.type === "balance") {
       $("#balance-chip").textContent = "$" + msg.balance;
       $("#menu-balance").textContent = "$" + msg.balance;
+      $("#roulette-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
       return;
     }
     if (msg.type === "profile") {
@@ -565,8 +579,9 @@ function connect() {
       renderAdminUsers(msg.users || [], msg.tablePlayers || [], msg.dealerPreviewActive, msg.dealerPreview);
       return;
     }
+    if (msg.type === "roulette_state") { renderRouletteState(msg.state); return; }
     if (msg.type === "error") {
-      const target = msg.scope === "auth" ? $("#join-error") : (msg.scope === "admin" ? $("#admin-error") : (msg.scope === "daily" ? $("#daily-reward-box") : (msg.scope === "friends" ? $("#friends-error") : $("#room-error"))));
+      const target = msg.scope === "auth" ? $("#join-error") : (msg.scope === "admin" ? $("#admin-error") : (msg.scope === "daily" ? $("#daily-reward-box") : (msg.scope === "friends" ? $("#friends-error") : (msg.scope === "roulette" ? $("#roulette-room-error") : $("#room-error")))));
       if (msg.scope === "daily") target.innerHTML = `<strong>NOT AVAILABLE</strong><span>${msg.message}</span>`;
       else target.textContent = msg.message;
       return;
@@ -808,9 +823,9 @@ function renderStats() {
   const s = myProfile.stats || {};
   $("#stats-hero").innerHTML = `<strong>LEVEL ${myProfile.level || 1}</strong><span>${myProfile.levelTitle || "Rookie"} • ${Number(myProfile.xp || 0).toLocaleString()} XP</span>`;
   const items = [
-    ["GAMES", s.gamesPlayed || 0], ["WINS", s.wins || 0], ["LOSSES", s.losses || 0],
-    ["PUSHES", s.pushes || 0], ["BLACKJACKS", s.blackjacks || 0], ["WIN RATE", `${s.winRate || 0}%`],
-    ["BEST STREAK", s.bestWinStreak || 0], ["BIGGEST WIN", "$" + Number(s.biggestWin || 0).toLocaleString()]
+    ["CASINO GAMES", s.gamesPlayed || 0], ["CASINO WINS", s.wins || 0], ["LOSSES", s.losses || 0],
+    ["BLACKJACKS", s.blackjacks || 0], ["ROULETTE GAMES", s.rouletteGames || 0], ["ROULETTE WINS", s.rouletteWins || 0],
+    ["WIN RATE", `${s.winRate || 0}%`], ["BIGGEST WIN", "$" + Number(s.biggestWin || 0).toLocaleString()]
   ];
   $("#stats-grid").innerHTML = items.map(([a,b]) => `<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
 }
@@ -901,7 +916,7 @@ function renderProfile() {
   if (!p) return;
   $("#profile-hero").innerHTML = `<div><strong>${escapeHtml(p.username)}</strong><span>LEVEL ${p.level} • ${escapeHtml(p.levelTitle)}</span></div><b>$${Number(p.balance||0).toLocaleString()}</b>`;
   const st = p.stats || {};
-  const vals = [["GAMES",st.gamesPlayed],["WINS",st.wins],["LOSSES",st.losses],["PUSHES",st.pushes],["BLACKJACKS",st.blackjacks],["WIN RATE",(st.winRate||0)+"%"],["BEST STREAK",st.bestWinStreak],["BIGGEST WIN","$"+Number(st.biggestWin||0).toLocaleString()]];
+  const vals = [["CASINO GAMES",st.gamesPlayed],["CASINO WINS",st.wins],["LOSSES",st.losses],["BLACKJACKS",st.blackjacks],["ROULETTE GAMES",st.rouletteGames||0],["ROULETTE WINS",st.rouletteWins||0],["WIN RATE",(st.winRate||0)+"%"],["BIGGEST WIN","$"+Number(st.biggestWin||0).toLocaleString()]];
   $("#profile-stats-grid").innerHTML = vals.map(([a,b])=>`<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
   renderProfileFriends();
 }
@@ -922,6 +937,38 @@ function renderPublicTables(){
   box.querySelectorAll('[data-join]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.join})));
   box.querySelectorAll('[data-spec]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.spec,spectate:true})));
 }
+
+function renderRouletteTables(){
+  const box=$("#roulette-table-list"); if(!box) return;
+  const tables=rouletteTables.filter(t=>t.game==="roulette");
+  box.innerHTML=tables.length ? tables.map(t=>`<div class="public-table-row"><div><strong>TABLE ${escapeHtml(t.code)}</strong><small>${escapeHtml(t.host)} • ${t.phase==='SPINNING'?'SPINNING':'BETTING'} • ${t.players}/${t.maxPlayers} players</small></div><div class="public-table-actions">${t.canJoin?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}</div></div>`).join("") : '<div class="admin-empty">No Roulette tables yet. Create one! </div>';
+  box.querySelectorAll('[data-rjoin]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.rjoin,game:'roulette'})));
+}
+function buildRouletteNumbers(){
+  const box=$("#roulette-number-strip"); if(!box) return; box.innerHTML="";
+  for(let n=0;n<=36;n++){
+    const b=el("button","roulette-number",String(n)); b.classList.add(n===0?'green':([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n)?'red':'black'));
+    wireButton(b,()=>send({type:'roulette_bet',token:authToken,betType:'straight',value:n,amount:rouletteBetAmount})); box.appendChild(b);
+  }
+}
+function renderRouletteState(state){
+  rouletteState=state; if(!state) return;
+  $("#roulette-room-chip").textContent="ROULETTE " + state.code;
+  const me=(state.players||[]).find(x=>x.id===myId);
+  $("#roulette-seat-info").textContent=me ? `YOUR BETS: $${Number(me.total||0).toLocaleString()}` : "PLACE A BET TO JOIN THE ROUND";
+  const r=state.lastResult;
+  $("#roulette-result").textContent = state.phase==='SPINNING' ? "THE WHEEL IS SPINNING…" : r ? `RESULT • ${r.number} ${String(r.color).toUpperCase()}` : "PLACE YOUR BETS";
+  $("#roulette-spin").disabled = state.phase!=="BETTING" || !(me && me.total>0);
+  $("#roulette-clear").disabled = state.phase!=="BETTING" || !(me && me.total>0);
+  document.querySelectorAll(".roulette-bet,.roulette-number").forEach(b=>b.disabled=state.phase!=="BETTING");
+  if(r && state.phase==='RESULT'){
+    $("#roulette-wheel").classList.remove("spin-now"); void $("#roulette-wheel").offsetWidth; $("#roulette-wheel").classList.add("spin-now");
+    setTimeout(()=>$("#roulette-wheel").classList.remove("spin-now"),900);
+  }
+}
+function openRouletteLobby(){ currentGame="roulette"; $("#roulette-room-error").textContent=""; showScreen("#screen-roulette-lobby"); send({type:"public_tables",game:"roulette"}); }
+function openBlackjackLobby(){ currentGame="blackjack"; $("#room-error").textContent=""; showScreen("#screen-lobby"); send({type:"public_tables",game:"blackjack"}); }
+
 function appendChat(username,text){
   if(chatMuted) return;
   const box=$("#chat-messages"); if(!box) return;
@@ -1016,15 +1063,13 @@ function initJoin() {
   $("#tab-login").addEventListener("click", () => setAuthMode("login"));
   $("#tab-signup").addEventListener("click", () => setAuthMode("signup"));
   wireButton($("#btn-auth"), loginOrSignup);
-  wireButton($("#btn-play"), () => {
-    $("#room-error").textContent = "";
-    showScreen("#screen-lobby");
-    send({type:"public_tables"});
-  });
+  wireButton($("#btn-play"), openBlackjackLobby);
+  wireButton($("#game-blackjack"), openBlackjackLobby);
+  wireButton($("#game-roulette"), openRouletteLobby);
   wireButton($("#btn-join-table"), () => {
     const room = $("#input-room").value.trim() || "public";
     $("#room-error").textContent = "";
-    send({ type: "join", token: authToken, room });
+    send({ type: "join", token: authToken, room, game:"blackjack" });
   });
   wireButton($("#btn-back-menu"), () => {
     $("#room-error").textContent = "";
@@ -1079,7 +1124,18 @@ function initJoin() {
   wireButton($("#btn-friends-close"), () => closeProgress("#friends-overlay"));
   wireButton($("#btn-add-friend"), () => { $("#friends-error").textContent=""; send({type:"add_friend",token:authToken,username:$("#friend-username").value.trim()}); });
   wireButton($("#btn-public-tables"), () => { send({type:"public_tables"}); renderPublicTables(); });
-  wireButton($("#btn-create-public"), () => send({type:"create_public",token:authToken}));
+  wireButton($("#btn-create-public"), () => send({type:"create_public",token:authToken,game:"blackjack"}));
+  wireButton($("#btn-roulette-public"), () => send({type:"public_tables",game:"roulette"}));
+  wireButton($("#btn-roulette-create"), () => send({type:"create_public",token:authToken,game:"roulette"}));
+  wireButton($("#btn-roulette-join"), () => send({type:"join",token:authToken,room:$("#roulette-room").value.trim() || "PUBLIC",game:"roulette"}));
+  wireButton($("#btn-roulette-back"), showMainMenu);
+  wireButton($("#roulette-clear"), () => send({type:"roulette_clear"}));
+  wireButton($("#roulette-chip-amount"), () => { const vals=[100,500,1000,5000]; rouletteBetAmount=vals[(vals.indexOf(rouletteBetAmount)+1)%vals.length]; $("#roulette-chip-amount").textContent="$"+rouletteBetAmount.toLocaleString(); });
+  wireButton($("#roulette-spin"), () => send({type:"roulette_spin"}));
+  wireButton($("#roulette-leave"), () => send({type:"leave_table"}));
+  wireButton($("#roulette-settings"), () => { $("#btn-leave-table").classList.remove("hidden"); $("#settings-overlay").classList.add("open"); });
+  document.querySelectorAll(".roulette-bet").forEach(b => wireButton(b, () => send({type:"roulette_bet",token:authToken,betType:b.dataset.bet,amount:rouletteBetAmount})));
+  buildRouletteNumbers();
   wireButton($("#btn-chat-open"), () => toggleChat(true));
   wireButton($("#btn-chat-toggle"), () => toggleChat(false));
   wireButton($("#btn-chat-mute"), () => { chatMuted=!chatMuted; localStorage.setItem('bj_chat_muted',chatMuted?'1':'0'); $("#btn-chat-mute").textContent=chatMuted?'🔇':'🔊'; });

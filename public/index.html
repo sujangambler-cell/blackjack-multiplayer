@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<title>Blackjack</title>
+<title>Casino X</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -16,8 +16,8 @@
   <!-- ==================== ACCOUNT SCREEN ==================== -->
   <div id="screen-join" class="screen active">
     <div class="auth-card">
-      <div class="auth-logo">♠ BLACKJACK</div>
-      <div class="auth-sub">MULTIPLAYER TABLE</div>
+      <div class="auth-logo">CASINO X</div>
+      <div class="auth-sub">BLACKJACK • ROULETTE • MORE TO COME</div>
       <div class="auth-tabs">
         <button class="auth-tab active" id="tab-login">LOGIN</button>
         <button class="auth-tab" id="tab-signup">SIGN UP</button>
@@ -30,25 +30,25 @@
         <button class="btn auth-submit" id="btn-auth">LOGIN</button>
       </div>
       <div id="room-form" class="hidden">
-        <div class="main-menu-title">BLACKJACK</div>
-        <div class="welcome-user" id="welcome-user"></div>
-        <div class="menu-level" id="menu-level">LEVEL 1 • ROOKIE</div>
-        <div class="menu-balance" id="menu-balance">$5,000</div>
-        <div class="menu-xp" id="menu-xp">0 XP</div>
-        <div class="main-menu-buttons">
-          <button class="btn auth-submit menu-primary" id="btn-play">PLAY</button>
-          <div class="menu-grid">
-            <button class="btn secondary" id="btn-profile">PROFILE</button>
-            <button class="btn secondary" id="btn-friends">FRIENDS</button>
-            <button class="btn secondary" id="btn-stats">STATS</button>
-            <button class="btn secondary" id="btn-rankings">RANKINGS</button>
-            <button class="btn secondary" id="btn-achievements">ACHIEVEMENTS</button>
-            <button class="btn secondary" id="btn-daily">DAILY</button>
-            <button class="btn secondary" id="btn-store">STORE</button>
-            <button class="btn secondary" id="btn-season">SEASON</button>
+        <div class="casino-home">
+          <div class="casino-brand">CASINO X</div>
+          <div class="welcome-user" id="welcome-user"></div>
+          <div class="menu-level" id="menu-level">LEVEL 1 • ROOKIE</div>
+          <div class="menu-balance" id="menu-balance">$5,000</div>
+          <div class="menu-xp" id="menu-xp">0 XP</div>
+          <div class="game-picker-title">CHOOSE YOUR GAME</div>
+          <div class="game-picker">
+            <button class="game-card game-card-featured" id="game-blackjack" type="button"><span class="game-card-icon">♠</span><span class="game-card-name">BLACKJACK</span><span class="game-card-desc">MULTIPLAYER TABLES</span><span class="game-card-action">PLAY</span></button>
+            <button class="game-card game-card-roulette" id="game-roulette" type="button"><span class="game-card-icon">◉</span><span class="game-card-name">ROULETTE</span><span class="game-card-desc">EUROPEAN • 0–36</span><span class="game-card-action">PLAY</span></button>
+            <button class="game-card game-card-disabled" id="game-coming-soon" type="button" disabled><span class="game-card-icon">✦</span><span class="game-card-name">COMING SOON</span><span class="game-card-desc">THE NEXT TABLE</span><span class="game-card-action">LOCKED</span></button>
           </div>
-          <button class="btn panel-btn auth-submit" id="btn-settings-menu">SETTINGS</button>
-          <button class="btn panel-btn auth-submit" id="btn-logout">LOG OUT</button>
+          <div class="home-tools">
+            <button class="btn secondary" id="btn-profile">PROFILE</button>
+            <button class="btn secondary" id="btn-store">STORE</button>
+            <button class="btn secondary" id="btn-season">SEASON 1</button>
+          </div>
+          <div class="home-footer"><button class="icon-btn menu-settings" id="btn-settings-menu" type="button" aria-label="Settings" title="Settings">⚙</button><button class="btn ghost-btn" id="btn-logout">LOG OUT</button></div>
+          <div class="hidden" aria-hidden="true"><button id="btn-play"></button><button id="btn-friends"></button><button id="btn-stats"></button><button id="btn-rankings"></button><button id="btn-achievements"></button><button id="btn-daily"></button></div>
         </div>
       </div>
     </div>
@@ -68,6 +68,35 @@
       <button class="btn auth-submit menu-primary" id="btn-join-table">JOIN TABLE</button>
       <button class="btn secondary auth-submit" id="btn-back-menu">BACK</button>
       <div id="public-table-list" class="public-table-list"></div>
+    </div>
+  </div>
+
+  <!-- ==================== ROULETTE LOBBY ==================== -->
+  <div id="screen-roulette-lobby" class="screen">
+    <div class="auth-card lobby-card roulette-lobby-card">
+      <div class="roulette-mark">◉</div><div class="main-menu-title">ROULETTE</div><div class="auth-sub">EUROPEAN WHEEL • 0–36</div>
+      <div class="field"><label>Table code</label><input id="roulette-room" maxlength="12" placeholder="Blank = public" autocomplete="off"></div>
+      <div class="auth-error" id="roulette-room-error"></div>
+      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-roulette-public">PUBLIC TABLES</button><button class="btn secondary" id="btn-roulette-create">CREATE PUBLIC</button></div>
+      <button class="btn auth-submit menu-primary" id="btn-roulette-join">JOIN TABLE</button><button class="btn secondary" id="btn-roulette-back">BACK TO CASINO</button>
+      <div id="roulette-table-list" class="public-table-list"></div>
+    </div>
+  </div>
+
+  <!-- ==================== ROULETTE TABLE ==================== -->
+  <div id="screen-roulette" class="screen">
+    <div class="top-bar"><div class="top-left"><div class="profile-chip"><span id="roulette-profile-name">PLAYER</span><span class="balance-chip" id="roulette-balance">$0</span></div><div class="room-chip" id="roulette-room-chip">ROULETTE</div></div><div class="top-actions"><button class="icon-btn" id="roulette-settings" aria-label="Settings">⚙</button></div></div>
+    <div class="roulette-stage">
+      <div class="roulette-header"><span>ROULETTE</span><small>EUROPEAN WHEEL</small></div>
+      <div class="roulette-wheel-wrap"><div class="roulette-wheel" id="roulette-wheel"><div class="roulette-zero">0</div><div class="roulette-wheel-ring">CASINO X</div></div></div>
+      <div class="roulette-result" id="roulette-result">PLACE YOUR BETS</div>
+      <div class="roulette-bets-grid">
+        <button class="roulette-bet red" data-bet="red">RED<br><small>1:1</small></button><button class="roulette-bet black" data-bet="black">BLACK<br><small>1:1</small></button><button class="roulette-bet green" data-bet="odd">ODD<br><small>1:1</small></button><button class="roulette-bet black" data-bet="even">EVEN<br><small>1:1</small></button><button class="roulette-bet neutral" data-bet="low">1–18<br><small>1:1</small></button><button class="roulette-bet neutral" data-bet="high">19–36<br><small>1:1</small></button>
+        <button class="roulette-bet dozen" data-bet="dozen1">1–12<br><small>2:1</small></button><button class="roulette-bet dozen" data-bet="dozen2">13–24<br><small>2:1</small></button><button class="roulette-bet dozen" data-bet="dozen3">25–36<br><small>2:1</small></button>
+      </div>
+      <div class="roulette-number-strip" id="roulette-number-strip"></div>
+      <div class="roulette-controls"><div class="roulette-chip-amount" id="roulette-chip-amount">$100</div><button class="btn secondary" id="roulette-clear">CLEAR</button><button class="btn good" id="roulette-spin">SPIN</button><button class="btn panel-btn" id="roulette-leave">LEAVE</button></div>
+      <div class="roulette-seat-info" id="roulette-seat-info"></div>
     </div>
   </div>
 

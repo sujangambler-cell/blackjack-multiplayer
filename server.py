@@ -42,6 +42,10 @@ ACCOUNTS_FILE = pathlib.Path(__file__).parent / "accounts.json"
 MAX_PLAYERS = 5
 READY_GRACE_S = 0.8      # small pause after last player hits ready before dealing
 ROUND_OVER_S = 4.5       # results screen duration before next betting phase
+ROULETTE_BET_WINDOW_S = 12
+ROULETTE_SPIN_DELAY_S = 2.0
+ROULETTE_NUMBERS = list(range(37))
+ROULETTE_RED = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
 
 # ---------------------------------------------------------------------------
 # Cards / deck
@@ -263,17 +267,17 @@ LEVELS = [
 
 
 COSMETIC_THEMES = {
-    "classic": {"name":"Classic Noir", "price":0, "season":None, "limited":False},
-    "midnight": {"name":"Midnight Velvet", "price":12000, "season":None, "limited":False},
-    "royal": {"name":"Royal Eclipse", "price":25000, "season":None, "limited":False},
-    "neon": {"name":"Neon Afterdark", "price":40000, "season":None, "limited":False},
-    "orbit": {"name":"Orbit — Season 1", "price":0, "season":1, "limited":True},
+    "classic": {"name":"Classic Noir", "price":0, "season":None, "limited":False, "scope":"GLOBAL"},
+    "midnight": {"name":"Midnight Velvet", "price":12000, "season":None, "limited":False, "scope":"GLOBAL"},
+    "royal": {"name":"Royal Eclipse", "price":25000, "season":None, "limited":False, "scope":"GLOBAL"},
+    "neon": {"name":"Neon Afterdark", "price":40000, "season":None, "limited":False, "scope":"GLOBAL"},
+    "orbit": {"name":"Orbit — Season 1", "price":0, "season":1, "limited":True, "scope":"GLOBAL"},
 }
 COSMETIC_CHIPS = {
-    "classic": {"name":"Classic Chip", "price":0, "season":None, "limited":False},
-    "silver": {"name":"Silver Edge", "price":8000, "season":None, "limited":False},
-    "gold": {"name":"Gold Crest", "price":18000, "season":None, "limited":False},
-    "orbit": {"name":"Orbit Chip", "price":0, "season":1, "limited":True},
+    "classic": {"name":"Classic Chip", "price":0, "season":None, "limited":False, "scope":"GLOBAL"},
+    "silver": {"name":"Silver Edge", "price":8000, "season":None, "limited":False, "scope":"GLOBAL"},
+    "gold": {"name":"Gold Crest", "price":18000, "season":None, "limited":False, "scope":"GLOBAL"},
+    "orbit": {"name":"Orbit Chip", "price":0, "season":1, "limited":True, "scope":"GLOBAL"},
 }
 SEASON = {
     "id": 1, "name": "ORBIT", "subtitle": "A new night begins.", "duration": "SEASON 1",
@@ -313,13 +317,19 @@ def ensure_account_progress(account):
         "pushes": 0, "blackjacks": 0, "best_win_streak": 0, "current_win_streak": 0,
         "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
         "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
-        "friends": [], "owned_themes": ["classic"], "owned_chips": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "season_xp": 0, "season_claimed": [], "season_title": "", "session_token": account.get("session_token"),
+        "friends": [], "owned_themes": ["classic"], "owned_chips": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "season_xp": 0, "season_claimed": [], "season_title": "",
+        "roulette_games": 0, "roulette_wins": 0, "roulette_biggest_win": 0,
+        "game_stats": {"blackjack": {"games": 0, "wins": 0}, "roulette": {"games": 0, "wins": 0}},
+        "session_token": account.get("session_token"),
     }
     changed = False
     for k, v in defaults.items():
         if k not in account:
             account[k] = v
             changed = True
+    stats = account.setdefault("game_stats", {})
+    stats.setdefault("blackjack", {"games": 0, "wins": 0})
+    stats.setdefault("roulette", {"games": int(account.get("roulette_games", 0)), "wins": int(account.get("roulette_wins", 0))})
     if changed:
         save_accounts()
     return account
@@ -345,7 +355,7 @@ def ensure_daily(account):
     today = today_key()
     if account.get("daily_challenge_date") != today:
         account["daily_challenge_date"] = today
-        account["daily_challenges"] = {"play10": 0, "win3": 0, "blackjack1": 0}
+        account["daily_challenges"] = {"play10": 0, "win3": 0, "blackjack1": 0, "roulette1": 0}
         account["daily_challenge_claimed"] = []
         save_accounts()
 
@@ -396,6 +406,10 @@ def profile_payload(account):
             "winRate": round((wins / games * 100), 1) if games else 0,
             "bestWinStreak": int(account.get("best_win_streak", 0)),
             "biggestWin": int(account.get("biggest_win", 0)),
+            "rouletteGames": int(account.get("roulette_games", 0)),
+            "rouletteWins": int(account.get("roulette_wins", 0)),
+            "rouletteBiggestWin": int(account.get("roulette_biggest_win", 0)),
+            "gameStats": account.get("game_stats", {}),
         },
         "xp": int(account.get("xp", 0)), "level": level, "levelTitle": title,
         "achievements": list(account.get("achievements", [])),
@@ -411,10 +425,12 @@ def leaderboard_payload():
     for a in ACCOUNTS.values():
         ensure_account_progress(a)
         level, title = account_level(int(a.get("xp", 0)))
+        total_games = int(a.get("games_played", 0))
+        total_wins = int(a.get("wins", 0))
         rows.append({"username": a["username"], "balance": int(a.get("money", 0)),
-                     "wins": int(a.get("wins", 0)), "blackjacks": int(a.get("blackjacks", 0)),
-                     "winRate": round((a.get("wins", 0) / a.get("games_played", 0) * 100), 1) if a.get("games_played", 0) else 0,
-                     "streak": int(a.get("best_win_streak", 0)), "games": int(a.get("games_played", 0)),
+                     "wins": total_wins, "blackjacks": int(a.get("blackjacks", 0)), "rouletteWins": int(a.get("roulette_wins", 0)),
+                     "winRate": round((total_wins / total_games * 100), 1) if total_games else 0,
+                     "streak": int(a.get("best_win_streak", 0)), "games": total_games,
                      "level": level, "levelTitle": title})
     def top(key): return sorted(rows, key=lambda x: (x[key], x["username"].lower()), reverse=True)[:20]
     return {"balance": top("balance"), "wins": top("wins"), "blackjacks": top("blackjacks"),
@@ -425,6 +441,7 @@ def challenge_defs():
         {"id": "play10", "title": "TABLE REGULAR", "desc": "Play 10 hands today.", "target": 10, "reward": 250},
         {"id": "win3", "title": "WINNER'S RUN", "desc": "Win 3 hands today.", "target": 3, "reward": 300},
         {"id": "blackjack1", "title": "NATURAL", "desc": "Get a Blackjack today.", "target": 1, "reward": 400},
+        {"id": "roulette1", "title": "RED OR BLACK", "desc": "Win a Roulette bet today.", "target": 1, "reward": 400},
     ]
 
 def challenge_payload(account):
@@ -454,11 +471,12 @@ def add_xp(account, amount):
     account["xp"] = max(0, int(account.get("xp", 0)) + int(amount))
 
 
-def get_room(code: str, public=False) -> dict:
+def get_room(code: str, public=False, game="blackjack") -> dict:
     if code not in rooms:
         rooms[code] = {
             "code": code,
             "public": bool(public),
+            "game": game,
             "phase": "LOBBY",
             "players": [],
             "host_id": None,
@@ -470,6 +488,10 @@ def get_room(code: str, public=False) -> dict:
             "lucky_players": set(),
             "dealer_preview_active": False,
             "dealer_preview_cards": [],
+            "roulette_bets": {},
+            "roulette_last_result": None,
+            "roulette_phase": "BETTING",
+            "roulette_task": None,
             # asyncio task handles for cancellation
             "_ready_task": None,
             "_round_task": None,
@@ -496,7 +518,7 @@ def public_tables_payload():
         spectators = connected_spectators(room)
         host = find_player(room, room.get("host_id")) if room.get("host_id") else None
         rows.append({
-            "code": room["code"], "players": len(players), "maxPlayers": MAX_PLAYERS,
+            "code": room["code"], "game": room.get("game", "blackjack"), "players": len(players), "maxPlayers": MAX_PLAYERS,
             "spectators": len(spectators), "host": host.get("username") if host else "—",
             "phase": room.get("phase", "LOBBY"), "canJoin": len(players) < MAX_PLAYERS,
             "canSpectate": bool(players) and room.get("phase") in ("PLAYING", "ROUND_OVER"),
@@ -545,6 +567,7 @@ def serialise(room) -> dict:
     dealer_hand = public_dealer_hand(room)
     return {
         "code": room["code"],
+        "game": room.get("game", "blackjack"),
         "phase": room["phase"],
         "activePlayerId": room["active_player_id"],
         "hostId": room.get("host_id"),
@@ -872,6 +895,8 @@ async def finish_round(room):
                 account["pushes"] += 1
                 add_xp(account, 8)
             account["season_xp"] = int(account.get("season_xp", 0)) + (30 if p["result"] == "blackjack" else 20 if p["result"] == "win" else 8 if p["result"] == "push" else 5)
+            bs = account.setdefault("game_stats", {}).setdefault("blackjack", {"games": 0, "wins": 0})
+            bs["games"] = int(account.get("games_played", 0)); bs["wins"] = int(account.get("wins", 0))
             update_daily_progress(account, p["result"])
             unlock_achievements(account)
             save_accounts()
@@ -898,6 +923,101 @@ async def finish_round(room):
 
     await asyncio.sleep(ROUND_OVER_S)
     await reset_for_betting(room)
+
+
+# ---------------------------------------------------------------------------
+# Roulette — server-authoritative European wheel, universal Casino X wallet/XP
+# ---------------------------------------------------------------------------
+ROULETTE_RED = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+ROULETTE_BLACK = set(range(1,37)) - ROULETTE_RED
+
+def roulette_color(n):
+    if n == 0: return "green"
+    return "red" if n in ROULETTE_RED else "black"
+
+def roulette_bet_payout(bet_type):
+    return {"straight": 35, "red": 1, "black": 1, "odd": 1, "even": 1, "low": 1, "high": 1,
+            "dozen1": 2, "dozen2": 2, "dozen3": 2}.get(bet_type, 0)
+
+def roulette_bet_wins(bet, number):
+    t = bet.get("type")
+    if t == "straight": return int(bet.get("value", -1)) == number
+    if t == "red": return number in ROULETTE_RED
+    if t == "black": return number in ROULETTE_BLACK
+    if t == "odd": return number != 0 and number % 2 == 1
+    if t == "even": return number != 0 and number % 2 == 0
+    if t == "low": return 1 <= number <= 18
+    if t == "high": return 19 <= number <= 36
+    if t == "dozen1": return 1 <= number <= 12
+    if t == "dozen2": return 13 <= number <= 24
+    if t == "dozen3": return 25 <= number <= 36
+    return False
+
+def roulette_serialise(room):
+    bets = []
+    for p in room.get("players", []):
+        total = sum(int(b["amount"]) for b in room.get("roulette_bets", {}).get(p["id"], []))
+        bets.append({"id":p["id"],"username":p["username"],"total":total})
+    return {"code":room["code"],"game":"roulette","phase":room.get("roulette_phase","BETTING"),
+            "players":bets,"lastResult":room.get("roulette_last_result")}
+
+async def roulette_broadcast(room):
+    payload=json.dumps({"type":"roulette_state","state":roulette_serialise(room)})
+    for p in room.get("players", []):
+        if p.get("ws"):
+            try: await p["ws"].send(payload)
+            except Exception: pass
+
+def roulette_player_bets(room, pid):
+    return room.setdefault("roulette_bets", {}).setdefault(pid, [])
+
+async def roulette_spin(room):
+    if room.get("roulette_phase") != "BETTING": return
+    if not any(roulette_player_bets(room,p["id"]) for p in active_players(room)): return
+    room["roulette_phase"]="SPINNING"
+    await roulette_broadcast(room)
+    await asyncio.sleep(ROULETTE_SPIN_DELAY_S)
+    number=random.choice(ROULETTE_NUMBERS)
+    color=roulette_color(number)
+    room["roulette_last_result"]={"number":number,"color":color,"ts":int(time.time()*1000)}
+    room["roulette_phase"]="RESULT"
+    for p in active_players(room):
+        bets=roulette_player_bets(room,p["id"])
+        if not bets: continue
+        account=ACCOUNTS.get(p.get("username_key")); total_staked=sum(int(b["amount"]) for b in bets)
+        total_return=0; winning=False; win_profit=0
+        for b in bets:
+            if roulette_bet_wins(b,number):
+                winning=True
+                ret=int(b["amount"])*(roulette_bet_payout(b["type"])+1)
+                total_return += ret
+                win_profit += ret-int(b["amount"])
+        p["money"] += total_return
+        if account is not None:
+            ensure_account_progress(account)
+            account["roulette_games"]=int(account.get("roulette_games",0))+1
+            account["games_played"]=int(account.get("games_played",0))+1
+            rs=account.setdefault("game_stats",{}).setdefault("roulette",{"games":0,"wins":0})
+            rs["games"]=account["roulette_games"]
+            if winning:
+                account["roulette_wins"]=int(account.get("roulette_wins",0))+1
+                account["wins"]=int(account.get("wins",0))+1
+                rs["wins"]=account["roulette_wins"]
+                account["roulette_biggest_win"]=max(int(account.get("roulette_biggest_win",0)),win_profit)
+                account["biggest_win"]=max(int(account.get("biggest_win",0)),win_profit)
+                add_xp(account,20); account["season_xp"]=int(account.get("season_xp",0))+20
+                update_daily_progress(account, "win")
+            else:
+                account["losses"]=int(account.get("losses",0))+1
+                add_xp(account,5); account["season_xp"]=int(account.get("season_xp",0))+5
+                update_daily_progress(account, "lose")
+            persist_player_money(p)
+        p["roulette_last_profit"]=win_profit
+    await roulette_broadcast(room)
+    await asyncio.sleep(3.5)
+    room["roulette_bets"]={}
+    room["roulette_phase"]="BETTING"
+    await roulette_broadcast(room)
 
 # ---------------------------------------------------------------------------
 # WebSocket handler
@@ -985,7 +1105,10 @@ async def ws_handler(websocket):
             continue
 
         if kind == "public_tables":
-            await send_public_tables(websocket)
+            game=str(msg.get("game", "all")).lower()
+            tables=public_tables_payload()
+            if game in ("blackjack","roulette"): tables=[t for t in tables if t.get("game")==game]
+            await websocket.send(json.dumps({"type":"public_tables","tables":tables,"game":game}))
             continue
 
         if kind == "create_public":
@@ -995,8 +1118,10 @@ async def ws_handler(websocket):
                 await websocket.send(json.dumps({"type":"error","message":"Please log in first."}))
                 continue
             code = random_room_code()
-            get_room(code, public=True)
-            await websocket.send(json.dumps({"type":"public_created","code":code}))
+            game = str(msg.get("game", "blackjack")).lower()
+            if game not in ("blackjack", "roulette"): game = "blackjack"
+            get_room(code, public=True, game=game)
+            await websocket.send(json.dumps({"type":"public_created","code":code,"game":game}))
             await send_public_tables(websocket)
             continue
 
@@ -1171,12 +1296,17 @@ async def ws_handler(websocket):
                 await websocket.send(json.dumps({"type": "error", "scope": "auth", "message": "Please log in first."}))
                 continue
             code = (msg.get("room") or "PUBLIC").strip().upper()[:12] or "PUBLIC"
+            game = str(msg.get("game", "blackjack")).lower()
+            if game not in ("blackjack", "roulette"):
+                game = "blackjack"
             spectate = bool(msg.get("spectate"))
             if spectate and code not in rooms:
                 await websocket.send(json.dumps({"type":"error","message":"That table does not exist."}))
                 room = None
                 continue
-            room = get_room(code)
+            room = get_room(code, game=game)
+            if room.get("game") != game:
+                await websocket.send(json.dumps({"type":"error","scope":"table","message":"That table belongs to another game."})); room=None; continue
             if spectate and not room.get("players"):
                 await websocket.send(json.dumps({"type":"error","message":"There is nobody to spectate yet."}))
                 room = None
@@ -1228,9 +1358,47 @@ async def ws_handler(websocket):
             if room["phase"] == "LOBBY":
                 room["phase"] = "BETTING"
 
-            await websocket.send(json.dumps({"type": "joined", "id": pid, "room": code, "username": account["username"], "balance": player["money"], "isHost": room["host_id"] == pid}))
+            await websocket.send(json.dumps({"type": "joined", "id": pid, "room": code, "game": room.get("game","blackjack"), "username": account["username"], "balance": player["money"], "isHost": room["host_id"] == pid}))
             await broadcast(room)
+            if room.get("game")=="roulette": await roulette_broadcast(room)
             await broadcast_public_tables()
+            continue
+
+
+        if kind == "roulette_state":
+            if room and player and room.get("game") == "roulette":
+                await roulette_broadcast(room)
+            continue
+
+        if kind == "roulette_bet":
+            if room is None or player is None or room.get("game") != "roulette" or room.get("roulette_phase") != "BETTING":
+                continue
+            bet_type=str(msg.get("betType", "")); amount=int(msg.get("amount",0)); value=msg.get("value")
+            if roulette_bet_payout(bet_type) <= 0 or amount <= 0 or amount > int(player.get("money",0)):
+                await websocket.send(json.dumps({"type":"error","scope":"roulette","message":"Invalid Roulette bet or insufficient chips."})); continue
+            if bet_type == "straight":
+                try: value=int(value)
+                except Exception: value=-1
+                if value < 0 or value > 36:
+                    await websocket.send(json.dumps({"type":"error","scope":"roulette","message":"Straight bets must be 0–36."})); continue
+            player["money"]-=amount
+            roulette_player_bets(room,player["id"]).append({"type":bet_type,"value":value,"amount":amount})
+            persist_player_money(player)
+            await roulette_broadcast(room)
+            continue
+
+        if kind == "roulette_clear":
+            if room and player and room.get("game")=="roulette" and room.get("roulette_phase")=="BETTING":
+                bets=roulette_player_bets(room,player["id"]); refund=sum(int(b["amount"]) for b in bets)
+                player["money"]+=refund; room["roulette_bets"][player["id"]]=[]; persist_player_money(player); await roulette_broadcast(room)
+            continue
+
+        if kind == "roulette_spin":
+            if room and player and room.get("game")=="roulette" and room.get("roulette_phase")=="BETTING":
+                if room.get("host_id") == player.get("id"):
+                    asyncio.create_task(roulette_spin(room))
+                else:
+                    await websocket.send(json.dumps({"type":"error","scope":"roulette","message":"Only the table host can spin the wheel."}))
             continue
 
         if kind == "admin_login":
@@ -1246,6 +1414,12 @@ async def ws_handler(websocket):
         if kind == "leave_table":
             if player and room:
                 was_active = room["active_player_id"] == player["id"]
+                if room.get("game")=="roulette":
+                    refund=sum(int(b["amount"]) for b in room.get("roulette_bets",{}).get(player["id"],[]))
+                    if refund:
+                        player["money"] += refund
+                        persist_player_money(player)
+                    room.get("roulette_bets",{}).pop(player["id"],None)
                 invalidate_dealer_preview(room)
                 try:
                     room["players"].remove(player)
@@ -1264,6 +1438,9 @@ async def ws_handler(websocket):
             continue
 
         if room is None or player is None:
+            continue
+        if room.get("game") == "roulette":
+            # Roulette actions are handled above; ignore Blackjack-only commands.
             continue
 
         # ---- betting actions ----
