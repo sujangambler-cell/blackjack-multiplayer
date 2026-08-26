@@ -290,7 +290,7 @@ requestAnimationFrame(drawBackground);
 // ---------------------------------------------------------------------------
 function buildCard(card, small = false) {
   const faceUp = card.faceUp === true;
-  const wrap = el("div", "card" + (faceUp ? "" : " face-down"));
+  const wrap = el("div", "card deck-" + (myProfile?.cosmetics?.deck||"classic") + (faceUp ? "" : " face-down"));
   const tilt = (Math.random() * 8 - 4).toFixed(1);
   wrap.style.setProperty("--tilt", tilt + "deg");
 
@@ -494,14 +494,14 @@ function connect() {
       $("#room-chip").textContent = "TABLE " + myRoom;
       $("#profile-name").textContent = msg.username || loggedUsername || "PLAYER";
       $("#menu-balance").textContent = "$" + msg.balance;
-      $("#btn-admin-float").classList.toggle("hidden", !(isAdmin && currentGame === "blackjack"));
+      $("#btn-admin-float").classList.add("hidden"); $("#btn-admin-table").classList.remove("hidden");
       $("#chat-messages").innerHTML = "";
       toggleChat(false);
       if (currentGame === "roulette") {
         $("#roulette-profile-name").textContent = msg.username || loggedUsername || "PLAYER";
         $("#roulette-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
         $("#roulette-room-chip").textContent = "ROULETTE " + myRoom;
-        $("#roulette-admin").classList.toggle("hidden", !isAdmin);
+        $("#roulette-admin").classList.remove("hidden");
         showScreen("#screen-roulette");
         send({type:"roulette_state"});
       } else {
@@ -511,11 +511,12 @@ function connect() {
       return;
     }
     if (msg.type === "left_table") {
-      myId = null; myRoom = null; lastState = null;
+      myId = null; myRoom = null; lastState = null; isAdmin = false;
       $("#settings-overlay").classList.remove("open");
       $("#claim-overlay").classList.remove("open");
       $("#admin-overlay").classList.remove("open");
       $("#roulette-admin").classList.add("hidden");
+      $("#btn-admin-table").classList.add("hidden");
       $("#btn-admin-float").classList.add("hidden");
       $("#menu-balance").textContent = $("#balance-chip").textContent || "$0";
       toggleChat(false);
@@ -568,7 +569,10 @@ function connect() {
         myProfile.cosmetics = myProfile.cosmetics || {};
         myProfile.cosmetics.theme = msg.store.themes.find(x => x.equipped)?.id || myProfile.cosmetics.theme || "classic";
         myProfile.cosmetics.chip = msg.store.chips.find(x => x.equipped)?.id || myProfile.cosmetics.chip || "classic";
-        applyCosmeticTheme(myProfile.cosmetics.theme);
+        myProfile.cosmetics.deck = msg.store.decks?.find(x => x.equipped)?.id || myProfile.cosmetics.deck || "classic";
+        myProfile.cosmetics.table = msg.store.tables?.find(x => x.equipped)?.id || myProfile.cosmetics.table || "classic";
+        myProfile.cosmetics.ball = msg.store.balls?.find(x => x.equipped)?.id || myProfile.cosmetics.ball || "classic";
+        applyCosmeticTheme(myProfile.cosmetics.theme); applyGameCosmetics(myProfile.cosmetics);
       }
       if (msg.purchased) { play("win"); centerBanner("ITEM UNLOCKED", "win"); }
       if (msg.equipped) play("chip");
@@ -586,7 +590,7 @@ function connect() {
       isAdmin = true;
       $("#admin-login-box").classList.add("hidden");
       $("#admin-dashboard").classList.remove("hidden");
-      $("#btn-admin-float").classList.remove("hidden");
+      $("#btn-admin-float").classList.remove("hidden"); $("#btn-admin-table").classList.remove("hidden"); $("#roulette-admin").classList.remove("hidden");
       return;
     }
     if (msg.type === "admin_data") {
@@ -595,8 +599,14 @@ function connect() {
     }
     if (msg.type === "roulette_state") { renderRouletteState(msg.state); return; }
     if (msg.type === "error") {
-      const target = msg.scope === "auth" ? $("#join-error") : (msg.scope === "admin" ? $("#admin-error") : (msg.scope === "daily" ? $("#daily-reward-box") : (msg.scope === "friends" ? $("#friends-error") : (msg.scope === "roulette" ? $("#roulette-room-error") : $("#room-error")))));
+      const target = msg.scope === "auth" ? $("#join-error") :
+        msg.scope === "admin" ? $("#admin-error") :
+        msg.scope === "daily" ? $("#daily-reward-box") :
+        msg.scope === "friends" ? $("#friends-error") :
+        msg.scope === "roulette" ? $("#roulette-room-error") :
+        msg.scope === "store" ? $("#store-empty") : $("#room-error");
       if (msg.scope === "daily") target.innerHTML = `<strong>NOT AVAILABLE</strong><span>${msg.message}</span>`;
+      else if (msg.scope === "store") { target.classList.remove("hidden"); target.innerHTML = `<strong>${escapeHtml(msg.message || "Store action unavailable")}</strong><span>Please try again.</span>`; setTimeout(()=>{ if(storeData) renderStore(); }, 1200); }
       else target.textContent = msg.message;
       return;
     }
@@ -653,7 +663,8 @@ function onState(state) {
     $("#balance-chip").textContent = "$" + me.money;
     $("#menu-balance").textContent = "$" + me.money;
     $("#profile-name").textContent = me.username || loggedUsername || me.name;
-    $("#btn-admin-float").classList.toggle("hidden", !(isAdmin && currentGame === "blackjack"));
+    applyGameCosmetics(me.cosmetics || myProfile?.cosmetics || {});
+    $("#btn-admin-float").classList.add("hidden"); $("#btn-admin-table").classList.remove("hidden");
     $("#btn-host").classList.toggle("hidden", !me.isHost);
     if (me.canClaim && state.phase === "BETTING") {
       $("#claim-overlay").classList.add("open");
@@ -723,25 +734,36 @@ function onState(state) {
 }
 
 function handleResult(result) {
+  const table = $("#table-wrap");
+  if (table) {
+    table.classList.remove("result-kick-win","result-pain-loss","result-push");
+    void table.offsetWidth;
+  }
   if (result === "win" || result === "blackjack") {
     play(result === "blackjack" ? "blackjack" : "win");
     flash("win");
     burstConfetti();
+    table?.classList.add("result-kick-win");
     centerBanner(result === "blackjack" ? "BLACKJACK!" : "YOU WIN!", "win");
   } else if (result === "push") {
     play("push");
-    centerBanner("PUSH", "push");
+    flash("push");
+    table?.classList.add("result-push");
+    centerBanner("PUSH — SECOND CHANCE", "push");
   } else if (result === "lose") {
     play("lose");
     flash("lose");
     shakeTable();
+    table?.classList.add("result-pain-loss");
     centerBanner("DEALER WINS", "lose");
   } else if (result === "bust") {
     play("bust");
     flash("lose");
     shakeTable();
+    table?.classList.add("result-pain-loss");
     centerBanner("BUST!", "bust");
   }
+  if (table) setTimeout(() => table.classList.remove("result-kick-win","result-pain-loss","result-push"), 1200);
 }
 
 function renderSeats(state, prev) {
@@ -859,6 +881,8 @@ function renderAdminUsers(users, tablePlayers = [], previewActive = false, previ
 function updateProfileUI(profile) {
   if (!profile) return;
   myProfile = profile;
+  if(profile.season) { seasonData = profile.season; applySeasonTheme(); }
+  applyGameCosmetics(profile.cosmetics || {});
   $("#menu-balance").textContent = "$" + Number(profile.balance || 0).toLocaleString();
   $("#menu-level").textContent = `LEVEL ${profile.level || 1} • ${(profile.levelTitle || "Rookie").toUpperCase()}`;
   $("#menu-xp").textContent = `${Number(profile.xp || 0).toLocaleString()} XP`;
@@ -920,82 +944,77 @@ function renderDaily(claimed, challenges) {
   $("#challenge-list").innerHTML = challenges.length ? challenges.map(c => `<div class="challenge ${c.complete ? "complete" : ""}"><div><strong>${c.title}</strong><span>${c.desc}</span></div><div class="challenge-right"><b>${c.progress}/${c.target}</b><small>+${c.reward} chips</small></div></div>`).join("") : '<div class="admin-empty">No challenges today.</div>';
 }
 
-function applyCosmeticTheme(theme){
-  const t=theme || "classic";
-  document.documentElement.setAttribute("data-cosmetic-theme", t);
-  document.body.dataset.cosmeticTheme = t;
-  if (myProfile) {
-    myProfile.cosmetics = myProfile.cosmetics || {};
-    myProfile.cosmetics.theme = t;
-  }
+function applyCosmeticTheme(theme){const t=theme||"classic";document.documentElement.setAttribute("data-cosmetic-theme",t);document.body.dataset.cosmeticTheme=t;if(myProfile){myProfile.cosmetics=myProfile.cosmetics||{};myProfile.cosmetics.theme=t;}applySeasonTheme();}
+function applyGameCosmetics(c={}){document.documentElement.setAttribute("data-casino-chip",c.chip||"classic");document.documentElement.setAttribute("data-blackjack-deck",c.deck||"classic");document.documentElement.setAttribute("data-table-skin",c.table||"classic");document.documentElement.setAttribute("data-roulette-ball",c.ball||"classic");if(myProfile)myProfile.cosmetics={...(myProfile.cosmetics||{}),...c};}
+function applySeasonTheme(){
+  const enabled = localStorage.getItem("bj_seasonal_ui") !== "0";
+  const active = !!(seasonData?.season?.active===true && seasonData?.season?.theme==="casino1927");
+  document.documentElement.classList.toggle("season-1927", active && enabled);
+  document.documentElement.setAttribute("data-seasonal-ui", active && enabled ? "1" : "0");
+  $("#toggle-seasonal-ui")?.classList.toggle("on", active && enabled);
 }
-function renderAppearance() {
-  const themeBox=$("#appearance-themes"), chipBox=$("#appearance-chips");
-  if(!themeBox || !chipBox) return;
-  const themes=[...(storeData?.themes||[]), ...(storeData?.adminThemes||[])], chips=[...(storeData?.chips||[]), ...(storeData?.adminChips||[])];
-  const card=(item,cat)=>{
-    const owned=!!item.owned, equipped=!!item.equipped;
-    const action=equipped?'<button class="btn secondary" disabled>EQUIPPED</button>':
-      owned?`<button class="btn" data-app-equip="${cat}" data-id="${escapeAttr(item.id)}">EQUIP</button>`:
-      '<button class="btn secondary" data-app-buy>BUY AT SHOP</button>';
-    return `<div class="appearance-item ${equipped?'equipped':''} ${!owned?'locked':''}">
-      <div class="appearance-preview" style="--preview-a:${cat==="theme"?themePreview(item.id).split(",")[0]:chipPreview(item.id).split(",")[0]};--preview-b:${cat==="theme"?themePreview(item.id).split(",")[1]:chipPreview(item.id).split(",")[1]}">${escapeHtml(item.name)}</div>
-      <div><strong>${escapeHtml(item.name)}</strong><small>${owned?(equipped?"CURRENTLY EQUIPPED":"OWNED"):"UNOWNED"}</small></div>${action}</div>`;
-  };
-  themeBox.innerHTML=themes.map(x=>card(x,"theme")).join("");
-  chipBox.innerHTML=chips.map(x=>card(x,"chip")).join("");
-  themeBox.querySelectorAll("[data-app-equip], [data-app-buy]").forEach(b=>wireButton(b,()=>{
-    if(b.hasAttribute("data-app-buy")) { $("#appearance-overlay").classList.remove("open"); openProgress("#store-overlay"); send({type:"store",token:authToken}); }
-    else send({type:"equip_cosmetic",token:authToken,category:b.dataset.appEquip,id:b.dataset.id});
-  }));
+function applySeasonalUI(enabled){
+  localStorage.setItem("bj_seasonal_ui", enabled ? "1" : "0");
+  applySeasonTheme();
 }
-
-function chipPreview(id){
-  const map={classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",gold:"#e5c56d,#6c4c13",orbit:"#5dd6ff,#172a65"};
-  return map[id]||map.classic;
-}
-function themePreview(id){
-  const map={classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",royal:"#6a326c,#160916",neon:"#16877f,#060f12",orbit:"#12618c,#040814"};
-  return map[id]||map.classic;
-}
+function previewCosmetic(cat,id){const maps={theme:{classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",royal:"#6a326c,#160916",neon:"#16877f,#060f12",casino1927:"#d7b56d,#183b2a"},chip:{classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",gold:"#e5c56d,#6c4c13",casino1927:"#d7b56d,#3c2413"},deck:{classic:"#f7f0df,#2b2a29",midnight:"#252a35,#050609",casino1927:"#d7b56d,#173d2a"},table:{classic:"#2f6d4b,#0c281b",royal:"#496c35,#1c2b16",casino1927:"#6d5130,#123a28"},ball:{classic:"#f4f4f4,#777",brass1927:"#f1d28a,#8f5c1a"}};return (maps[cat]&&maps[cat][id])||maps[cat]?.classic||"#17191d,#050506";}
+function renderAppearance(){const boxes={theme:$("#appearance-themes"),chip:$("#appearance-chips"),deck:$("#appearance-decks"),table:$("#appearance-tables"),ball:$("#appearance-balls")};if(!boxes.theme)return;const cats={theme:[...(storeData?.themes||[]),...(storeData?.adminThemes||[])],chip:[...(storeData?.chips||[]),...(storeData?.adminChips||[])],deck:storeData?.decks||[],table:storeData?.tables||[],ball:storeData?.balls||[]};Object.entries(boxes).forEach(([cat,b])=>{if(!b)return;b.innerHTML=(cats[cat]||[]).map(x=>{const c=previewCosmetic(cat,x.id).split(","),a=x.equipped?'<button class="btn secondary" disabled>EQUIPPED</button>':x.owned?`<button class="btn" data-app-equip="${cat}" data-id="${escapeAttr(x.id)}">EQUIP</button>`:'<button class="btn secondary" data-app-buy>BUY AT SHOP</button>';return `<div class="appearance-item ${x.equipped?'equipped':''} ${!x.owned?'locked':''}"><div class="appearance-preview" style="--preview-a:${c[0]};--preview-b:${c[1]}">${escapeHtml(x.name)}</div><div><strong>${escapeHtml(x.name)}</strong><small>${x.owned?(x.equipped?"CURRENTLY EQUIPPED":"OWNED"):"UNOWNED"}${x.limited?" • SEASONAL":""}</small></div>${a}</div>`}).join("");b.querySelectorAll("[data-app-equip],[data-app-buy]").forEach(x=>wireButton(x,()=>{if(x.hasAttribute("data-app-buy")){$("#appearance-overlay").classList.remove("open");openProgress("#store-overlay");send({type:"store",token:authToken});}else send({type:"equip_cosmetic",token:authToken,category:x.dataset.appEquip,id:x.dataset.id});}));});}
 function renderStore(){
   if(!storeData) return;
+  const catalog = [
+    ...(storeData.themes||[]).map(x=>({...x,category:"theme",categoryLabel:"THEME"})),
+    ...(storeData.chips||[]).map(x=>({...x,category:"chip",categoryLabel:"CHIPS"})),
+    ...(storeData.decks||[]).map(x=>({...x,category:"deck",categoryLabel:"BLACKJACK"})),
+    ...(storeData.tables||[]).map(x=>({...x,category:"table",categoryLabel:"TABLE"})),
+    ...(storeData.balls||[]).map(x=>({...x,category:"ball",categoryLabel:"ROULETTE"}))
+  ];
   $("#store-balance").textContent="$"+Number(storeData.balance||0).toLocaleString();
-  const card=(item,cat)=>{
-    const colors=cat==="theme"?themePreview(item.id):chipPreview(item.id);
-    const action=item.equipped?'<button class="btn secondary" disabled>EQUIPPED</button>':item.owned?`<button class="btn" data-equip="${cat}" data-id="${item.id}">EQUIP</button>`:`<button class="btn" data-buy="${cat}" data-id="${item.id}">${item.price?"BUY $"+Number(item.price).toLocaleString():"UNLOCK"}</button>`;
-    return `<div class="store-item ${item.equipped?'equipped':''}"><div class="store-preview" style="--preview-a:${colors.split(',')[0]};--preview-b:${colors.split(',')[1]}">${cat==='theme'?'THEME':'CHIP'}</div><strong>${item.name}</strong><small>${item.limited?'LIMITED • SEASON 1':item.owned?'OWNED':'PERMANENT'}</small>${action}</div>`;
-  };
-  $("#store-themes").innerHTML=storeData.themes.map(x=>card(x,"theme")).join("");
-  $("#store-chips").innerHTML=storeData.chips.map(x=>card(x,"chip")).join("");
-  document.querySelectorAll("[data-buy]").forEach(b=>wireButton(b,()=>send({type:"buy_cosmetic",token:authToken,category:b.dataset.buy,id:b.dataset.id})));
-  document.querySelectorAll("[data-equip]").forEach(b=>wireButton(b,()=>send({type:"equip_cosmetic",token:authToken,category:b.dataset.equip,id:b.dataset.id})));
+  const activeTab = window.storeTab || "all";
+  const ownedOnly = !!window.storeOwnedOnly;
+  document.querySelectorAll(".store-tab").forEach(b=>b.classList.toggle("active",b.dataset.storeTab===activeTab));
+  const visible = catalog.filter(x=>(activeTab==="all"||x.category===activeTab) && (!ownedOnly||x.owned));
+  $("#store-results-title").textContent = activeTab==="all" ? "HOUSE COLLECTION" : ({theme:"THEMES",chip:"CASINO CHIPS",deck:"BLACKJACK DECKS",table:"TABLE SKINS",ball:"ROULETTE BALLS"}[activeTab]||"COLLECTION");
+  $("#store-results-count").textContent = visible.length+" ITEM"+(visible.length===1?"":"S");
+  $("#store-owned-toggle").classList.toggle("active",ownedOnly);
+  $("#store-owned-toggle").setAttribute("aria-pressed",String(ownedOnly));
+  const catalogEl=$("#store-catalog"), empty=$("#store-empty");
+  empty.classList.toggle("hidden",visible.length!==0);
+  catalogEl.innerHTML=visible.map(x=>{
+    const colors=previewCosmetic(x.category,x.id).split(",");
+    const state=x.equipped?"EQUIPPED":x.owned?"OWNED":x.limited?"SEASONAL REWARD":"AVAILABLE";
+    let action="";
+    if(x.equipped) action='<button class="store-action secondary" disabled>✓ EQUIPPED</button>';
+    else if(x.owned) action=`<button class="store-action" data-store-equip="${escapeAttr(x.category)}" data-id="${escapeAttr(x.id)}">EQUIP</button>`;
+    else if(x.limited) action='<button class="store-action seasonal" disabled>CLAIM IN SEASON</button>';
+    else action=`<button class="store-action" data-store-buy="${escapeAttr(x.category)}" data-id="${escapeAttr(x.id)}">BUY <span>$${Number(x.price||0).toLocaleString()}</span></button>`;
+    return `<article class="store-product ${x.equipped?"is-equipped":""} ${x.owned?"is-owned":""} ${x.limited?"is-seasonal":""}">
+      <div class="store-product-art" style="--preview-a:${colors[0]};--preview-b:${colors[1]}">
+        <span class="store-product-category">${escapeHtml(x.categoryLabel)}</span>
+        <div class="store-product-mark">${escapeHtml(x.category==="chip"?"✦":x.category==="ball"?"●":x.category==="deck"?"♠":x.category==="table"?"▰":"✥")}</div>
+        ${x.limited?'<span class="store-season-ribbon">SEASON 1</span>':""}
+      </div>
+      <div class="store-product-copy">
+        <div class="store-product-top"><span>${escapeHtml(state)}</span><span>${x.price?("$"+Number(x.price).toLocaleString()):"FREE"}</span></div>
+        <h3>${escapeHtml(x.name)}</h3>
+        <p>${x.limited?"Limited Season 1 reward • permanent once claimed.":x.owned?"Already in your permanent collection.":"Permanent item • available anytime."}</p>
+      </div>
+      ${action}
+    </article>`;
+  }).join("");
+  document.querySelectorAll("[data-store-buy]").forEach(b=>wireButton(b,()=>{
+    b.disabled=true; b.classList.add("loading");
+    send({type:"buy_cosmetic",token:authToken,category:b.dataset.storeBuy,id:b.dataset.id});
+  }));
+  document.querySelectorAll("[data-store-equip]").forEach(b=>wireButton(b,()=>{
+    b.disabled=true; b.classList.add("loading");
+    send({type:"equip_cosmetic",token:authToken,category:b.dataset.storeEquip,id:b.dataset.id});
+  }));
   applyCosmeticTheme(myProfile?.cosmetics?.theme||"classic");
+  applyGameCosmetics(myProfile?.cosmetics||{});
   renderAppearance();
 }
-function renderSeason(){
-  if(!seasonData) return;
-  const xp=Number(seasonData.xp||0), tiers=seasonData.tiers||[];
-  $("#season-xp").textContent=xp.toLocaleString()+" XP";
-  const max=Number(tiers.at(-1)?.xp||1);
-  const pct=Math.min(100,Math.round(xp/max*100));
-  $("#season-progress-fill").style.width=pct+"%";
-  $("#season-tier-list").innerHTML=tiers.map(t=>{
-    const r=t.reward||{};
-    const type=(r.type||"reward").toUpperCase();
-    const state=t.claimed?"CLAIMED":t.unlocked?"AVAILABLE":"LOCKED";
-    const button=t.claimed?'<button class="btn secondary" disabled>CLAIMED</button>':
-      t.unlocked?`<button class="btn" data-season-claim="${t.tier}">CLAIM</button>`:
-      '<button class="btn secondary" disabled>LOCKED</button>';
-    const limited=(r.id==="orbit")?'<span class="limited-badge">LIMITED</span>':"";
-    return `<div class="season-tier ${t.unlocked?'unlocked':''} ${t.claimed?'claimed':''}">
-      <div class="season-tier-num">${t.tier}</div>
-      <div class="season-reward-copy"><strong>${escapeHtml(r.name||"REWARD")}</strong><small>${type} • ${Number(t.xp).toLocaleString()} XP</small>${limited}</div>
-      <div class="season-state">${state}</div>${button}
-    </div>`;
-  }).join("");
-  document.querySelectorAll("[data-season-claim]").forEach(b=>wireButton(b,()=>send({type:"claim_season",token:authToken,tier:Number(b.dataset.seasonClaim)})));
-}
+function formatCountdown(sec){let s=Math.max(0,Math.floor(Number(sec||0))),d=Math.floor(s/86400);s%=86400;let h=Math.floor(s/3600);s%=3600;let m=Math.floor(s/60);return `${d}D ${String(h).padStart(2,"0")}H ${String(m).padStart(2,"0")}M`;}
+function renderSeason(){if(!seasonData)return;const xp=Number(seasonData.xp||0),tiers=seasonData.tiers||[],meta=seasonData.season||{};$("#season-xp").textContent=xp.toLocaleString()+" XP";$("#season-countdown").textContent=meta.active===false?"SEASON ENDED":formatCountdown(meta.remainingSeconds);$("#season-season-status").textContent=meta.active===false?"ACQUISITION CLOSED":"ACTIVE";applySeasonTheme();const max=Number(tiers.at(-1)?.xp||1);$("#season-progress-fill").style.width=Math.min(100,Math.round(xp/max*100))+"%";$("#season-tier-list").innerHTML=tiers.map(t=>{const r=t.reward||{},type=(r.type||"reward").toUpperCase(),state=t.claimed?"CLAIMED":t.unlocked?"AVAILABLE":"LOCKED",button=t.claimed?'<button class="btn secondary" disabled>CLAIMED</button>':t.unlocked?`<button class="btn" data-season-claim="${t.tier}">CLAIM</button>`:'<button class="btn secondary" disabled>LOCKED</button>',limited=(r.id&&String(r.id).includes("1927"))||["deck","table","ball"].includes(r.type)?'<span class="limited-badge">SEASONAL • PERMANENT ON CLAIM</span>':"";return `<div class="season-tier ${t.unlocked?"unlocked":""} ${t.claimed?"claimed":""}"><div class="season-tier-num">${t.tier}</div><div class="season-reward-copy"><strong>${escapeHtml(r.name||"REWARD")}</strong><small>${type} • ${Number(t.xp).toLocaleString()} XP</small>${limited}</div><div class="season-state">${state}</div>${button}</div>`}).join("");document.querySelectorAll("[data-season-claim]").forEach(b=>wireButton(b,()=>send({type:"claim_season",token:authToken,tier:Number(b.dataset.seasonClaim)})));}
 function openProgress(id) { $(id).classList.add("open"); }
 function closeProgress(id) { $(id).classList.remove("open"); }
 
@@ -1024,6 +1043,7 @@ function renderFriends(){
   box.querySelectorAll('.friend-invite').forEach(b=>wireButton(b,()=>send({type:'invite_friend',token:authToken,username:b.dataset.user})));
 }
 
+let seasonTicker=null;function startSeasonTicker(){if(seasonTicker)clearInterval(seasonTicker);seasonTicker=setInterval(()=>{if(!seasonData?.season)return;const rem=Math.max(0,Math.floor(Number(seasonData.season.endAt||0)-Date.now()/1000));seasonData.season.remainingSeconds=rem;if(rem<=0)seasonData.season.active=false;if($("#season-overlay").classList.contains("open"))renderSeason();applySeasonTheme()},1000)}
 function renderPublicTables(){
   const box=$("#public-table-list"); if(!box) return;
   box.innerHTML = publicTables.length ? publicTables.map(t=>`<div class="public-table-row"><div><strong>${escapeHtml((t.game||"BLACKJACK").toUpperCase())} • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host)} • ${t.players}/${t.maxPlayers} Players • ${t.phase === 'PLAYING' ? 'IN GAME' : 'WAITING'}</small></div><div class="public-table-actions">${t.canJoin?`<button class="btn" data-join="${t.code}">JOIN</button>`:''}${t.canSpectate?`<button class="btn secondary" data-spec="${t.code}">WATCH</button>`:''}</div></div>`).join("") : '<div class="admin-empty">No public tables yet. Create one!</div>';
@@ -1056,24 +1076,12 @@ function placeRouletteBet(type,value=null){
   if(!rouletteState || rouletteState.phase!=="BETTING") return;
   send({type:"roulette_bet",token:authToken,betType:type,value,amount:rouletteBetAmount});
 }
-function animateRouletteResult(number){
-  const wheel=$("#roulette-wheel"), ball=$("#roulette-ball");
-  if(!wheel) return;
-  if(rouletteAnimationTimer) clearTimeout(rouletteAnimationTimer);
-  const idx=Math.max(0,ROULETTE_ORDER.indexOf(Number(number)));
-  const rotations=6*360 + idx*(360/37);
-  wheel.style.setProperty("--target-rotation", rotations+"deg");
-  wheel.classList.remove("roulette-spinning"); void wheel.offsetWidth; wheel.classList.add("roulette-spinning");
-  if(ball){
-    ball.style.setProperty("--ball-rotation", `${rotations*1.35}deg`);
-    ball.classList.remove("ball-spinning"); void ball.offsetWidth; ball.classList.add("ball-spinning");
-  }
-  rouletteAnimationTimer=setTimeout(()=>{wheel.classList.remove("roulette-spinning"); if(ball) ball.classList.remove("ball-spinning");},5200);
-}
+function animateRouletteResult(number){const wheel=$("#roulette-wheel"),ball=$("#roulette-ball");if(!wheel)return;if(rouletteAnimationTimer)clearTimeout(rouletteAnimationTimer);const idx=Math.max(0,ROULETTE_ORDER.indexOf(Number(number))),rotations=7*360+idx*(360/37);if(ball){ball.style.setProperty("--ball-rotation",rotations+"deg");ball.classList.remove("ball-spinning");void ball.offsetWidth;ball.classList.add("ball-spinning");}wheel.classList.remove("wheel-live");rouletteAnimationTimer=setTimeout(()=>{ball?.classList.remove("ball-spinning");wheel.classList.remove("wheel-live")},6000);}
 function renderRouletteState(state){
   rouletteState=state; if(!state) return;
   $("#roulette-room-chip").textContent="ROULETTE " + state.code;
   const me=(state.players||[]).find(x=>x.id===myId);
+  if(me?.cosmetics) applyGameCosmetics(me.cosmetics);
   const total=Number(me?.total||0);
   $("#roulette-seat-info").textContent=me ? `YOUR BETS: $${total.toLocaleString()}` : "PLACE A BET TO JOIN THE ROUND";
   $("#roulette-total-bets").textContent="$"+total.toLocaleString();
@@ -1153,6 +1161,7 @@ function applyScale(v) {
   $("#slider-scale").value = uiScale;
   localStorage.setItem("bj_scale", String(uiScale));
 }
+function applyMobileMode(enabled){const on=!!enabled;document.documentElement.setAttribute("data-mobile",on?"1":"0");$("#toggle-mobile")?.classList.toggle("on",on);localStorage.setItem("bj_mobile",on?"1":"0");}
 
 function initSettings() {
   const savedDark = localStorage.getItem("bj_dark") === "1";
@@ -1161,16 +1170,15 @@ function initSettings() {
   applySound(savedSound);
   const savedVol = parseInt(localStorage.getItem("bj_volume") || "60", 10);
   applyVolume(savedVol);
-  const savedScale = parseInt(localStorage.getItem("bj_scale") || "100", 10);
-  applyScale(savedScale);
+  const savedScale=parseInt(localStorage.getItem("bj_scale")||"100",10); applyScale(savedScale); applyMobileMode(localStorage.getItem("bj_mobile")==="1");
+  applySeasonTheme();
 
   $("#toggle-sound").addEventListener("click", () => {
     applySound(!soundEnabled); play("click");
   });
-  $("#toggle-dark").addEventListener("click", () => {
-    play("click");
-    applyTheme(!(document.documentElement.getAttribute("data-theme") === "dark"));
-  });
+  $("#toggle-dark").addEventListener("click",()=>{play("click");applyTheme(!(document.documentElement.getAttribute("data-theme")==="dark"));});
+  $("#toggle-mobile").addEventListener("click",()=>{play("click");applyMobileMode(!(document.documentElement.getAttribute("data-mobile")==="1"));});
+  $("#toggle-seasonal-ui").addEventListener("click",()=>{play("click");applySeasonalUI(!(localStorage.getItem("bj_seasonal_ui") !== "0"));});
   $("#slider-volume").addEventListener("input", (e) => applyVolume(parseInt(e.target.value, 10)));
   $("#slider-scale").addEventListener("input", (e) => applyScale(parseInt(e.target.value, 10)));
 
@@ -1213,11 +1221,7 @@ function initJoin() {
   wireButton($("#btn-play"), openBlackjackLobby);
   wireButton($("#game-blackjack"), openBlackjackLobby);
   wireButton($("#game-roulette"), openRouletteLobby);
-  wireButton($("#btn-join-table"), () => {
-    const room = $("#input-room").value.trim() || "public";
-    $("#room-error").textContent = "";
-    send({ type: "join", token: authToken, room, game:"blackjack" });
-  });
+  wireButton($("#btn-join-table"),()=>{const room=$("#input-room").value.trim();$("#room-error").textContent="";if(!room){$("#room-error").textContent="Enter a private table code, or use CREATE PUBLIC TABLE.";return;}send({type:"join",token:authToken,room,game:"blackjack"});});
   wireButton($("#btn-back-menu"), () => {
     $("#room-error").textContent = "";
     showMainMenu();
@@ -1254,6 +1258,7 @@ function initJoin() {
     else setTimeout(() => $("#admin-password").focus(), 120);
   };
   wireButton($("#btn-admin-float"), openAdmin);
+  wireButton($("#btn-admin-table"), openAdmin);
   wireButton($("#roulette-admin"), openAdmin);
   wireButton($("#roulette-host"), () => { renderRouletteHostList(); $("#host-overlay").classList.add("open"); });
   wireButton($("#admin-preview-toggle"), () => {
@@ -1275,7 +1280,7 @@ function initJoin() {
   wireButton($("#btn-add-friend"), () => { $("#friends-error").textContent=""; send({type:"add_friend",token:authToken,username:$("#friend-username").value.trim()}); });
   wireButton($("#btn-create-public"), () => send({type:"create_public",token:authToken,game:"blackjack"}));
   wireButton($("#btn-roulette-create"), () => send({type:"create_public",token:authToken,game:"roulette"}));
-  wireButton($("#btn-roulette-join"), () => send({type:"join",token:authToken,room:$("#roulette-room").value.trim() || "PUBLIC",game:"roulette"}));
+  wireButton($("#btn-roulette-join"),()=>{const room=$("#roulette-room").value.trim();$("#roulette-room-error").textContent="";if(!room){$("#roulette-room-error").textContent="Enter a private table code, or use CREATE PUBLIC TABLE.";return;}send({type:"join",token:authToken,room,game:"roulette"});});
   wireButton($("#btn-roulette-back"), showMainMenu);
   wireButton($("#roulette-clear"), () => send({type:"roulette_clear"}));
   wireButton($("#roulette-chip-amount"), () => { const vals=[100,500,1000,5000]; rouletteBetAmount=vals[(vals.indexOf(rouletteBetAmount)+1)%vals.length]; $("#roulette-chip-amount").textContent="$"+rouletteBetAmount.toLocaleString(); $("#roulette-chip-amount").classList.add("selected-chip"); });
@@ -1301,6 +1306,16 @@ function initJoin() {
   wireButton($("#btn-achievements-close"), () => closeProgress("#achievements-overlay"));
   wireButton($("#btn-daily-close"), () => closeProgress("#daily-overlay"));
   wireButton($("#btn-store-close"), () => closeProgress("#store-overlay"));
+  window.storeTab = "all";
+  window.storeOwnedOnly = false;
+  document.querySelectorAll(".store-tab").forEach(btn => wireButton(btn, () => {
+    window.storeTab = btn.dataset.storeTab || "all";
+    renderStore();
+  }));
+  wireButton($("#store-owned-toggle"), () => {
+    window.storeOwnedOnly = !window.storeOwnedOnly;
+    renderStore();
+  });
   wireButton($("#btn-season-close"), () => closeProgress("#season-overlay"));
   document.querySelectorAll(".rank-tab").forEach(btn => btn.addEventListener("click", () => {
     activeRank = btn.dataset.rank;
@@ -1312,5 +1327,6 @@ function initJoin() {
 initSettings();
 initControls();
 initJoin();
+startSeasonTicker();
 $("#btn-chat-mute").textContent = chatMuted ? "🔇" : "🔊";
 if (localStorage.getItem("bj_session_token")) { setTimeout(() => { if (!ws || ws.readyState === WebSocket.CLOSED) connect(); }, 50); }

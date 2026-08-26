@@ -44,3 +44,7 @@ Roulette is a server-authoritative European wheel (0–36) with red/black, odd/e
 - Admin Roulette luck is bounded and server-side, with temporary table luck and per-player luck controls.
 - Season XP is shared across Blackjack and Roulette through the existing account progression state.
 - Responsive layouts were added for Appearance, Admin, Season, and Roulette.
+
+
+## Season 1
+**Casino X: 1927** runs for 21 days from first production initialization. The start time is persisted in PostgreSQL `app_settings`, so restarts do not reset the countdown. Seasonal cosmetics remain permanently owned after the acquisition window closes.

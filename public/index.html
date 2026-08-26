@@ -59,15 +59,13 @@
     <div class="auth-card lobby-card">
       <div class="main-menu-title">BLACKJACK</div>
       <div class="auth-sub">JOIN A TABLE</div>
-      <div class="field">
-        <label>Table code</label>
-        <input id="input-room" type="text" maxlength="12" placeholder="e.g. LUCKY7 (blank = public)" autocomplete="off">
-      </div>
-      <div class="auth-error" id="room-error"></div>
-      <div class="lobby-actions"><button class="btn secondary" id="btn-create-public">CREATE PUBLIC</button></div>
-      <button class="btn auth-submit menu-primary" id="btn-join-table">JOIN TABLE</button>
-      <button class="btn secondary auth-submit" id="btn-back-menu">BACK</button>
+      <div class="lobby-divider"><span>PUBLIC TABLES</span><i></i></div>
       <div id="public-table-list" class="public-table-list"></div>
+      <div class="lobby-or"><span>OR</span></div>
+      <div class="field compact-field"><label>PRIVATE TABLE CODE</label><input id="input-room" type="text" maxlength="12" placeholder="Enter a table code" autocomplete="off"></div>
+      <div class="auth-error" id="room-error"></div>
+      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-create-public">CREATE PUBLIC TABLE</button><button class="btn secondary auth-submit" id="btn-join-table">JOIN PRIVATE TABLE</button></div>
+      <button class="btn secondary auth-submit" id="btn-back-menu">BACK TO CASINO</button>
     </div>
   </div>
 
@@ -75,30 +73,37 @@
   <div id="screen-roulette-lobby" class="screen">
     <div class="auth-card lobby-card roulette-lobby-card">
       <div class="roulette-mark">◉</div><div class="main-menu-title">ROULETTE</div><div class="auth-sub">EUROPEAN WHEEL • 0–36</div>
-      <div class="field"><label>Table code</label><input id="roulette-room" maxlength="12" placeholder="Blank = public" autocomplete="off"></div>
-      <div class="auth-error" id="roulette-room-error"></div>
-      <div class="lobby-actions"><button class="btn secondary" id="btn-roulette-create">CREATE PUBLIC</button></div>
-      <button class="btn auth-submit menu-primary" id="btn-roulette-join">JOIN TABLE</button><button class="btn secondary" id="btn-roulette-back">BACK TO CASINO</button>
+      <div class="lobby-divider"><span>PUBLIC TABLES</span><i></i></div>
       <div id="roulette-table-list" class="public-table-list"></div>
+      <div class="lobby-or"><span>OR</span></div>
+      <div class="field compact-field"><label>PRIVATE TABLE CODE</label><input id="roulette-room" maxlength="12" placeholder="Enter a table code" autocomplete="off"></div>
+      <div class="auth-error" id="roulette-room-error"></div>
+      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-roulette-create">CREATE PUBLIC TABLE</button><button class="btn secondary auth-submit" id="btn-roulette-join">JOIN PRIVATE TABLE</button></div>
+      <button class="btn secondary auth-submit" id="btn-roulette-back">BACK TO CASINO</button>
     </div>
   </div>
 
   <!-- ==================== ROULETTE TABLE ==================== -->
   <div id="screen-roulette" class="screen">
-    <div class="top-bar"><div class="top-left"><div class="profile-chip"><span id="roulette-profile-name">PLAYER</span><span class="balance-chip" id="roulette-balance">$0</span></div><div class="room-chip" id="roulette-room-chip">ROULETTE</div><span class="room-chip" id="roulette-player-count">0/5</span><span class="room-chip" id="roulette-status">BETTING</span></div><div class="top-actions"><button class="icon-btn hidden" id="roulette-host" aria-label="Host controls">♛</button><button class="icon-btn hidden" id="roulette-admin" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="roulette-settings" aria-label="Settings">⚙</button></div></div>
-    <div class="roulette-stage">
-      <div class="roulette-header"><span>CASINO X ROULETTE</span><small>EUROPEAN • 0–36 • SERVER-SETTLED</small></div>
-      <div class="roulette-wheel-wrap"><div class="roulette-pointer"></div><div class="roulette-wheel" id="roulette-wheel"><div class="roulette-pockets" id="roulette-pockets"></div><div class="roulette-hub"><span>CASINO X</span></div><div class="roulette-ball" id="roulette-ball"></div></div></div>
-      <div class="roulette-result" id="roulette-result">PLACE YOUR BETS</div>
-      <div class="roulette-history" id="roulette-history"></div>
-      <div class="roulette-meta"><div><span>BALANCE</span><strong id="roulette-balance-meta">$0</strong></div><div><span>TOTAL BETS</span><strong id="roulette-total-bets">$0</strong></div><div><span>ROUND</span><strong id="roulette-round-state">BETTING</strong></div></div>
-      <div class="roulette-bets-grid">
-        <button class="roulette-bet red" data-bet="red">RED<br><small>1:1</small></button><button class="roulette-bet black" data-bet="black">BLACK<br><small>1:1</small></button><button class="roulette-bet green" data-bet="odd">ODD<br><small>1:1</small></button><button class="roulette-bet black" data-bet="even">EVEN<br><small>1:1</small></button><button class="roulette-bet neutral" data-bet="low">1–18<br><small>1:1</small></button><button class="roulette-bet neutral" data-bet="high">19–36<br><small>1:1</small></button>
-        <button class="roulette-bet dozen" data-bet="dozen1">1–12<br><small>2:1</small></button><button class="roulette-bet dozen" data-bet="dozen2">13–24<br><small>2:1</small></button><button class="roulette-bet dozen" data-bet="dozen3">25–36<br><small>2:1</small></button>
+    <div class="top-bar"><div class="top-left"><div class="profile-chip"><span id="roulette-profile-name">PLAYER</span><span class="balance-chip" id="roulette-balance">$0</span></div><div class="room-chip" id="roulette-room-chip">ROULETTE</div><span class="room-chip" id="roulette-player-count">0/5</span><span class="room-chip" id="roulette-status">BETTING</span></div><div class="top-actions"><button class="icon-btn hidden" id="roulette-host" aria-label="Host controls">♛</button><button class="icon-btn table-admin-btn" id="roulette-admin" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="roulette-settings" aria-label="Settings">⚙</button></div></div>
+    <div class="roulette-table-shell">
+      <div class="roulette-table-heading"><div><span class="eyebrow">CASINO X • TABLE</span><h1>EUROPEAN ROULETTE</h1><small>0–36 • SERVER-SETTLED</small></div><div class="roulette-result-card"><span id="roulette-round-state">BETTING</span><strong id="roulette-result">PLACE YOUR BETS</strong></div></div>
+      <div class="roulette-table-layout">
+        <section class="roulette-felt" id="roulette-felt">
+          <div class="felt-ornament top"></div><div class="roulette-zero-bet" id="roulette-zero-bet">0</div><div class="roulette-number-grid" id="roulette-number-strip"></div>
+          <div class="roulette-outside-grid">
+            <button class="roulette-bet outside red" data-bet="red">RED<small>1:1</small></button><button class="roulette-bet outside black" data-bet="black">BLACK<small>1:1</small></button><button class="roulette-bet outside neutral" data-bet="odd">ODD<small>1:1</small></button><button class="roulette-bet outside neutral" data-bet="even">EVEN<small>1:1</small></button><button class="roulette-bet outside neutral" data-bet="low">1–18<small>1:1</small></button><button class="roulette-bet outside neutral" data-bet="high">19–36<small>1:1</small></button>
+          </div>
+          <div class="roulette-dozen-grid"><button class="roulette-bet dozen" data-bet="dozen1">1ST 12<small>2:1</small></button><button class="roulette-bet dozen" data-bet="dozen2">2ND 12<small>2:1</small></button><button class="roulette-bet dozen" data-bet="dozen3">3RD 12<small>2:1</small></button></div>
+          <div class="felt-ornament bottom"></div>
+        </section>
+        <aside class="roulette-wheel-panel">
+          <div class="wheel-panel-title"><span>THE WHEEL</span><small>EUROPEAN • 37 POCKETS</small></div>
+          <div class="roulette-wheel-wrap"><div class="roulette-pointer"></div><div class="roulette-wheel" id="roulette-wheel"><div class="roulette-pockets" id="roulette-pockets"></div><div class="roulette-hub"><span>CASINO X</span></div><div class="roulette-ball" id="roulette-ball"></div></div></div>
+          <div class="roulette-history-label">RECENT</div><div class="roulette-history" id="roulette-history"></div>
+        </aside>
       </div>
-      <div class="roulette-number-board"><div class="roulette-zero-bet" id="roulette-zero-bet">0</div><div class="roulette-number-grid" id="roulette-number-strip"></div></div>
-      <div class="roulette-controls"><div class="roulette-chip-amount" id="roulette-chip-amount">$100</div><button class="btn secondary" id="roulette-clear">CLEAR</button><button class="btn good" id="roulette-spin">SPIN</button><button class="btn panel-btn" id="roulette-leave">LEAVE</button></div>
-      <div class="roulette-seat-info" id="roulette-seat-info"></div>
+      <div class="roulette-bottom-bar"><div class="roulette-player-panel"><span id="roulette-balance-meta" class="hidden"></span><span id="roulette-seat-info">PLACE A BET TO JOIN THE ROUND</span><strong id="roulette-total-bets">$0</strong></div><div class="roulette-chip-selector" id="roulette-chip-amount">$100</div><button class="btn secondary" id="roulette-clear">CLEAR BETS</button><button class="btn good roulette-spin-btn" id="roulette-spin">SPIN</button><button class="btn panel-btn" id="roulette-leave">LEAVE TABLE</button></div>
     </div>
   </div>
 
@@ -109,7 +114,7 @@
         <div class="profile-chip"><span id="profile-name">PLAYER</span><span class="balance-chip" id="balance-chip">$0</span><button class="refresh-btn" id="btn-refresh-balance" title="Refresh balance">↻</button></div>
         <div class="room-chip" id="room-chip">TABLE</div>
       </div>
-      <div class="top-actions"><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
+      <div class="top-actions"><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn table-admin-btn" id="btn-admin-table" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
     </div>
 
     <div class="table-wrap" id="table-wrap">
@@ -237,23 +242,51 @@
     </div>
   </div>
 
-  <div class="overlay" id="store-overlay">
-    <div class="overlay-card progress-card store-card">
-      <div class="overlay-title">CASINO X STORE</div>
-      <div class="store-balance" id="store-balance">$0</div>
-      <div class="store-section-title">THEMES</div>
-      <div id="store-themes" class="store-grid"></div>
-      <div class="store-section-title">CHIPS</div>
-      <div id="store-chips" class="store-grid"></div>
-      <button class="btn panel-btn" id="btn-store-close">CLOSE</button>
+  <div class="overlay" id="store-overlay" aria-hidden="true">
+    <div class="overlay-card progress-card store-card store-redesign">
+      <header class="store-header">
+        <div>
+          <span class="store-kicker">CASINO X • HOUSE COLLECTION</span>
+          <h2>THE STORE</h2>
+          <p>Own it forever. Equip it everywhere it belongs.</p>
+        </div>
+        <div class="store-wallet">
+          <span>YOUR CHIPS</span>
+          <strong id="store-balance">$0</strong>
+        </div>
+      </header>
+      <nav class="store-tabs" aria-label="Store categories">
+        <button class="store-tab active" data-store-tab="all">ALL</button>
+        <button class="store-tab" data-store-tab="theme">THEMES</button>
+        <button class="store-tab" data-store-tab="chip">CHIPS</button>
+        <button class="store-tab" data-store-tab="deck">BLACKJACK</button>
+        <button class="store-tab" data-store-tab="table">TABLES</button>
+        <button class="store-tab" data-store-tab="ball">ROULETTE</button>
+      </nav>
+      <div class="store-toolbar">
+        <div>
+          <strong id="store-results-title">HOUSE COLLECTION</strong>
+          <small id="store-results-count">0 ITEMS</small>
+        </div>
+        <button class="store-owned-toggle" id="store-owned-toggle" type="button" aria-pressed="false">SHOW OWNED ONLY</button>
+      </div>
+      <div id="store-catalog" class="store-catalog" aria-live="polite"></div>
+      <div class="store-empty hidden" id="store-empty">
+        <strong>NOTHING HERE YET</strong>
+        <span>Try another category.</span>
+      </div>
+      <footer class="store-footer">
+        <div class="store-footer-note"><span>✦</span><span>Seasonal rewards stay permanently in your collection after you claim them.</span></div>
+        <button class="btn panel-btn store-close-bottom" id="btn-store-close">CLOSE STORE</button>
+      </footer>
     </div>
   </div>
 
   <div class="overlay" id="season-overlay">
     <div class="overlay-card progress-card season-card">
-      <div class="season-hero"><div><span>SEASON 1</span><strong>ORBIT</strong><small>A new night begins.</small></div><b id="season-xp">0 XP</b></div>
-      <div class="season-progress"><div id="season-progress-fill"></div></div>
-      <div id="season-tier-list" class="season-tier-list"></div>
+      <div class="season-art"><div class="season-art-copy"><span>SEASON 1 • 21 DAYS</span><strong>CASINO X: 1927</strong><small>THE GOLDEN AGE OF THE HOUSE</small></div><div class="season-countdown"><span>SEASON ENDS IN</span><strong id="season-countdown">21D 00H 00M</strong><small id="season-season-status">ACTIVE</small></div></div>
+      <div class="season-summary"><div><span>SEASONAL XP</span><strong id="season-xp">0 XP</strong></div><div><span>THEME</span><strong>ART DECO</strong></div><div><span>REWARDS</span><strong>10 TIERS</strong></div></div>
+      <div class="season-progress"><div id="season-progress-fill"></div></div><div id="season-tier-list" class="season-tier-list"></div>
       <button class="btn panel-btn" id="btn-season-close">CLOSE</button>
     </div>
   </div>
@@ -305,8 +338,10 @@
       <div class="appearance-subtitle">Only items in your permanent inventory can be equipped.</div>
       <div class="store-section-title">THEMES</div>
       <div id="appearance-themes" class="appearance-grid"></div>
-      <div class="store-section-title">COSMETICS</div>
-      <div id="appearance-chips" class="appearance-grid"></div>
+      <div class="store-section-title">CASINO CHIPS</div><div id="appearance-chips" class="appearance-grid"></div>
+      <div class="store-section-title">BLACKJACK DECKS</div><div id="appearance-decks" class="appearance-grid"></div>
+      <div class="store-section-title">TABLE SKINS</div><div id="appearance-tables" class="appearance-grid"></div>
+      <div class="store-section-title">ROULETTE BALLS</div><div id="appearance-balls" class="appearance-grid"></div>
       <button class="btn secondary panel-btn" id="btn-appearance-store">BUY AT SHOP</button>
       <button class="btn panel-btn" id="btn-appearance-close">CLOSE</button>
     </div>
@@ -320,10 +355,9 @@
         <label>Dark mode</label>
         <div class="toggle" id="toggle-dark"><div class="toggle-knob"></div></div>
       </div>
-      <div class="settings-row">
-        <label>Sound effects</label>
-        <div class="toggle on" id="toggle-sound"><div class="toggle-knob"></div></div>
-      </div>
+      <div class="settings-row"><label>Sound effects</label><div class="toggle on" id="toggle-sound"><div class="toggle-knob"></div></div></div>
+      <div class="settings-row"><div><label>Mobile mode</label><small class="settings-help">Optimizes tables and menus for touch.</small></div><div class="toggle" id="toggle-mobile"><div class="toggle-knob"></div></div></div>
+      <div class="settings-row"><div><label>Seasonal UI &amp; Theme</label><small class="settings-help">Applies the active season's full visual overhaul across Casino X.</small></div><div class="toggle on" id="toggle-seasonal-ui"><div class="toggle-knob"></div></div></div>
       <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
         <label>SFX volume — <span id="volume-pct">60%</span></label>
         <input type="range" id="slider-volume" min="0" max="100" value="60" />
@@ -333,8 +367,8 @@
         <input type="range" id="slider-scale" min="80" max="130" value="100" step="5" />
       </div>
       <button class="btn secondary panel-btn" id="btn-settings-appearance">APPEARANCE</button>
-      <button class="btn panel-btn" id="btn-settings-close">CLOSE</button>
       <button class="btn panel-btn" id="btn-leave-table">LEAVE TABLE</button>
+      <button class="btn panel-btn settings-close-bottom" id="btn-settings-close">CLOSE</button>
     </div>
   </div>
 

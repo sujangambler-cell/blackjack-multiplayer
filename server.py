@@ -137,6 +137,13 @@ def _ensure_db():
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
 
 def _load_accounts_from_db():
     global ACCOUNTS, TOKENS
@@ -179,11 +186,37 @@ def _migrate_json_accounts_to_db():
     save_accounts()
     print(f"Migrated {len(ACCOUNTS)} account(s) from accounts.json to PostgreSQL.")
 
+SEASON_START_TS = 0.0
+SEASON_DURATION_S = 21 * 24 * 60 * 60
+SEASON_META_FILE = pathlib.Path(__file__).parent / "season_meta.json"
+
+def _load_or_create_season_start():
+    global SEASON_START_TS
+    if _db_enabled():
+        with _db_connect() as conn:
+            row = conn.execute("SELECT setting_value FROM app_settings WHERE setting_key=%s", ("season_1_start",)).fetchone()
+            if row:
+                SEASON_START_TS = float(row["setting_value"])
+            else:
+                SEASON_START_TS = time.time()
+                conn.execute("INSERT INTO app_settings (setting_key, setting_value) VALUES (%s, %s)", ("season_1_start", str(SEASON_START_TS)))
+        return
+    try:
+        if SEASON_META_FILE.exists():
+            raw=json.loads(SEASON_META_FILE.read_text(encoding="utf-8"))
+            SEASON_START_TS=float(raw.get("season_1_start",0))
+        if not SEASON_START_TS:
+            SEASON_START_TS=time.time()
+            SEASON_META_FILE.write_text(json.dumps({"season_1_start":SEASON_START_TS}),encoding="utf-8")
+    except Exception:
+        SEASON_START_TS=time.time()
+
 def load_accounts():
     global ACCOUNTS, TOKENS
     if _db_enabled():
         try:
             _ensure_db()
+            _load_or_create_season_start()
             _load_accounts_from_db()
             if not ACCOUNTS:
                 _migrate_json_accounts_to_db()
@@ -195,6 +228,7 @@ def load_accounts():
             raise
 
     try:
+        _load_or_create_season_start()
         if ACCOUNTS_FILE.exists():
             ACCOUNTS = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
             TOKENS = {}
@@ -267,52 +301,75 @@ LEVELS = [
 
 
 COSMETIC_THEMES = {
-    "classic": {"name":"Classic Noir", "price":0, "season":None, "limited":False, "scope":"GLOBAL"},
-    "midnight": {"name":"Midnight Velvet", "price":12000, "season":None, "limited":False, "scope":"GLOBAL"},
-    "royal": {"name":"Royal Eclipse", "price":25000, "season":None, "limited":False, "scope":"GLOBAL"},
-    "neon": {"name":"Neon Afterdark", "price":40000, "season":None, "limited":False, "scope":"GLOBAL"},
-    "orbit": {"name":"Orbit — Season 1", "price":0, "season":1, "limited":True, "scope":"GLOBAL"},
-    "admin_star": {"name":"Admin Star", "price":0, "season":None, "limited":False, "scope":"GLOBAL", "admin_only":True},
+    "classic":{"name":"Classic Noir","price":0,"season":None,"limited":False,"scope":"GLOBAL"},
+    "midnight":{"name":"Midnight Velvet","price":12000,"season":None,"limited":False,"scope":"GLOBAL"},
+    "royal":{"name":"Royal Eclipse","price":25000,"season":None,"limited":False,"scope":"GLOBAL"},
+    "neon":{"name":"Neon Afterdark","price":40000,"season":None,"limited":False,"scope":"GLOBAL"},
+    "casino1927":{"name":"Casino X: 1927","price":0,"season":1,"limited":True,"scope":"GLOBAL"},
+    "admin_star":{"name":"Admin Star","price":0,"season":None,"limited":False,"scope":"GLOBAL","admin_only":True},
 }
 COSMETIC_CHIPS = {
-    "classic": {"name":"Classic Chip", "price":0, "season":None, "limited":False, "scope":"GLOBAL"},
-    "silver": {"name":"Silver Edge", "price":8000, "season":None, "limited":False, "scope":"GLOBAL"},
-    "gold": {"name":"Gold Crest", "price":18000, "season":None, "limited":False, "scope":"GLOBAL"},
-    "orbit": {"name":"Orbit Chip", "price":0, "season":1, "limited":True, "scope":"GLOBAL"},
-    "admin_chip": {"name":"Admin Chip", "price":0, "season":None, "limited":False, "scope":"GLOBAL", "admin_only":True},
+    "classic":{"name":"Classic Chip","price":0,"season":None,"limited":False,"scope":"GLOBAL"},
+    "silver":{"name":"Silver Edge","price":8000,"season":None,"limited":False,"scope":"GLOBAL"},
+    "gold":{"name":"Gold Crest","price":18000,"season":None,"limited":False,"scope":"GLOBAL"},
+    "casino1927":{"name":"1927 Brass Chip","price":0,"season":1,"limited":True,"scope":"GLOBAL"},
+    "admin_chip":{"name":"Admin Chip","price":0,"season":None,"limited":False,"scope":"GLOBAL","admin_only":True},
+}
+COSMETIC_DECKS = {
+    "classic":{"name":"Classic Deck","price":0,"season":None,"limited":False,"scope":"BLACKJACK"},
+    "midnight":{"name":"Midnight Deck","price":14000,"season":None,"limited":False,"scope":"BLACKJACK"},
+    "casino1927":{"name":"1927 Art Deco Deck","price":0,"season":1,"limited":True,"scope":"BLACKJACK"},
+}
+COSMETIC_TABLES = {
+    "classic":{"name":"Classic Felt","price":0,"season":None,"limited":False,"scope":"GLOBAL"},
+    "royal":{"name":"Royal Green Table","price":22000,"season":None,"limited":False,"scope":"GLOBAL"},
+    "casino1927":{"name":"1927 Golden House Table","price":0,"season":1,"limited":True,"scope":"GLOBAL"},
+}
+COSMETIC_BALLS = {
+    "classic":{"name":"Classic Roulette Ball","price":0,"season":None,"limited":False,"scope":"ROULETTE"},
+    "brass1927":{"name":"1927 Brass Roulette Ball","price":0,"season":1,"limited":True,"scope":"ROULETTE"},
 }
 SEASON = {
-    "id": 1, "name": "ORBIT", "subtitle": "A new night begins.", "duration": "SEASON 1",
-    "tiers": [
+    "id":1,"name":"CASINO X: 1927","subtitle":"THE GOLDEN AGE OF THE HOUSE","duration":"21 DAYS","theme":"casino1927",
+    "tiers":[
         {"tier":1,"xp":0,"reward":{"type":"chips","amount":500,"name":"500 CHIPS"}},
-        {"tier":2,"xp":100,"reward":{"type":"chips","amount":750,"name":"750 CHIPS"}},
-        {"tier":3,"xp":250,"reward":{"type":"chips","amount":1000,"name":"1,000 CHIPS"}},
-        {"tier":4,"xp":450,"reward":{"type":"chips","amount":1500,"name":"1,500 CHIPS"}},
-        {"tier":5,"xp":700,"reward":{"type":"chip","id":"orbit","name":"ORBIT CHIP"}},
-        {"tier":6,"xp":1000,"reward":{"type":"chips","amount":2500,"name":"2,500 CHIPS"}},
-        {"tier":7,"xp":1400,"reward":{"type":"chips","amount":3500,"name":"3,500 CHIPS"}},
-        {"tier":8,"xp":1900,"reward":{"type":"theme","id":"orbit","name":"ORBIT THEME"}},
-        {"tier":9,"xp":2500,"reward":{"type":"chips","amount":7500,"name":"7,500 CHIPS"}},
-        {"tier":10,"xp":3250,"reward":{"type":"title","id":"orbit","name":"ORBIT HIGH ROLLER"}},
+        {"tier":2,"xp":120,"reward":{"type":"chip","id":"casino1927","name":"1927 BRASS CHIP"}},
+        {"tier":3,"xp":300,"reward":{"type":"chips","amount":1000,"name":"1,000 CHIPS"}},
+        {"tier":4,"xp":600,"reward":{"type":"deck","id":"casino1927","name":"1927 ART DECO DECK"}},
+        {"tier":5,"xp":1000,"reward":{"type":"chips","amount":2500,"name":"2,500 CHIPS"}},
+        {"tier":6,"xp":1500,"reward":{"type":"ball","id":"brass1927","name":"1927 BRASS ROULETTE BALL"}},
+        {"tier":7,"xp":2200,"reward":{"type":"chips","amount":4000,"name":"4,000 CHIPS"}},
+        {"tier":8,"xp":3000,"reward":{"type":"table","id":"casino1927","name":"1927 GOLDEN HOUSE TABLE"}},
+        {"tier":9,"xp":4000,"reward":{"type":"title","id":"golden_age","name":"GOLDEN AGE HIGH ROLLER"}},
+        {"tier":10,"xp":5250,"reward":{"type":"theme","id":"casino1927","name":"CASINO X: 1927 UNIVERSAL THEME"}},
     ]
 }
+def season_active(): return SEASON_START_TS > 0 and time.time() < SEASON_START_TS + SEASON_DURATION_S
+def season_times():
+    start=float(SEASON_START_TS or time.time()); end=start+SEASON_DURATION_S
+    return start,end,max(0,int(end-time.time()))
 
 def season_payload(account):
     xp=int(account.get("season_xp",0)); claimed=set(account.get("season_claimed",[]))
-    tiers=[]
-    for t in SEASON["tiers"]:
-        tiers.append({**t, "claimed": str(t["tier"]) in claimed, "unlocked": xp >= t["xp"]})
-    return {"season": SEASON, "xp":xp, "claimed":sorted(claimed), "tiers":tiers}
+    start_ts,end_ts,remaining=season_times()
+    tiers=[{**t,"claimed":str(t["tier"]) in claimed,"unlocked":xp>=t["xp"] and season_active()} for t in SEASON["tiers"]]
+    return {"season":{**SEASON,"startAt":start_ts,"endAt":end_ts,"active":season_active(),"remainingSeconds":remaining},"xp":xp,"claimed":sorted(claimed),"tiers":tiers}
+
+def _catalog_payload(catalog,owned,equipped):
+    return [{"id":k,**v,"owned":k in owned,"equipped":equipped==k} for k,v in catalog.items() if not v.get("admin_only")]
 
 def store_payload(account):
-    owned_themes=set(account.get("owned_themes",["classic"]))
-    owned_chips=set(account.get("owned_chips",["classic"]))
+    ot=set(account.get("owned_themes",["classic"])); oc=set(account.get("owned_chips",["classic"]))
+    od=set(account.get("owned_decks",["classic"])); osk=set(account.get("owned_tables",["classic"])); ob=set(account.get("owned_balls",["classic"]))
     return {
-        "themes":[{"id":k,**v,"owned":k in owned_themes,"equipped":account.get("equipped_theme","classic")==k} for k,v in COSMETIC_THEMES.items() if not v.get("admin_only")],
-        "chips":[{"id":k,**v,"owned":k in owned_chips,"equipped":account.get("equipped_chip","classic")==k} for k,v in COSMETIC_CHIPS.items() if not v.get("admin_only")],
-        "balance":int(account.get("money",0)), "season":season_payload(account),
-        "adminThemes":[{"id":k,**v,"owned":k in owned_themes,"equipped":account.get("equipped_theme","classic")==k} for k,v in COSMETIC_THEMES.items() if v.get("admin_only") and k in owned_themes],
-        "adminChips":[{"id":k,**v,"owned":k in owned_chips,"equipped":account.get("equipped_chip","classic")==k} for k,v in COSMETIC_CHIPS.items() if v.get("admin_only") and k in owned_chips]
+        "themes":_catalog_payload(COSMETIC_THEMES,ot,account.get("equipped_theme","classic")),
+        "chips":_catalog_payload(COSMETIC_CHIPS,oc,account.get("equipped_chip","classic")),
+        "decks":_catalog_payload(COSMETIC_DECKS,od,account.get("equipped_deck","classic")),
+        "tables":_catalog_payload(COSMETIC_TABLES,osk,account.get("equipped_table","classic")),
+        "balls":_catalog_payload(COSMETIC_BALLS,ob,account.get("equipped_ball","classic")),
+        "balance":int(account.get("money",0)),"season":season_payload(account),
+        "adminThemes":[{"id":k,**v,"owned":k in ot,"equipped":account.get("equipped_theme","classic")==k} for k,v in COSMETIC_THEMES.items() if v.get("admin_only") and k in ot],
+        "adminChips":[{"id":k,**v,"owned":k in oc,"equipped":account.get("equipped_chip","classic")==k} for k,v in COSMETIC_CHIPS.items() if v.get("admin_only") and k in oc]
     }
 
 def ensure_account_progress(account):
@@ -321,7 +378,7 @@ def ensure_account_progress(account):
         "pushes": 0, "blackjacks": 0, "best_win_streak": 0, "current_win_streak": 0,
         "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
         "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
-        "friends": [], "owned_themes": ["classic"], "owned_chips": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "season_xp": 0, "season_claimed": [], "season_title": "",
+        "friends": [], "owned_themes": ["classic"], "owned_chips": ["classic"], "owned_decks": ["classic"], "owned_tables": ["classic"], "owned_balls": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "equipped_deck": "classic", "equipped_table": "classic", "equipped_ball": "classic", "season_xp": 0, "season_claimed": [], "season_title": "",
         "roulette_games": 0, "roulette_wins": 0, "roulette_biggest_win": 0,
         "game_stats": {"blackjack": {"games": 0, "wins": 0}, "roulette": {"games": 0, "wins": 0}},
         "session_token": account.get("session_token"),
@@ -420,7 +477,9 @@ def profile_payload(account):
         "friends": friends_payload(account),
         "dailyClaimed": account.get("daily_claim") == today_key(),
         "dailyChallenges": account.get("daily_challenges", {}),
-        "cosmetics": {"theme": account.get("equipped_theme","classic"), "chip": account.get("equipped_chip","classic"), "title": account.get("season_title","")},
+        "cosmetics": {"theme":account.get("equipped_theme","classic"),"chip":account.get("equipped_chip","classic"),
+                       "deck":account.get("equipped_deck","classic"),"table":account.get("equipped_table","classic"),
+                       "ball":account.get("equipped_ball","classic"),"title":account.get("season_title","")},
         "season": season_payload(account),
     }
 
@@ -597,6 +656,7 @@ def serialise(room) -> dict:
                 "spectator": bool(p.get("spectator")),
                 "pity":      p.get("pity_banner", False),
                 "lucky":     bool(room.get("lucky_players", {}).get(p.get("username_key"), 0)),
+                "cosmetics": p.get("cosmetics", {}),
             }
             for p in room["players"]
         ],
@@ -975,7 +1035,7 @@ def roulette_serialise(room):
     bets = []
     for p in room.get("players", []):
         total = sum(int(b["amount"]) for b in room.get("roulette_bets", {}).get(p["id"], []))
-        bets.append({"id":p["id"],"username":p["username"],"total":total,"isHost":p["id"]==room.get("host_id"),"connected":p.get("connected",False)})
+        bets.append({"id":p["id"],"username":p["username"],"total":total,"isHost":p["id"]==room.get("host_id"),"connected":p.get("connected",False),"cosmetics":p.get("cosmetics",{})})
     return {"code":room["code"],"game":"roulette","phase":room.get("roulette_phase","BETTING"),
             "players":bets,"lastResult":room.get("roulette_last_result")}
 
@@ -1318,38 +1378,38 @@ async def ws_handler(websocket):
             continue
 
         if kind == "buy_cosmetic":
-            key = TOKENS.get(msg.get("token")); account = ACCOUNTS.get(key)
-            category = msg.get("category"); item_id = msg.get("id")
-            catalog = COSMETIC_THEMES if category == "theme" else COSMETIC_CHIPS if category == "chip" else {}
-            if account is not None and item_id in catalog:
-                item=catalog[item_id]; owned_key="owned_themes" if category=="theme" else "owned_chips"
-                owned=set(account.get(owned_key,[]))
-                if item_id in owned:
-                    await websocket.send(json.dumps({"type":"store","store":store_payload(account)}))
-                elif item.get("admin_only"):
-                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"That item can only be granted by an authorized admin."}))
-                elif item.get("limited"):
-                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"Limited items are earned through the active season."}))
-                elif item.get("season") not in (None, SEASON["id"]):
-                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"That limited item is no longer available."}))
-                elif int(account.get("money",0)) < int(item.get("price",0)):
-                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"Not enough chips."}))
+            key=TOKENS.get(msg.get("token")); account=ACCOUNTS.get(key); category=str(msg.get("category","")); item_id=str(msg.get("id",""))
+            catalogs={"theme":COSMETIC_THEMES,"chip":COSMETIC_CHIPS,"deck":COSMETIC_DECKS,"table":COSMETIC_TABLES,"ball":COSMETIC_BALLS}
+            owned_keys={"theme":"owned_themes","chip":"owned_chips","deck":"owned_decks","table":"owned_tables","ball":"owned_balls"}
+            catalog=catalogs.get(category,{}); owned_key=owned_keys.get(category)
+            if account is not None and owned_key and item_id in catalog:
+                item=catalog[item_id]; owned=set(account.get(owned_key,[]))
+                if item_id in owned: await websocket.send(json.dumps({"type":"store","store":store_payload(account)}))
+                elif item.get("admin_only"): await websocket.send(json.dumps({"type":"error","scope":"store","message":"That item can only be granted by an authorized admin."}))
+                elif item.get("limited"): await websocket.send(json.dumps({"type":"error","scope":"store","message":"Limited items are earned through the active season."}))
+                elif int(account.get("money",0)) < int(item.get("price",0)): await websocket.send(json.dumps({"type":"error","scope":"store","message":"Not enough chips."}))
                 else:
-                    account["money"] -= int(item.get("price",0)); owned.add(item_id); account[owned_key]=sorted(owned); save_accounts()
+                    account["money"]-=int(item.get("price",0)); owned.add(item_id); account[owned_key]=sorted(owned); save_accounts()
                     await websocket.send(json.dumps({"type":"store","store":store_payload(account),"purchased":item_id}))
                     await websocket.send(json.dumps({"type":"profile","profile":profile_payload(account)}))
                     await websocket.send(json.dumps({"type":"balance","balance":int(account.get("money",0))}))
             continue
 
         if kind == "equip_cosmetic":
-            key = TOKENS.get(msg.get("token")); account = ACCOUNTS.get(key)
-            category = msg.get("category"); item_id = msg.get("id")
-            owned_key="owned_themes" if category=="theme" else "owned_chips" if category=="chip" else None
-            if account is not None and owned_key and item_id in set(account.get(owned_key,[])):
-                account["equipped_theme" if category=="theme" else "equipped_chip"] = item_id
-                save_accounts()
+            key=TOKENS.get(msg.get("token")); account=ACCOUNTS.get(key); category=str(msg.get("category","")); item_id=str(msg.get("id",""))
+            catalogs={"theme":COSMETIC_THEMES,"chip":COSMETIC_CHIPS,"deck":COSMETIC_DECKS,"table":COSMETIC_TABLES,"ball":COSMETIC_BALLS}
+            owned_keys={"theme":"owned_themes","chip":"owned_chips","deck":"owned_decks","table":"owned_tables","ball":"owned_balls"}
+            equipped_keys={"theme":"equipped_theme","chip":"equipped_chip","deck":"equipped_deck","table":"equipped_table","ball":"equipped_ball"}
+            if account is not None and category in catalogs and item_id in catalogs[category] and item_id in set(account.get(owned_keys[category],[])):
+                account[equipped_keys[category]]=item_id; save_accounts()
+                for r in rooms.values():
+                    for p in r.get("players",[]):
+                        if p.get("username_key")==key: p.setdefault("cosmetics",{})[category]=item_id
                 await websocket.send(json.dumps({"type":"store","store":store_payload(account),"equipped":item_id}))
                 await websocket.send(json.dumps({"type":"profile","profile":profile_payload(account)}))
+                for r in rooms.values():
+                    if any(p.get("username_key")==key for p in r.get("players",[])):
+                        await (roulette_broadcast(r) if r.get("game")=="roulette" else broadcast(r))
             continue
 
         if kind == "claim_season":
@@ -1358,13 +1418,16 @@ async def ws_handler(websocket):
             if account is not None:
                 match = next((t for t in SEASON["tiers"] if str(t["tier"])==tier_id), None)
                 claimed=set(account.get("season_claimed",[]))
-                if not match or tier_id in claimed or int(account.get("season_xp",0)) < int(match["xp"]):
+                if not season_active() or not match or tier_id in claimed or int(account.get("season_xp",0)) < int(match["xp"]):
                     await websocket.send(json.dumps({"type":"error","scope":"season","message":"That reward is not available."}))
                 else:
                     r=match["reward"]
                     if r["type"]=="chips": account["money"] += int(r["amount"])
                     elif r["type"]=="chip": account["owned_chips"] = sorted(set(account.get("owned_chips",[])) | {r["id"]})
                     elif r["type"]=="theme": account["owned_themes"] = sorted(set(account.get("owned_themes",[])) | {r["id"]})
+                    elif r["type"]=="deck": account["owned_decks"] = sorted(set(account.get("owned_decks",[])) | {r["id"]})
+                    elif r["type"]=="table": account["owned_tables"] = sorted(set(account.get("owned_tables",[])) | {r["id"]})
+                    elif r["type"]=="ball": account["owned_balls"] = sorted(set(account.get("owned_balls",[])) | {r["id"]})
                     elif r["type"]=="title": account["season_title"] = r["name"]
                     claimed.add(tier_id); account["season_claimed"]=sorted(claimed); save_accounts()
                     await websocket.send(json.dumps({"type":"season","season":season_payload(account),"profile":profile_payload(account),"claimedTier":int(tier_id)}))
@@ -1431,6 +1494,9 @@ async def ws_handler(websocket):
                 "consecutive_losses": 0,
                 "pity_banner": False,
                 "double_used": False,
+                "cosmetics":{"theme":account.get("equipped_theme","classic"),"chip":account.get("equipped_chip","classic"),
+                             "deck":account.get("equipped_deck","classic"),"table":account.get("equipped_table","classic"),
+                             "ball":account.get("equipped_ball","classic")},
             }
             if room.get("host_id") is None:
                 room["host_id"] = pid
@@ -1514,6 +1580,7 @@ async def ws_handler(websocket):
             continue
 
         if kind == "leave_table":
+            ADMIN_SOCKETS.discard(websocket)
             if player and room:
                 leaving_id = player["id"]
                 was_active = room["active_player_id"] == leaving_id
@@ -1791,6 +1858,9 @@ async def ws_handler(websocket):
             if r["type"]=="chips": account["money"] += int(r["amount"])
             elif r["type"]=="chip": account["owned_chips"] = sorted(set(account.get("owned_chips",[])) | {r["id"]})
             elif r["type"]=="theme": account["owned_themes"] = sorted(set(account.get("owned_themes",[])) | {r["id"]})
+            elif r["type"]=="deck": account["owned_decks"] = sorted(set(account.get("owned_decks",[])) | {r["id"]})
+            elif r["type"]=="table": account["owned_tables"] = sorted(set(account.get("owned_tables",[])) | {r["id"]})
+            elif r["type"]=="ball": account["owned_balls"] = sorted(set(account.get("owned_balls",[])) | {r["id"]})
             elif r["type"]=="title": account["season_title"] = r["name"]
             claimed.add(key); account["season_claimed"]=sorted(claimed); save_accounts()
             await websocket.send(json.dumps({"type":"season","season":season_payload(account),"profile":profile_payload(account)}))
