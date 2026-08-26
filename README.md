@@ -23,3 +23,32 @@ Python + WebSocket multiplayer Blackjack game.
 - Additional synthesized game/UI sound effects are included without external audio assets.
 
 Do not commit `ADMIN_PASSWORD` to source code; configure it as an environment variable in deployment.
+
+
+## Persistent production storage
+
+Casino X now uses PostgreSQL when the `DATABASE_URL` environment variable is
+configured. This is the recommended Render deployment configuration.
+
+The current version previously stored accounts in `accounts.json`, not SQLite.
+When PostgreSQL is configured and the database has no accounts yet, the server
+automatically imports the existing `accounts.json` once.
+
+### Render setup
+
+1. Create a PostgreSQL database in Render.
+2. Open the Casino X web service's Environment settings.
+3. Add/link `DATABASE_URL` to the PostgreSQL database's internal connection URL.
+4. Redeploy the web service.
+5. Verify that login, balance, store purchases, XP, achievements, daily rewards,
+   and Season 1 progress survive a service restart.
+
+If `DATABASE_URL` is not set, local development continues to use `accounts.json`.
+If `DATABASE_URL` is set but PostgreSQL is unavailable, the server intentionally
+fails to start rather than silently reverting to ephemeral file storage.
+
+### Important fixes in this release
+
+- Fixed Store purchases for regular paid themes/chips being incorrectly rejected.
+- Prevented the same account from occupying multiple active table seats.
+- Added PostgreSQL persistence with automatic first-run migration from accounts.json.

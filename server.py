@@ -89,20 +89,120 @@ def new_id():
 rooms: dict[str, dict] = {}
 
 # ---------------------------------------------------------------------------
-# Simple account storage (intentionally lightweight for the current version)
+# Persistent account storage
+#
+# Production: PostgreSQL via DATABASE_URL.
+# Local development: accounts.json fallback when DATABASE_URL is not set.
+#
+# The current Casino X version actually stores accounts in accounts.json
+# (not SQLite). PostgreSQL replaces that ephemeral file storage on Render.
 # ---------------------------------------------------------------------------
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+
 ACCOUNTS: dict[str, dict] = {}
 TOKENS: dict[str, str] = {}
 ADMIN_SOCKETS = set()
-ADMIN_EVENTS = {"double_xp": False, "bonus_cash": False}
 USER_SOCKETS = {}
 BANNED_WORDS = {
     "fuck", "shit", "bitch", "asshole", "nigger", "nigga", "cunt",
     "dick", "pussy", "porn", "sex", "rape", "slut", "whore"
 }
 
+def _db_enabled():
+    return bool(DATABASE_URL)
+
+def _db_connect():
+    if not _db_enabled():
+        raise RuntimeError("DATABASE_URL is not configured")
+    if psycopg is None:
+        raise RuntimeError("psycopg is not installed. Add psycopg[binary] to requirements.txt")
+    return psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=10)
+
+def _ensure_db():
+    with _db_connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS accounts (
+                username_key TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                password TEXT NOT NULL,
+                data JSONB NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+
+def _load_accounts_from_db():
+    global ACCOUNTS, TOKENS
+    _ensure_db()
+    with _db_connect() as conn:
+        rows = conn.execute(
+            "SELECT username_key, data FROM accounts"
+        ).fetchall()
+    ACCOUNTS = {}
+    TOKENS = {}
+    for row in rows:
+        key = row["username_key"]
+        account = dict(row["data"])
+        # Keep the canonical username key even if an older record omitted it.
+        ACCOUNTS[key] = account
+        tok = account.get("session_token")
+        if tok:
+            TOKENS[tok] = key
+
+def _migrate_json_accounts_to_db():
+    if not ACCOUNTS_FILE.exists():
+        return False
+    try:
+        raw = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return False
+    except Exception as exc:
+        print("Could not read accounts.json for migration:", exc)
+        return False
+
+    with _db_connect() as conn:
+        count = conn.execute("SELECT COUNT(*) AS n FROM accounts").fetchone()["n"]
+    if count:
+        return False
+
+    global ACCOUNTS, TOKENS
+    ACCOUNTS = raw
+    TOKENS = {}
+    for key, account in ACCOUNTS.items():
+        tok = account.get("session_token")
+        if tok:
+            TOKENS[tok] = key
+    for account in ACCOUNTS.values():
+        ensure_account_progress(account)
+    save_accounts()
+    print(f"Migrated {len(ACCOUNTS)} account(s) from accounts.json to PostgreSQL.")
+    return True
+
 def load_accounts():
     global ACCOUNTS, TOKENS
+    if _db_enabled():
+        try:
+            _ensure_db()
+            _load_accounts_from_db()
+            if not ACCOUNTS:
+                _migrate_json_accounts_to_db()
+            print(f"PostgreSQL account storage enabled ({len(ACCOUNTS)} account(s)).")
+            return
+        except Exception as exc:
+            # Do not silently fall back in production: running with local file
+            # storage on Render would reintroduce the data-loss problem.
+            print("FATAL: PostgreSQL is configured but unavailable:", exc)
+            raise
+
     try:
         if ACCOUNTS_FILE.exists():
             ACCOUNTS = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
@@ -111,11 +211,39 @@ def load_accounts():
                 tok = account.get("session_token")
                 if tok:
                     TOKENS[tok] = key
-    except Exception:
+        print(f"Local JSON account storage enabled ({len(ACCOUNTS)} account(s)).")
+    except Exception as exc:
+        print("Could not load accounts:", exc)
         ACCOUNTS = {}
         TOKENS = {}
 
 def save_accounts():
+    if _db_enabled():
+        try:
+            with _db_connect() as conn:
+                for key, account in ACCOUNTS.items():
+                    conn.execute("""
+                        INSERT INTO accounts
+                            (username_key, username, salt, password, data, updated_at)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
+                        ON CONFLICT (username_key) DO UPDATE SET
+                            username = EXCLUDED.username,
+                            salt = EXCLUDED.salt,
+                            password = EXCLUDED.password,
+                            data = EXCLUDED.data,
+                            updated_at = NOW()
+                    """, (
+                        key,
+                        account.get("username", key),
+                        account.get("salt", ""),
+                        account.get("password", ""),
+                        json.dumps(account),
+                    ))
+            return
+        except Exception as exc:
+            print("Could not save accounts to PostgreSQL:", exc)
+            raise
+
     try:
         tmp = ACCOUNTS_FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps(ACCOUNTS, indent=2), encoding="utf-8")
@@ -160,13 +288,59 @@ LEVELS = [
     (1500, "Blackjack Master"), (4000, "Casino Legend"),
 ]
 
+
+COSMETIC_THEMES = {
+    "classic": {"name":"Classic Noir", "price":0, "season":None, "limited":False},
+    "midnight": {"name":"Midnight Velvet", "price":12000, "season":None, "limited":False},
+    "royal": {"name":"Royal Eclipse", "price":25000, "season":None, "limited":False},
+    "neon": {"name":"Neon Afterdark", "price":40000, "season":None, "limited":False},
+    "orbit": {"name":"Orbit — Season 1", "price":0, "season":1, "limited":True},
+}
+COSMETIC_CHIPS = {
+    "classic": {"name":"Classic Chip", "price":0, "season":None, "limited":False},
+    "silver": {"name":"Silver Edge", "price":8000, "season":None, "limited":False},
+    "gold": {"name":"Gold Crest", "price":18000, "season":None, "limited":False},
+    "orbit": {"name":"Orbit Chip", "price":0, "season":1, "limited":True},
+}
+SEASON = {
+    "id": 1, "name": "ORBIT", "subtitle": "A new night begins.", "duration": "SEASON 1",
+    "tiers": [
+        {"tier":1,"xp":0,"reward":{"type":"chips","amount":500,"name":"500 CHIPS"}},
+        {"tier":2,"xp":100,"reward":{"type":"chips","amount":750,"name":"750 CHIPS"}},
+        {"tier":3,"xp":250,"reward":{"type":"chips","amount":1000,"name":"1,000 CHIPS"}},
+        {"tier":4,"xp":450,"reward":{"type":"chips","amount":1500,"name":"1,500 CHIPS"}},
+        {"tier":5,"xp":700,"reward":{"type":"chip","id":"orbit","name":"ORBIT CHIP"}},
+        {"tier":6,"xp":1000,"reward":{"type":"chips","amount":2500,"name":"2,500 CHIPS"}},
+        {"tier":7,"xp":1400,"reward":{"type":"chips","amount":3500,"name":"3,500 CHIPS"}},
+        {"tier":8,"xp":1900,"reward":{"type":"theme","id":"orbit","name":"ORBIT THEME"}},
+        {"tier":9,"xp":2500,"reward":{"type":"chips","amount":7500,"name":"7,500 CHIPS"}},
+        {"tier":10,"xp":3250,"reward":{"type":"title","id":"orbit","name":"ORBIT HIGH ROLLER"}},
+    ]
+}
+
+def season_payload(account):
+    xp=int(account.get("season_xp",0)); claimed=set(account.get("season_claimed",[]))
+    tiers=[]
+    for t in SEASON["tiers"]:
+        tiers.append({**t, "claimed": str(t["tier"]) in claimed, "unlocked": xp >= t["xp"]})
+    return {"season": SEASON, "xp":xp, "claimed":sorted(claimed), "tiers":tiers}
+
+def store_payload(account):
+    owned_themes=set(account.get("owned_themes",["classic"]))
+    owned_chips=set(account.get("owned_chips",["classic"]))
+    return {
+        "themes":[{"id":k,**v,"owned":k in owned_themes,"equipped":account.get("equipped_theme","classic")==k} for k,v in COSMETIC_THEMES.items()],
+        "chips":[{"id":k,**v,"owned":k in owned_chips,"equipped":account.get("equipped_chip","classic")==k} for k,v in COSMETIC_CHIPS.items()],
+        "balance":int(account.get("money",0)), "season":season_payload(account)
+    }
+
 def ensure_account_progress(account):
     defaults = {
         "money": STARTING_MONEY, "games_played": 0, "wins": 0, "losses": 0,
         "pushes": 0, "blackjacks": 0, "best_win_streak": 0, "current_win_streak": 0,
         "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
         "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
-        "friends": [], "friend_requests": [], "session_token": account.get("session_token"),
+        "friends": [], "owned_themes": ["classic"], "owned_chips": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "season_xp": 0, "season_claimed": [], "season_title": "", "session_token": account.get("session_token"),
     }
     changed = False
     for k, v in defaults.items():
@@ -251,6 +425,8 @@ def profile_payload(account):
         "friends": friends_payload(account),
         "dailyClaimed": account.get("daily_claim") == today_key(),
         "dailyChallenges": account.get("daily_challenges", {}),
+        "cosmetics": {"theme": account.get("equipped_theme","classic"), "chip": account.get("equipped_chip","classic"), "title": account.get("season_title","")},
+        "season": season_payload(account),
     }
 
 def leaderboard_payload():
@@ -298,8 +474,7 @@ def update_daily_progress(account, result):
 
 def add_xp(account, amount):
     ensure_account_progress(account)
-    mult = 2 if ADMIN_EVENTS.get("double_xp") else 1
-    account["xp"] = max(0, int(account.get("xp", 0)) + int(amount) * mult)
+    account["xp"] = max(0, int(account.get("xp", 0)) + int(amount))
 
 
 def get_room(code: str, public=False) -> dict:
@@ -316,8 +491,6 @@ def get_room(code: str, public=False) -> dict:
             "dealer_hand": [],
             "active_player_id": None,
             "lucky_players": set(),
-            "muted_users": set(),
-            "paused": False,
             "dealer_preview_active": False,
             "dealer_preview_cards": [],
             # asyncio task handles for cancellation
@@ -396,7 +569,6 @@ def serialise(room) -> dict:
     return {
         "code": room["code"],
         "phase": room["phase"],
-        "paused": bool(room.get("paused", False)),
         "activePlayerId": room["active_player_id"],
         "hostId": room.get("host_id"),
         "dealerHand": dealer_hand,
@@ -467,29 +639,20 @@ def chat_clean(text):
 # Admin helpers
 # ---------------------------------------------------------------------------
 def admin_payload(room):
-    users = [{"username": a["username"], "money": int(a.get("money", 0)), "xp": int(a.get("xp", 0)),
-              "wins": int(a.get("wins", 0)), "games": int(a.get("games_played", 0))}
+    users = [{"username": a["username"], "money": int(a.get("money", 0))}
              for a in ACCOUNTS.values()]
     table_players = []
     if room:
         table_players = [{
             "id": p["id"], "username": p["username"], "money": int(p["money"]),
             "lucky": p.get("username_key") in room.get("lucky_players", set()),
-            "muted": p.get("username_key") in room.get("muted_users", set()),
             "connected": p.get("connected", False),
         } for p in room.get("players", [])]
     preview = None
     if room and room.get("dealer_preview_active") and room.get("dealer_preview_cards"):
         preview = [{"rank": c["rank"], "suit": c["suit"], "faceUp": True}
                    for c in room["dealer_preview_cards"]]
-    connected = sum(1 for r in rooms.values() for p in r.get("players", []) if p.get("connected"))
-    active_tables = len(rooms)
-    total_money = sum(int(a.get("money", 0)) for a in ACCOUNTS.values())
-    return {"users": users, "tablePlayers": table_players,
-            "dealerPreviewActive": bool(room and room.get("dealer_preview_active")),
-            "dealerPreview": preview,
-            "metrics": {"accounts": len(ACCOUNTS), "online": connected, "tables": active_tables, "money": total_money},
-            "events": dict(ADMIN_EVENTS), "paused": bool(room and room.get("paused", False))}
+    return {"users": users, "tablePlayers": table_players, "dealerPreviewActive": bool(room and room.get("dealer_preview_active")), "dealerPreview": preview}
 
 async def send_admin_data(websocket, room):
     if websocket in ADMIN_SOCKETS:
@@ -706,10 +869,6 @@ async def finish_round(room):
                 p["result"] = "push"
                 p["consecutive_losses"] = 0
 
-        if ADMIN_EVENTS.get("bonus_cash") and p["result"] in ("win", "blackjack"):
-            bonus = max(10, int(round(p["bet"] * 0.25)))
-            p["money"] += bonus
-            p["admin_bonus"] = bonus
         p["money"] = max(0, int(p["money"]))
         account = ACCOUNTS.get(p.get("username_key"))
         if account is not None:
@@ -735,6 +894,7 @@ async def finish_round(room):
             elif p["result"] == "push":
                 account["pushes"] += 1
                 add_xp(account, 8)
+            account["season_xp"] = int(account.get("season_xp", 0)) + (30 if p["result"] == "blackjack" else 20 if p["result"] == "win" else 8 if p["result"] == "push" else 5)
             update_daily_progress(account, p["result"])
             unlock_achievements(account)
             save_accounts()
@@ -910,16 +1070,8 @@ async def ws_handler(websocket):
 
         if kind == "chat":
             if room is not None and player is not None:
-                if player.get("username_key") in room.get("muted_users", set()):
-                    await websocket.send(json.dumps({"type":"error","scope":"chat","message":"You are muted by the admin for this table."}))
-                    continue
-                now = time.monotonic()
-                if now - float(player.get("last_chat_at", 0.0)) < 0.75:
-                    await websocket.send(json.dumps({"type":"error","scope":"chat","message":"Slow down a little — chat is limited to prevent spam."}))
-                    continue
                 text = chat_clean(msg.get("text"))
                 if text:
-                    player["last_chat_at"] = now
                     payload = json.dumps({"type":"chat","username":player["username"],"text":text,"ts":int(time.time()*1000)})
                     for rp in room.get("players", []):
                         if rp.get("ws"):
@@ -975,6 +1127,66 @@ async def ws_handler(websocket):
                     await websocket.send(json.dumps({"type":"error", "scope":"daily", "message":"Today's reward has already been claimed."}))
             continue
 
+        if kind == "store":
+            key = TOKENS.get(msg.get("token"))
+            if key in ACCOUNTS:
+                await websocket.send(json.dumps({"type":"store", "store":store_payload(ACCOUNTS[key])}))
+            continue
+
+        if kind == "season":
+            key = TOKENS.get(msg.get("token"))
+            if key in ACCOUNTS:
+                await websocket.send(json.dumps({"type":"season", "season":season_payload(ACCOUNTS[key])}))
+            continue
+
+        if kind == "buy_cosmetic":
+            key = TOKENS.get(msg.get("token")); account = ACCOUNTS.get(key)
+            category = msg.get("category"); item_id = msg.get("id")
+            catalog = COSMETIC_THEMES if category == "theme" else COSMETIC_CHIPS if category == "chip" else {}
+            if account is not None and item_id in catalog:
+                item=catalog[item_id]; owned_key="owned_themes" if category=="theme" else "owned_chips"
+                owned=set(account.get(owned_key,[]))
+                if item_id in owned:
+                    await websocket.send(json.dumps({"type":"store","store":store_payload(account)}))
+                elif item.get("limited"):
+                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"Limited items are earned through the active season."}))
+                elif item.get("season") not in (None, SEASON["id"]):
+                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"That limited item is no longer available."}))
+                elif int(account.get("money",0)) < int(item.get("price",0)):
+                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"Not enough chips."}))
+                else:
+                    account["money"] -= int(item.get("price",0)); owned.add(item_id); account[owned_key]=sorted(owned); save_accounts()
+                    await websocket.send(json.dumps({"type":"store","store":store_payload(account),"purchased":item_id}))
+            continue
+
+        if kind == "equip_cosmetic":
+            key = TOKENS.get(msg.get("token")); account = ACCOUNTS.get(key)
+            category = msg.get("category"); item_id = msg.get("id")
+            owned_key="owned_themes" if category=="theme" else "owned_chips" if category=="chip" else None
+            if account is not None and owned_key and item_id in set(account.get(owned_key,[])):
+                account["equipped_theme" if category=="theme" else "equipped_chip"] = item_id
+                save_accounts()
+                await websocket.send(json.dumps({"type":"store","store":store_payload(account),"equipped":item_id}))
+            continue
+
+        if kind == "claim_season":
+            key = TOKENS.get(msg.get("token")); account = ACCOUNTS.get(key)
+            tier_id = str(msg.get("tier"))
+            if account is not None:
+                match = next((t for t in SEASON["tiers"] if str(t["tier"])==tier_id), None)
+                claimed=set(account.get("season_claimed",[]))
+                if not match or tier_id in claimed or int(account.get("season_xp",0)) < int(match["xp"]):
+                    await websocket.send(json.dumps({"type":"error","scope":"season","message":"That reward is not available."}))
+                else:
+                    r=match["reward"]
+                    if r["type"]=="chips": account["money"] += int(r["amount"])
+                    elif r["type"]=="chip": account["owned_chips"] = sorted(set(account.get("owned_chips",[])) | {r["id"]})
+                    elif r["type"]=="theme": account["owned_themes"] = sorted(set(account.get("owned_themes",[])) | {r["id"]})
+                    elif r["type"]=="title": account["season_title"] = r["name"]
+                    claimed.add(tier_id); account["season_claimed"]=sorted(claimed); save_accounts()
+                    await websocket.send(json.dumps({"type":"season","season":season_payload(account),"profile":profile_payload(account),"claimedTier":int(tier_id)}))
+            continue
+
         if kind == "join":
             token = msg.get("token")
             account_key = TOKENS.get(token)
@@ -1005,6 +1217,23 @@ async def ws_handler(websocket):
             pid = new_id()
             account = ACCOUNTS[account_key]
             ensure_account_progress(account)
+
+            # A player may only occupy one seat at a time. Without this guard,
+            # refreshing/reconnecting can create duplicate seats for one account.
+            existing = None
+            for existing_room in rooms.values():
+                existing = next((ep for ep in existing_room.get("players", [])
+                                 if ep.get("username_key") == account_key and ep.get("connected")), None)
+                if existing:
+                    break
+            if existing:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "scope": "table",
+                    "message": "You are already connected to a table. Leave that table before joining another."
+                }))
+                continue
+
             player = {
                 "id": pid,
                 "ws": websocket,
@@ -1021,7 +1250,6 @@ async def ws_handler(websocket):
                 "consecutive_losses": 0,
                 "pity_banner": False,
                 "double_used": False,
-                "last_chat_at": 0.0,
             }
             if room.get("host_id") is None:
                 room["host_id"] = pid
@@ -1069,16 +1297,9 @@ async def ws_handler(websocket):
             continue
 
         # ---- betting actions ----
-        if room.get("paused") and kind in {"chip","clear_bet","all_in","ready","hit","stand","double"}:
-            continue
         if kind == "chip":
             if player["status"] not in ("betting", "ready"): continue
-            try:
-                amt = int(msg.get("amount", 0))
-            except (TypeError, ValueError):
-                amt = 0
-            if amt <= 0 or amt > 1000000:
-                continue
+            amt = int(msg.get("amount", 0))
             player["bet"] = min(player["money"], player["bet"] + amt)
             player["status"] = "betting"
             await broadcast(room)
@@ -1172,77 +1393,6 @@ async def ws_handler(websocket):
             except Exception:
                 pass
 
-        elif kind == "admin_kick":
-            if websocket not in ADMIN_SOCKETS or not room:
-                continue
-            target = find_player(room, msg.get("targetId"))
-            if not target:
-                continue
-            target_ws = target.get("ws")
-            try:
-                if target_ws:
-                    await target_ws.send(json.dumps({"type":"kicked", "message":"Removed by the admin."}))
-                    await target_ws.close()
-            except Exception:
-                pass
-
-        elif kind == "admin_mute":
-            if websocket not in ADMIN_SOCKETS or not room:
-                continue
-            target = find_player(room, msg.get("targetId"))
-            if target:
-                key = target.get("username_key")
-                if bool(msg.get("muted")):
-                    room.setdefault("muted_users", set()).add(key)
-                else:
-                    room.setdefault("muted_users", set()).discard(key)
-                await broadcast(room)
-                await send_admin_data(websocket, room)
-
-        elif kind == "admin_reshuffle":
-            if websocket not in ADMIN_SOCKETS or not room or room.get("phase") == "PLAYING":
-                continue
-            invalidate_dealer_preview(room)
-            room["deck"] = fresh_shoe()
-            await broadcast(room)
-            await send_admin_data(websocket, room)
-
-        elif kind == "admin_reset_round":
-            if websocket not in ADMIN_SOCKETS or not room or room.get("phase") == "PLAYING":
-                continue
-            await reset_for_betting(room)
-            await send_admin_data(websocket, room)
-
-        elif kind == "admin_bonus_table":
-            if websocket not in ADMIN_SOCKETS or not room:
-                continue
-            amount = max(0, min(100000, int(msg.get("amount", 0))))
-            if amount:
-                for p in active_players(room):
-                    p["money"] += amount
-                    persist_player_money(p)
-                await broadcast(room)
-                await send_admin_data(websocket, room)
-
-        elif kind == "admin_event":
-            if websocket not in ADMIN_SOCKETS:
-                continue
-            event = str(msg.get("event", ""))
-            if event in ADMIN_EVENTS:
-                ADMIN_EVENTS[event] = bool(msg.get("enabled"))
-                await websocket.send(json.dumps({"type":"admin_event_state", "events": dict(ADMIN_EVENTS), "paused": bool(room and room.get("paused", False))}))
-                await send_admin_data(websocket, room)
-
-        elif kind == "admin_pause":
-            if websocket not in ADMIN_SOCKETS or not room:
-                continue
-            if room.get("phase") == "PLAYING":
-                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Pause is available between rounds only."}))
-                continue
-            room["paused"] = bool(msg.get("paused"))
-            await broadcast(room)
-            await send_admin_data(websocket, room)
-
         elif kind == "admin_data":
             await send_admin_data(websocket, room)
 
@@ -1325,30 +1475,6 @@ async def ws_handler(websocket):
                     {"username": a["username"], "money": int(a.get("money", 0))}
                     for a in ACCOUNTS.values()
                 ]}))
-
-        elif kind == "admin_reset_account":
-            if websocket not in ADMIN_SOCKETS:
-                continue
-            key = username_key(msg.get("username"))
-            if key in ACCOUNTS:
-                account = ACCOUNTS[key]
-                password = account.get("password")
-                salt = account.get("salt")
-                username = account.get("username")
-                friends = account.get("friends", [])
-                requests = account.get("friend_requests", [])
-                created = account.get("created", time.time())
-                account.clear()
-                account.update({"username": username, "salt": salt, "password": password, "money": STARTING_MONEY,
-                                "friends": friends, "friend_requests": requests, "created": created})
-                ensure_account_progress(account)
-                save_accounts()
-                for r in rooms.values():
-                    for p in r["players"]:
-                        if p.get("username_key") == key:
-                            p["money"] = STARTING_MONEY
-                            await broadcast(r)
-                await send_admin_data(websocket, room)
 
         elif kind == "admin_reset_money":
             if not websocket in ADMIN_SOCKETS:

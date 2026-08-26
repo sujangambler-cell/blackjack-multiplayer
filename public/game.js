@@ -8,11 +8,6 @@ const SUIT_SYMBOL = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const RED_SUITS = new Set(["H", "D"]);
 const CHIP_AMOUNTS = [5, 25, 100, 500, 1000];
 const CHIP_COLORS = { 5: "#d7465a", 25: "#4664d2", 100: "#3cb482", 500: "#3c374a", 1000: "#d7a52d" };
-const APP_DATA_VERSION = "2026-08-14-v2";
-if (localStorage.getItem("bj_data_version") !== APP_DATA_VERSION) {
-  localStorage.removeItem("bj_session_token");
-  localStorage.setItem("bj_data_version", APP_DATA_VERSION);
-}
 
 let ws = null;
 let myId = null;
@@ -31,7 +26,8 @@ let activeRank = "balance";
 let publicTables = [];
 let friendsData = [];
 let chatMuted = localStorage.getItem("bj_chat_muted") === "1";
-let publicRefreshTimer = null;
+let storeData = null;
+let seasonData = null;
 
 // ---------------------------------------------------------------------------
 // Audio — synthesized SFX (no asset files needed), same idea as the desktop build
@@ -54,43 +50,20 @@ function tone(freq, duration, kind = "sine", sweep = 0, vol = 0.5) {
 }
 
 const SFX = {
-  click: () => tone(680, 0.055, "square", 40, 0.24),
-  hover: () => tone(520, 0.025, "sine", 20, 0.08),
-  chip: () => { tone(760, 0.045, "triangle", 90, 0.24); setTimeout(() => tone(1080, 0.035, "sine", -60, 0.12), 38); },
-  deal: () => { tone(230, 0.045, "triangle", 80, 0.22); setTimeout(() => tone(390, 0.07, "sine", 120, 0.18), 35); },
-  flip: () => { tone(360, 0.05, "triangle", 180, 0.18); setTimeout(() => tone(620, 0.07, "sine", 100, 0.16), 35); },
-  hit: () => { tone(310, 0.055, "triangle", 140, 0.22); setTimeout(() => tone(520, 0.08, "sine", 80, 0.16), 45); },
-  stand: () => { tone(250, 0.08, "triangle", -30, 0.2); setTimeout(() => tone(190, 0.1, "sine", -20, 0.12), 55); },
-  shuffle: () => { [0,70,140,210].forEach((d,i)=>setTimeout(()=>tone(260+i*55,0.055,"triangle",35,0.14),d)); },
-  join: () => { tone(440,0.08,"sine",120,0.18); setTimeout(()=>tone(660,0.12,"sine",140,0.2),70); },
-  leave: () => { tone(420,0.09,"sine",-120,0.16); setTimeout(()=>tone(260,0.13,"sine",-80,0.12),70); },
-  chat: () => { tone(720,0.045,"sine",60,0.11); setTimeout(()=>tone(900,0.055,"sine",0,0.08),45); },
-  notify: () => { tone(580,0.07,"sine",90,0.15); setTimeout(()=>tone(760,0.1,"sine",60,0.14),70); },
-  blackjack: () => {
-    [660,780,920,1100].forEach((f,i)=>setTimeout(()=>tone(f,0.16,"sine",80,0.24),i*85));
-    setTimeout(()=>tone(1320,0.35,"sine",0,0.2),350);
-  },
-  win: () => {
-    [520,660,820].forEach((f,i)=>setTimeout(()=>tone(f,0.18,"sine",100,0.22),i*85));
-    setTimeout(()=>tone(1040,0.34,"sine",160,0.24),270);
-  },
-  lose: () => {
-    tone(260,0.18,"triangle",-50,0.22);
-    setTimeout(()=>tone(205,0.2,"triangle",-60,0.2),130);
-    setTimeout(()=>tone(155,0.3,"sine",-30,0.16),270);
-  },
-  bust: () => {
-    tone(240,0.12,"square",-40,0.2);
-    setTimeout(()=>tone(145,0.28,"triangle",-60,0.2),100);
-  },
-  push: () => {
-    tone(420,0.12,"sine",60,0.18);
-    setTimeout(()=>tone(560,0.14,"sine",80,0.16),110);
-    setTimeout(()=>tone(700,0.18,"sine",40,0.14),240);
-  },
-  payout: () => {
-    [720,860,1020].forEach((f,i)=>setTimeout(()=>tone(f,0.08,"triangle",50,0.12),i*55));
-  },
+  click: () => tone(700, 0.06, "square", 0, 0.4),
+  hover: () => tone(500, 0.03, "sine", 0, 0.12),
+  chip: () => tone(900, 0.05, "sine", -200, 0.3),
+  deal: () => tone(320, 0.08, "sine", 180, 0.35),
+  flip: () => tone(500, 0.07, "sine", 150, 0.3),
+  hit: () => tone(420, 0.09, "triangle", 100, 0.32),
+  stand: () => tone(250, 0.12, "triangle", -40, 0.28),
+  blackjack: () => { tone(660, 0.16, "sine", 180, 0.42); setTimeout(() => tone(990, 0.28, "sine", 80, 0.35), 90); },
+  join: () => tone(560, 0.12, "sine", 160, 0.3),
+  leave: () => tone(300, 0.14, "sine", -100, 0.25),
+  win: () => { tone(660, 0.35, "sine", 220, 0.45); },
+  lose: () => tone(180, 0.4, "sine", -80, 0.45),
+  bust: () => tone(140, 0.35, "square", -60, 0.45),
+  push: () => tone(420, 0.2, "sine", 0, 0.3),
   pity: () => { tone(500, 0.15, "sine", 100, 0.4); setTimeout(() => tone(700, 0.25, "sine", 150, 0.4), 120); },
 };
 function play(name) {
@@ -109,29 +82,6 @@ function el(tag, cls, text) {
   if (cls) e.className = cls;
   if (text !== undefined) e.textContent = text;
   return e;
-}
-
-
-function setDeviceProfile(device) {
-  const isPhone = device === "phone";
-  document.documentElement.classList.toggle("device-phone", isPhone);
-  document.documentElement.classList.toggle("device-pc", !isPhone);
-  localStorage.setItem("bj_device_profile", isPhone ? "phone" : "pc");
-  // Device profile also applies a sensible baseline GUI size; the GUI slider can override it afterwards.
-  applyScale(isPhone ? 85 : 100);
-  updateGraphicsButtons();
-}
-
-function updateGraphicsButtons() {
-  const device = localStorage.getItem("bj_device_profile") || "pc";
-  $("#graphics-pc")?.classList.toggle("active", device === "pc");
-  $("#graphics-phone")?.classList.toggle("active", device === "phone");
-}
-
-function initDeviceProfile() {
-  const saved = localStorage.getItem("bj_device_profile") || "pc";
-  document.documentElement.classList.toggle("device-phone", saved === "phone");
-  document.documentElement.classList.toggle("device-pc", saved !== "phone");
 }
 
 function showMainMenu() {
@@ -307,8 +257,7 @@ function drawBackground(t) {
 
   const accountScreen = $("#screen-join").classList.contains("active") || $("#screen-lobby").classList.contains("active");
   if (accountScreen) {
-    const shapeLimit = document.documentElement.classList.contains("device-phone") ? 10 : bgShapes.length;
-    bgShapes.slice(0, shapeLimit).forEach(o => {
+    bgShapes.forEach(o => {
       o.y -= o.speed;
       if (o.y < -0.16) { o.y = 1.16; o.x = Math.random(); }
       o.rot += o.spin;
@@ -319,34 +268,6 @@ function drawBackground(t) {
       else drawFloatingMoney(o, x, y, dark);
     });
   }
-
-  // Soft animated clouds for light mode; deliberately subtle so the light
-  // theme remains clean while gaining the depth of the dark space background.
-  if (!dark) {
-    const clouds = [
-      [.16,.18,.20,.075,.0010,0],
-      [.72,.27,.24,.085,-.0007,1.7],
-      [.38,.72,.27,.09,.0006,3.2],
-      [.86,.76,.18,.065,-.0008,4.5]
-    ];
-    bgCtx.save();
-    bgCtx.globalCompositeOperation = "screen";
-    clouds.forEach(([cx,cy,cw,ch,spd,phase]) => {
-      const drift = Math.sin(t * spd + phase) * 0.045;
-      const x = (cx + drift) * w;
-      const y = cy * h;
-      const gx = bgCtx.createRadialGradient(x,y,0,x,y,Math.max(w,h)*cw);
-      gx.addColorStop(0,"rgba(255,255,255,.22)");
-      gx.addColorStop(.45,"rgba(255,255,255,.11)");
-      gx.addColorStop(1,"rgba(255,255,255,0)");
-      bgCtx.fillStyle = gx;
-      bgCtx.beginPath();
-      bgCtx.ellipse(x,y,Math.max(w,h)*cw,Math.max(w,h)*ch,0,0,Math.PI*2);
-      bgCtx.fill();
-    });
-    bgCtx.restore();
-  }
-
   bgCtx.globalAlpha = 1;
   requestAnimationFrame(drawBackground);
 }
@@ -458,14 +379,12 @@ function shakeTable() {
   void tw.offsetWidth;
   tw.classList.add("shake");
 }
-function centerBanner(text, kind, subtitle = "") {
+function centerBanner(text, kind) {
   const slot = $("#turn-banner-slot");
   slot.innerHTML = "";
-  const b = el("div", "center-banner " + (kind || ""));
-  b.appendChild(el("div", "banner-title", text));
-  if (subtitle) b.appendChild(el("div", "banner-subtitle", subtitle));
+  const b = el("div", "center-banner " + (kind || ""), text);
   slot.appendChild(b);
-  setTimeout(() => { if (slot.contains(b)) b.remove(); }, 2100);
+  setTimeout(() => { if (slot.contains(b)) b.remove(); }, 1800);
 }
 function pityBanner() {
   const slot = $("#turn-banner-slot");
@@ -482,7 +401,7 @@ function buildChipRow() {
   const row = $("#chip-row");
   row.innerHTML = "";
   CHIP_AMOUNTS.forEach((amount) => {
-    const btn = el("button", "chip chip-" + amount, "$" + amount);
+    const btn = el("button", "chip", "$" + amount);
     btn.style.setProperty("--chip-color", CHIP_COLORS[amount]);
     wireButton(btn, () => { play("chip"); send({ type: "chip", amount }); });
     row.appendChild(btn);
@@ -566,7 +485,7 @@ function connect() {
       $("#room-chip").textContent = "TABLE " + myRoom;
       $("#profile-name").textContent = msg.username || loggedUsername || "PLAYER";
       $("#menu-balance").textContent = "$" + msg.balance;
-      $("#btn-admin-table").classList.remove("hidden");
+      $("#btn-admin-float").classList.toggle("hidden", !isAdmin);
       $("#chat-messages").innerHTML = "";
       toggleChat(false);
       showScreen("#screen-table");
@@ -621,16 +540,29 @@ function connect() {
       renderDaily(false, msg.profile.dailyChallenges ? buildChallengeObjects(msg.profile.dailyChallenges) : []);
       return;
     }
+    if (msg.type === "store") {
+      storeData = msg.store || null;
+      renderStore();
+      if (msg.purchased) { play("win"); centerBanner("ITEM UNLOCKED", "win"); }
+      if (msg.equipped) play("chip");
+      return;
+    }
+    if (msg.type === "season") {
+      seasonData = msg.season || null;
+      if (msg.profile) updateProfileUI(msg.profile);
+      renderSeason();
+      if (msg.claimedTier) { play("win"); centerBanner("SEASON REWARD CLAIMED", "win"); }
+      return;
+    }
     if (msg.type === "admin_ok") {
       isAdmin = true;
       $("#admin-login-box").classList.add("hidden");
       $("#admin-dashboard").classList.remove("hidden");
-      $("#btn-admin-table").classList.remove("hidden");
+      $("#btn-admin-float").classList.remove("hidden");
       return;
     }
     if (msg.type === "admin_data") {
-      renderAdminUsers(msg.users || [], msg.tablePlayers || [], msg.dealerPreviewActive, msg.dealerPreview, msg.metrics || {}, msg.events || {});
-      const pauseBtn = $("#admin-pause"); if (pauseBtn) { pauseBtn.textContent = msg.paused ? "RESUME TABLE" : "PAUSE TABLE"; pauseBtn.classList.toggle("on", !!msg.paused); }
+      renderAdminUsers(msg.users || [], msg.tablePlayers || [], msg.dealerPreviewActive, msg.dealerPreview);
       return;
     }
     if (msg.type === "error") {
@@ -692,7 +624,7 @@ function onState(state) {
     $("#balance-chip").textContent = "$" + me.money;
     $("#menu-balance").textContent = "$" + me.money;
     $("#profile-name").textContent = me.username || loggedUsername || me.name;
-    $("#btn-admin-table").classList.remove("hidden");
+    $("#btn-admin-float").classList.toggle("hidden", !isAdmin);
     $("#btn-host").classList.toggle("hidden", !me.isHost);
     if (me.canClaim && state.phase === "BETTING") {
       $("#claim-overlay").classList.add("open");
@@ -705,7 +637,6 @@ function onState(state) {
   $("#dealer-value").textContent = state.dealerDisplay || "";
 
   renderSeats(state, prev);
-  const rules = $(".table-rules"); if (rules) rules.textContent = state.paused ? "TABLE PAUSED • ADMIN CONTROL" : "BLACKJACK PAYS 3:2 • DEALER STANDS ON 17";
 
   // ---- control dock switching ----
   const bettingDock = $("#betting-dock");
@@ -762,36 +693,25 @@ function onState(state) {
   }
 }
 
-function pulsePayout() {
-  const balance = $("#balance-chip");
-  if (!balance) return;
-  balance.classList.remove("payout-pulse");
-  void balance.offsetWidth;
-  balance.classList.add("payout-pulse");
-  setTimeout(() => balance.classList.remove("payout-pulse"), 900);
-}
-
 function handleResult(result) {
-  pulsePayout();
   if (result === "win" || result === "blackjack") {
     play(result === "blackjack" ? "blackjack" : "win");
-    play("payout");
     flash("win");
     burstConfetti();
-    centerBanner(result === "blackjack" ? "BLACKJACK!" : "YOU WIN!", "win", result === "blackjack" ? "NATURAL • 3:2 PAYOUT" : "NICE HAND • PAYOUT SECURED");
+    centerBanner(result === "blackjack" ? "BLACKJACK!" : "YOU WIN!", "win");
   } else if (result === "push") {
     play("push");
-    centerBanner("PUSH", "push", "SECOND CHANCE • YOUR BET IS RETURNED");
+    centerBanner("PUSH", "push");
   } else if (result === "lose") {
     play("lose");
     flash("lose");
     shakeTable();
-    centerBanner("DEALER WINS", "lose", "NEXT HAND IS WAITING");
+    centerBanner("DEALER WINS", "lose");
   } else if (result === "bust") {
     play("bust");
     flash("lose");
     shakeTable();
-    centerBanner("BUST!", "bust", "RESET • NEXT HAND");
+    centerBanner("BUST!", "bust");
   }
 }
 
@@ -840,45 +760,28 @@ function renderHostList() {
   });
 }
 
-function renderAdminUsers(users, tablePlayers = [], previewActive = false, preview = null, metrics = {}, events = {}) {
+function renderAdminUsers(users, tablePlayers = [], previewActive = false, preview = null) {
   const box = $("#admin-users");
   box.innerHTML = "";
+  const title = el("div", "admin-section-title", "PLAYERS AT THIS TABLE"); box.appendChild(title);
   if (!tablePlayers.length) box.appendChild(el("div", "admin-empty", "No players currently at this table."));
   tablePlayers.forEach((u) => {
     const row = el("div", "admin-user");
-    const info = el("div", "admin-user-info");
-    info.innerHTML = `<strong>${escapeHtml(u.username)}</strong><span>$${Number(u.money).toLocaleString()} ${u.connected ? "• ONLINE" : "• OFFLINE"}</span>`;
+    const info = el("div", null, `${u.username}  •  $${u.money}`);
     const actions = el("div", "admin-user-actions");
     const input = document.createElement("input"); input.type="number"; input.min="1"; input.placeholder="Amount";
-    const give = el("button", "kick-btn", "GIVE");
+    const add = el("button", "kick-btn", "GIVE");
     const lucky = el("button", "kick-btn", u.lucky ? "LUCKY ON" : "LUCKY OFF");
-    const mute = el("button", "kick-btn", u.muted ? "UNMUTE" : "MUTE");
-    const kick = el("button", "kick-btn", "KICK");
-    give.addEventListener("click",()=>{const n=parseInt(input.value,10);if(n>0)send({type:"admin_give_table_money",targetId:u.id,amount:n});});
+    add.addEventListener("click",()=>{const n=parseInt(input.value,10);if(n>0)send({type:"admin_give_table_money",targetId:u.id,amount:n});});
     lucky.addEventListener("click",()=>send({type:"admin_toggle_lucky",targetId:u.id,enabled:!u.lucky}));
-    mute.addEventListener("click",()=>send({type:"admin_mute",targetId:u.id,muted:!u.muted}));
-    kick.addEventListener("click",()=>{if(confirm(`Remove ${u.username} from this table?`))send({type:"admin_kick",targetId:u.id});});
-    actions.append(input,give,lucky,mute,kick); row.append(info,actions); box.appendChild(row);
-  });
-  const abox=$("#admin-accounts"); abox.innerHTML="";
-  if(!users.length) abox.appendChild(el("div","admin-empty","No accounts yet."));
-  users.forEach(u=>{
-    const row=el("div","admin-account");
-    const info=el("div","admin-user-info"); info.innerHTML=`<strong>${escapeHtml(u.username)}</strong><span>$${Number(u.money).toLocaleString()} • ${Number(u.wins||0)} wins • ${Number(u.xp||0)} XP</span>`;
-    const actions=el("div","admin-user-actions"); const input=document.createElement("input"); input.type="number"; input.min="0"; input.placeholder="Amount";
-    const add=el("button","kick-btn","GIVE"); const set=el("button","kick-btn","SET"); const reset=el("button","kick-btn","RESET"); const wipe=el("button","kick-btn","WIPE");
-    add.onclick=()=>{const n=parseInt(input.value,10);if(n>0)send({type:"admin_add_money",username:u.username,amount:n});};
-    set.onclick=()=>{const n=parseInt(input.value,10);if(n>=0)send({type:"admin_set_money",username:u.username,amount:n});};
-    reset.onclick=()=>{if(confirm(`Reset ${u.username} to $5,000?`))send({type:"admin_reset_money",username:u.username});};
-    wipe.onclick=()=>{if(confirm(`WIPE ALL PROGRESS for ${u.username}? This resets money, XP, stats and achievements.`))send({type:"admin_reset_account",username:u.username});};
-    actions.append(input,add,set,reset,wipe); row.append(info,actions); abox.appendChild(row);
+    actions.append(input,add,lucky); row.append(info,actions); box.appendChild(row);
   });
   $("#admin-preview-toggle").classList.toggle("on", !!previewActive);
   const pv=$("#admin-preview"); pv.innerHTML="";
-  if(previewActive && preview){ pv.appendChild(el("div","admin-section-title","DEALER PREVIEW")); const hand=el("div","admin-preview-cards"); preview.forEach(c=>hand.appendChild(buildCard(c))); pv.appendChild(hand); }
-  const m=$("#admin-metrics");
-  m.innerHTML=`<div><span>ONLINE</span><strong>${metrics.online||0}</strong></div><div><span>TABLES</span><strong>${metrics.tables||0}</strong></div><div><span>ACCOUNTS</span><strong>${metrics.accounts||0}</strong></div><div><span>CHIPS IN CIRCULATION</span><strong>$${Number(metrics.money||0).toLocaleString()}</strong></div>`;
-  ["double-xp","bonus-event"].forEach(id=>{const key=id==="double-xp"?"double_xp":"bonus_cash";const b=$("#admin-"+id);if(b){const on=!!events[key];b.classList.toggle("on",on);b.querySelector("span").textContent=on?"ON":"OFF";}});
+  if(previewActive && preview){
+    pv.appendChild(el("div","admin-section-title","DEALER PREVIEW"));
+    const hand=el("div","admin-preview-cards"); preview.forEach(c=>hand.appendChild(buildCard(c))); pv.appendChild(hand);
+  }
 }
 
 
@@ -891,6 +794,7 @@ function updateProfileUI(profile) {
   $("#menu-balance").textContent = "$" + Number(profile.balance || 0).toLocaleString();
   $("#menu-level").textContent = `LEVEL ${profile.level || 1} • ${(profile.levelTitle || "Rookie").toUpperCase()}`;
   $("#menu-xp").textContent = `${Number(profile.xp || 0).toLocaleString()} XP`;
+  applyCosmeticTheme(profile.cosmetics?.theme || "classic");
   if (profile.username) {
     loggedUsername = profile.username;
     $("#welcome-user").textContent = `Welcome, ${loggedUsername}`;
@@ -948,6 +852,42 @@ function renderDaily(claimed, challenges) {
   $("#challenge-list").innerHTML = challenges.length ? challenges.map(c => `<div class="challenge ${c.complete ? "complete" : ""}"><div><strong>${c.title}</strong><span>${c.desc}</span></div><div class="challenge-right"><b>${c.progress}/${c.target}</b><small>+${c.reward} chips</small></div></div>`).join("") : '<div class="admin-empty">No challenges today.</div>';
 }
 
+function applyCosmeticTheme(theme){
+  const t=theme||"classic";
+  document.documentElement.setAttribute("data-cosmetic-theme",t);
+  if(myProfile?.cosmetics) myProfile.cosmetics.theme=t;
+}
+function chipPreview(id){
+  const map={classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",gold:"#e5c56d,#6c4c13",orbit:"#5dd6ff,#172a65"};
+  return map[id]||map.classic;
+}
+function themePreview(id){
+  const map={classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",royal:"#6a326c,#160916",neon:"#16877f,#060f12",orbit:"#12618c,#040814"};
+  return map[id]||map.classic;
+}
+function renderStore(){
+  if(!storeData) return;
+  $("#store-balance").textContent="$"+Number(storeData.balance||0).toLocaleString();
+  const card=(item,cat)=>{
+    const colors=cat==="theme"?themePreview(item.id):chipPreview(item.id);
+    const action=item.equipped?'<button class="btn secondary" disabled>EQUIPPED</button>':item.owned?`<button class="btn" data-equip="${cat}" data-id="${item.id}">EQUIP</button>`:`<button class="btn" data-buy="${cat}" data-id="${item.id}">${item.price?"BUY $"+Number(item.price).toLocaleString():"UNLOCK"}</button>`;
+    return `<div class="store-item ${item.equipped?'equipped':''}"><div class="store-preview" style="--preview-a:${colors.split(',')[0]};--preview-b:${colors.split(',')[1]}">${cat==='theme'?'THEME':'CHIP'}</div><strong>${item.name}</strong><small>${item.limited?'LIMITED • SEASON 1':item.owned?'OWNED':'PERMANENT'}</small>${action}</div>`;
+  };
+  $("#store-themes").innerHTML=storeData.themes.map(x=>card(x,"theme")).join("");
+  $("#store-chips").innerHTML=storeData.chips.map(x=>card(x,"chip")).join("");
+  document.querySelectorAll("[data-buy]").forEach(b=>wireButton(b,()=>send({type:"buy_cosmetic",token:authToken,category:b.dataset.buy,id:b.dataset.id})));
+  document.querySelectorAll("[data-equip]").forEach(b=>wireButton(b,()=>send({type:"equip_cosmetic",token:authToken,category:b.dataset.equip,id:b.dataset.id})));
+  applyCosmeticTheme(myProfile?.cosmetics?.theme||"classic");
+}
+function renderSeason(){
+  if(!seasonData) return;
+  const xp=Number(seasonData.xp||0), tiers=seasonData.tiers||[];
+  $("#season-xp").textContent=xp.toLocaleString()+" XP";
+  const max=Number(tiers.at(-1)?.xp||1); const pct=Math.min(100,Math.round(xp/max*100)); $("#season-progress-fill").style.width=pct+"%";
+  $("#season-tier-list").innerHTML=tiers.map(t=>{const r=t.reward||{}; const button=t.claimed?'<button class="btn secondary" disabled>CLAIMED</button>':t.unlocked?`<button class="btn" data-season-claim="${t.tier}">CLAIM</button>`:'<button class="btn secondary" disabled>LOCKED</button>'; return `<div class="season-tier ${t.unlocked?'unlocked':''} ${t.claimed?'claimed':''}"><div class="season-tier-num">${t.tier}</div><div><strong>${r.name}</strong><small>${Number(t.xp).toLocaleString()} XP</small></div>${button}</div>`}).join("");
+  document.querySelectorAll("[data-season-claim]").forEach(b=>wireButton(b,()=>send({type:"claim_season",token:authToken,tier:Number(b.dataset.seasonClaim)})));
+}
+
 function openProgress(id) { $(id).classList.add("open"); }
 function closeProgress(id) { $(id).classList.remove("open"); }
 
@@ -960,13 +900,6 @@ function renderProfile() {
   const p = myProfile;
   if (!p) return;
   $("#profile-hero").innerHTML = `<div><strong>${escapeHtml(p.username)}</strong><span>LEVEL ${p.level} • ${escapeHtml(p.levelTitle)}</span></div><b>$${Number(p.balance||0).toLocaleString()}</b>`;
-  const thresholds = [0,100,500,1500,4000];
-  const levelIndex = Math.max(0, Math.min((p.level || 1) - 1, thresholds.length - 1));
-  const startXp = thresholds[levelIndex];
-  const nextXp = thresholds[levelIndex + 1];
-  const currentXp = Number(p.xp || 0);
-  const pct = nextXp ? Math.max(0, Math.min(100, ((currentXp - startXp) / (nextXp - startXp)) * 100)) : 100;
-  $("#profile-xp").innerHTML = `<div class="profile-xp-head"><span>XP PROGRESS</span><strong>${currentXp.toLocaleString()}${nextXp ? ` / ${nextXp.toLocaleString()}` : " MAX"}</strong></div><div class="profile-xp-bar"><i style="width:${pct}%"></i></div>`;
   const st = p.stats || {};
   const vals = [["GAMES",st.gamesPlayed],["WINS",st.wins],["LOSSES",st.losses],["PUSHES",st.pushes],["BLACKJACKS",st.blackjacks],["WIN RATE",(st.winRate||0)+"%"],["BEST STREAK",st.bestWinStreak],["BIGGEST WIN","$"+Number(st.biggestWin||0).toLocaleString()]];
   $("#profile-stats-grid").innerHTML = vals.map(([a,b])=>`<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
@@ -1047,11 +980,21 @@ function initSettings() {
   $("#slider-scale").addEventListener("input", (e) => applyScale(parseInt(e.target.value, 10)));
 
   wireButton($("#btn-settings"), () => { $("#btn-leave-table").classList.remove("hidden"); $("#settings-overlay").classList.add("open"); });
-  wireButton($("#btn-settings-menu"), () => { $("#btn-leave-table").classList.add("hidden"); $("#settings-overlay").classList.add("open"); updateGraphicsButtons(); });
-  wireButton($("#btn-settings-auth"), () => { $("#btn-leave-table").classList.add("hidden"); $("#settings-overlay").classList.add("open"); updateGraphicsButtons(); });
+  wireButton($("#btn-settings-menu"), () => { $("#btn-leave-table").classList.add("hidden"); $("#settings-overlay").classList.add("open"); });
   wireButton($("#btn-settings-close"), () => $("#settings-overlay").classList.remove("open"));
-  wireButton($("#graphics-pc"), () => { setDeviceProfile("pc"); play("click"); });
-  wireButton($("#graphics-phone"), () => { setDeviceProfile("phone"); play("click"); });
+  wireButton($("#btn-settings-admin"), () => {
+    $("#settings-overlay").classList.remove("open");
+    $("#admin-overlay").classList.add("open");
+    $("#admin-error").textContent = "";
+    $("#admin-login-box").classList.toggle("hidden", isAdmin);
+    $("#admin-dashboard").classList.toggle("hidden", !isAdmin);
+    if (isAdmin) {
+      send({type:"admin_data"});
+    } else {
+      $("#admin-password").value = "";
+      setTimeout(() => $("#admin-password").focus(), 120);
+    }
+  });
   wireButton($("#btn-leave-table"), () => { send({type:"leave_table"}); });
 }
 
@@ -1066,17 +1009,6 @@ function initControls() {
   wireButton($("#btn-hit"), () => { play("hit"); send({ type: "hit" }); });
   wireButton($("#btn-stand"), () => { play("stand"); send({ type: "stand" }); });
   wireButton($("#btn-double"), () => send({ type: "double" }));
-  wireButton($("#btn-admin-table"), () => { $("#admin-overlay").classList.add("open"); if(isAdmin) send({type:"admin_data"}); });
-  wireButton($("#btn-admin-close"), () => $("#admin-overlay").classList.remove("open"));
-  wireButton($("#btn-admin-login"), () => send({type:"admin_login", password:$("#admin-password").value}));
-  wireButton($("#btn-admin-refresh"), () => send({type:"admin_data"}));
-  wireButton($("#admin-preview-toggle"), () => send({type:"admin_toggle_preview", enabled:!$("#admin-preview-toggle").classList.contains("on")}));
-  wireButton($("#admin-reshuffle"), () => send({type:"admin_reshuffle"}));
-  wireButton($("#admin-reset-round"), () => send({type:"admin_reset_round"}));
-  wireButton($("#admin-pause"), () => send({type:"admin_pause", paused:!$("#admin-pause").classList.contains("on")}));
-  wireButton($("#admin-double-xp"), () => send({type:"admin_event", event:"double_xp", enabled:!$("#admin-double-xp").classList.contains("on")}));
-  wireButton($("#admin-bonus-event"), () => send({type:"admin_event", event:"bonus_cash", enabled:!$("#admin-bonus-event").classList.contains("on")}));
-  wireButton($("#admin-bonus-table"), () => { const n=parseInt($("#admin-bonus-amount").value,10); if(n>0) send({type:"admin_bonus_table", amount:n}); });
 }
 
 function initJoin() {
@@ -1103,7 +1035,8 @@ function initJoin() {
     localStorage.removeItem("bj_session_token");
     authToken = null; loggedUsername = null; myId = null; myRoom = null; isAdmin = false;
     document.querySelector("#screen-join .auth-card").classList.remove("main-menu-mode");
-    ["#stats-overlay","#leaderboard-overlay","#achievements-overlay","#daily-overlay"].forEach(id => $(id).classList.remove("open"));
+    $("#btn-admin-float").classList.add("hidden");
+    ["#stats-overlay","#leaderboard-overlay","#achievements-overlay","#daily-overlay","#store-overlay","#season-overlay"].forEach(id => $(id).classList.remove("open"));
     myProfile = null; leaderboardData = null;
     $("#auth-form").classList.remove("hidden"); $("#room-form").classList.add("hidden");
     $("#auth-password").value = ""; $("#auth-confirm").value = "";
@@ -1120,7 +1053,7 @@ function initJoin() {
     $("#host-overlay").classList.add("open");
   });
   wireButton($("#btn-host-close"), () => $("#host-overlay").classList.remove("open"));
-  wireButton($("#btn-admin-table"), () => {
+  wireButton($("#btn-admin-float"), () => {
     $("#settings-overlay").classList.remove("open");
     $("#admin-overlay").classList.add("open");
     $("#admin-login-box").classList.toggle("hidden", isAdmin);
@@ -1145,7 +1078,7 @@ function initJoin() {
   wireButton($("#btn-friends"), () => { openProgress("#friends-overlay"); $("#friends-error").textContent=""; send({type:"friends",token:authToken}); });
   wireButton($("#btn-friends-close"), () => closeProgress("#friends-overlay"));
   wireButton($("#btn-add-friend"), () => { $("#friends-error").textContent=""; send({type:"add_friend",token:authToken,username:$("#friend-username").value.trim()}); });
-  wireButton($("#btn-public-tables"), () => { send({type:"public_tables"}); renderPublicTables(); if (!publicRefreshTimer) publicRefreshTimer = setInterval(() => { if ($("#screen-lobby").classList.contains("active")) send({type:"public_tables"}); }, 4000); });
+  wireButton($("#btn-public-tables"), () => { send({type:"public_tables"}); renderPublicTables(); });
   wireButton($("#btn-create-public"), () => send({type:"create_public",token:authToken}));
   wireButton($("#btn-chat-open"), () => toggleChat(true));
   wireButton($("#btn-chat-toggle"), () => toggleChat(false));
@@ -1157,10 +1090,14 @@ function initJoin() {
   wireButton($("#btn-rankings"), () => { openProgress("#leaderboard-overlay"); send({type:"leaderboard"}); });
   wireButton($("#btn-achievements"), () => { openProgress("#achievements-overlay"); send({type:"achievements", token:authToken}); });
   wireButton($("#btn-daily"), () => { openProgress("#daily-overlay"); send({type:"daily", token:authToken}); });
+  wireButton($("#btn-store"), () => { openProgress("#store-overlay"); send({type:"store", token:authToken}); });
+  wireButton($("#btn-season"), () => { openProgress("#season-overlay"); send({type:"season", token:authToken}); });
   wireButton($("#btn-stats-close"), () => closeProgress("#stats-overlay"));
   wireButton($("#btn-rankings-close"), () => closeProgress("#leaderboard-overlay"));
   wireButton($("#btn-achievements-close"), () => closeProgress("#achievements-overlay"));
   wireButton($("#btn-daily-close"), () => closeProgress("#daily-overlay"));
+  wireButton($("#btn-store-close"), () => closeProgress("#store-overlay"));
+  wireButton($("#btn-season-close"), () => closeProgress("#season-overlay"));
   document.querySelectorAll(".rank-tab").forEach(btn => btn.addEventListener("click", () => {
     activeRank = btn.dataset.rank;
     document.querySelectorAll(".rank-tab").forEach(x => x.classList.toggle("active", x === btn));
@@ -1169,8 +1106,7 @@ function initJoin() {
 }
 
 initSettings();
-initDeviceProfile();
 initControls();
 initJoin();
 $("#btn-chat-mute").textContent = chatMuted ? "🔇" : "🔊";
-
+if (localStorage.getItem("bj_session_token")) { setTimeout(() => { if (!ws || ws.readyState === WebSocket.CLOSED) connect(); }, 50); }
