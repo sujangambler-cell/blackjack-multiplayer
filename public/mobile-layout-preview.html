@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Casino X — Mobile 9:16 Layout Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090c;
+    --felt: #0f3d28;
+    --felt-edge: #5c3a1e;
+    --gold: #d7b56d;
+    --gold-hi: #f0d99c;
+    --card: #12151a;
+    --safe: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1d24;
+    color: #f2ead7;
+    font-family: Inter, system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+  h1 {
+    text-align: center;
+    font-family: "Playfair Display", serif;
+    font-size: 1.4rem;
+    margin-bottom: 6px;
+    color: var(--gold-hi);
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 0.8rem;
+    opacity: 0.55;
+    margin-bottom: 28px;
+  }
+  .phones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  /* Phone frame — 9:16 */
+  .phone {
+    width: 280px;
+    aspect-ratio: 9 / 16;
+    background: #0a0c10;
+    border-radius: 28px;
+    border: 3px solid #2a2e38;
+    box-shadow: 0 20px 50px rgba(0,0,0,.55), inset 0 0 0 2px #111;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .phone-label {
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--gold);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+  .notch {
+    height: 22px;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .notch span {
+    width: 72px;
+    height: 6px;
+    background: #222;
+    border-radius: 4px;
+  }
+  .screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    position: relative;
+  }
+
+  /* ========== HOME ========== */
+  .home-top {
+    padding: 14px 14px 8px;
+    text-align: center;
+  }
+  .brand {
+    font-family: "Playfair Display", serif;
+    font-size: 1.35rem;
+    color: var(--gold-hi);
+    letter-spacing: 0.06em;
+  }
+  .user-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,.05);
+    border-radius: 12px;
+    font-size: 0.72rem;
+  }
+  .bal { color: var(--gold); font-weight: 800; }
+  .game-pick {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 8px 14px;
+    justify-content: center;
+  }
+  .game-card {
+    background: linear-gradient(145deg, #1a2220, #0d1412);
+    border: 1px solid rgba(215,181,109,.28);
+    border-radius: 14px;
+    padding: 14px;
+    text-align: center;
+  }
+  .game-card .ico { font-size: 1.5rem; margin-bottom: 4px; }
+  .game-card .name { font-weight: 800; font-size: 0.85rem; letter-spacing: 0.1em; }
+  .game-card .desc { font-size: 0.65rem; opacity: 0.5; margin-top: 2px; }
+  .home-tools {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    padding: 0 14px 10px;
+  }
+  .tool-btn {
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 10px;
+    padding: 10px 4px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-align: center;
+    color: #ddd;
+  }
+  .home-foot {
+    padding: 8px 14px 14px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .ghost {
+    flex: 1;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 10px;
+    padding: 10px;
+    font-size: 0.7rem;
+    color: #aaa;
+    text-align: center;
+  }
+
+  /* ========== BLACKJACK ========== */
+  .bj-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: rgba(0,0,0,.45);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    font-size: 0.65rem;
+    flex-shrink: 0;
+  }
+  .bj-top .room { font-weight: 700; color: var(--gold); }
+  .bj-top .cash { color: var(--gold-hi); font-weight: 800; }
+  .icon-sm {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: rgba(255,255,255,.1);
+    display: grid; place-items: center;
+    font-size: 0.75rem;
+  }
+  .felt {
+    flex: 1;
+    margin: 8px 10px;
+    background: radial-gradient(ellipse at center, #174d35, #0a2c1f);
+    border: 5px solid var(--felt-edge);
+    border-radius: 40% / 28%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .dealer-zone {
+    padding-top: 10px;
+    text-align: center;
+  }
+  .zone-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.12em;
+    opacity: 0.55;
+    margin-bottom: 4px;
+  }
+  .cards {
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+  }
+  .card {
+    width: 32px;
+    height: 44px;
+    background: #f7f0df;
+    border-radius: 4px;
+    color: #1a1a1a;
+    font-size: 0.7rem;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  }
+  .card.red { color: #c0392b; }
+  .card.back {
+    background: linear-gradient(135deg, #1e3a5f, #2c5282);
+    color: #93c5fd;
+    border: 1px solid #60a5fa;
+  }
+  .shoe {
+    position: absolute;
+    top: 8px; right: 10px;
+    width: 28px; height: 38px;
+  }
+  .shoe .c {
+    position: absolute;
+    width: 24px; height: 34px;
+    background: linear-gradient(135deg, #1e3a5f, #2c5282);
+    border: 1px solid #60a5fa;
+    border-radius: 3px;
+  }
+  .shoe .c:nth-child(1) { top: 4px; left: 4px; }
+  .shoe .c:nth-child(2) { top: 2px; left: 2px; }
+  .shoe .c:nth-child(3) { top: 0; left: 0; }
+  .shoe-lbl {
+    position: absolute;
+    bottom: -12px; left: 0; right: 0;
+    text-align: center;
+    font-size: 0.45rem;
+    font-weight: 700;
+    opacity: 0.6;
+  }
+  .center-msg {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: var(--gold-hi);
+  }
+  .players-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .seat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .avatar {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    display: grid; place-items: center;
+    font-size: 0.6rem;
+    font-weight: 800;
+    border: 2px solid rgba(255,255,255,.3);
+  }
+  .avatar.me { border-color: var(--gold); }
+  .seat-name { font-size: 0.5rem; max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat-cards { display: flex; gap: 1px; }
+  .seat-cards .card { width: 22px; height: 30px; font-size: 0.55rem; }
+  .chip-mini {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #f59e0b, #b45309);
+    border: 2px dashed rgba(255,255,255,.5);
+    font-size: 0.4rem;
+    font-weight: 800;
+    display: grid; place-items: center;
+    color: #1a1000;
+  }
+  .bj-dock {
+    flex-shrink: 0;
+    background: rgba(0,0,0,.7);
+    border-top: 1px solid rgba(255,255,255,.1);
+    padding: 8px 10px 12px;
+  }
+  .chip-row {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .chip {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 2px dashed rgba(255,255,255,.55);
+    font-size: 0.55rem;
+    font-weight: 800;
+    display: grid; place-items: center;
+    color: #111;
+  }
+  .chip.c5 { background: linear-gradient(145deg, #ef4444, #b91c1c); color: #fff; }
+  .chip.c10 { background: linear-gradient(145deg, #3b82f6, #1d4ed8); color: #fff; }
+  .chip.c25 { background: linear-gradient(145deg, #22c55e, #15803d); color: #fff; }
+  .chip.c100 { background: linear-gradient(145deg, #f59e0b, #b45309); color: #fff; }
+  .action-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .action-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .btn {
+    min-height: 42px;
+    border-radius: 11px;
+    border: none;
+    font-weight: 700;
+    font-size: 0.75rem;
+    display: grid;
+    place-items: center;
+    color: #fff;
+  }
+  .btn.primary { background: linear-gradient(135deg, #f59e0b, #d97706); color: #3a2500; }
+  .btn.good { background: linear-gradient(135deg, #22c55e, #15803d); }
+  .btn.secondary { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.15); }
+  .btn.danger { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+
+  /* ========== ROULETTE ========== */
+  .roulette-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .wheel-area {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0 4px;
+  }
+  .wheel-title {
+    font-size: 0.55rem;
+    letter-spacing: 0.14em;
+    opacity: 0.45;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .wheel {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    border: 7px solid #6b4a24;
+    box-shadow: inset 0 0 0 3px #1a140c, inset 0 0 0 5px #d7b56d, 0 8px 20px rgba(0,0,0,.5);
+    background: conic-gradient(
+      #17633f 0deg 9.7deg,
+      #111 9.7deg 19.4deg, #a32f3e 19.4deg 29.1deg,
+      #111 29.1deg 38.8deg, #a32f3e 38.8deg 48.5deg,
+      #111 48.5deg 58.2deg, #a32f3e 58.2deg 67.9deg,
+      #111 67.9deg 77.6deg, #a32f3e 77.6deg 87.3deg,
+      #111 87.3deg 97deg, #a32f3e 97deg 106.7deg,
+      #111 106.7deg 116.4deg, #a32f3e 116.4deg 126.1deg,
+      #111 126.1deg 135.8deg, #a32f3e 135.8deg 145.5deg,
+      #111 145.5deg 155.2deg, #a32f3e 155.2deg 164.9deg,
+      #111 164.9deg 174.6deg, #a32f3e 174.6deg 184.3deg,
+      #111 184.3deg 194deg, #a32f3e 194deg 203.7deg,
+      #111 203.7deg 213.4deg, #a32f3e 213.4deg 223.1deg,
+      #111 223.1deg 232.8deg, #a32f3e 232.8deg 242.5deg,
+      #111 242.5deg 252.2deg, #a32f3e 252.2deg 261.9deg,
+      #111 261.9deg 271.6deg, #a32f3e 271.6deg 281.3deg,
+      #111 281.3deg 291deg, #a32f3e 291deg 300.7deg,
+      #111 300.7deg 310.4deg, #a32f3e 310.4deg 320.1deg,
+      #111 320.1deg 329.8deg, #a32f3e 329.8deg 339.5deg,
+      #111 339.5deg 349.2deg, #a32f3e 349.2deg 360deg
+    );
+    position: relative;
+  }
+  .wheel-hub {
+    position: absolute;
+    inset: 32%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #e8d08a, #a67c2e 45%, #1a140c 70%);
+    border: 2px solid rgba(255,255,255,.2);
+    display: grid;
+    place-items: center;
+    font-size: 0.45rem;
+    font-weight: 800;
+    color: #fff;
+  }
+  .wheel-ptr {
+    position: absolute;
+    top: -8px; left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 10px solid #e6cf8c;
+  }
+  .result-line {
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-top: 4px;
+    color: var(--gold-hi);
+  }
+  .bet-area {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 4px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .zero-btn {
+    background: #17633f;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 800;
+    font-size: 0.7rem;
+    padding: 6px;
+  }
+  .num-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 3px;
+    flex: 1;
+  }
+  .num {
+    border-radius: 4px;
+    font-size: 0.55rem;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    min-height: 22px;
+  }
+  .num.red { background: #8d2639; }
+  .num.black { background: #1a1a1a; }
+  .outside {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+  }
+  .out {
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 5px;
+    text-align: center;
+    font-size: 0.55rem;
+    font-weight: 700;
+    padding: 6px 2px;
+  }
+  .roulette-dock {
+    flex-shrink: 0;
+    background: rgba(0,0,0,.75);
+    border-top: 1px solid rgba(255,255,255,.1);
+    padding: 8px 10px 12px;
+  }
+  .roulette-dock .chip-row { margin-bottom: 6px; }
+  .roulette-actions {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1fr;
+    gap: 6px;
+  }
+
+  .notes {
+    max-width: 900px;
+    margin: 36px auto 0;
+    background: #12151c;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 16px;
+    padding: 20px 22px;
+    font-size: 0.85rem;
+    line-height: 1.55;
+  }
+  .notes h2 {
+    font-size: 0.95rem;
+    color: var(--gold-hi);
+    margin-bottom: 10px;
+  }
+  .notes ul { padding-left: 18px; opacity: 0.85; }
+  .notes li { margin-bottom: 6px; }
+  .notes code {
+    background: rgba(255,255,255,.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.8em;
+  }
+</style>
+</head>
+<body>
+  <h1>Casino X — Mobile 9:16 Layout</h1>
+  <p class="subtitle">How every screen should stack on a vertical phone · no horizontal scroll · thumb-zone controls at the bottom</p>
+
+  <div class="phones">
+
+    <!-- HOME -->
+    <div>
+      <div class="phone-label">1 · Home / Casino Lobby</div>
+      <div class="phone">
+        <div class="notch"><span></span></div>
+        <div class="screen" style="background: radial-gradient(ellipse at 50% 0%, rgba(215,181,109,.12), transparent 50%), #0a0c10;">
+          <div class="home-top">
+            <div class="brand">CASINO X</div>
+            <div class="user-row">
+              <span>PlayerOne · Lv 4</span>
+              <span class="bal">$12,400</span>
+            </div>
+          </div>
+          <div class="game-pick">
+            <div class="game-card">
+              <div class="ico">♠</div>
+              <div class="name">BLACKJACK</div>
+              <div class="desc">MULTIPLAYER TABLES</div>
+            </div>
+            <div class="game-card">
+              <div class="ico">◉</div>
+              <div class="name">ROULETTE</div>
+              <div class="desc">EUROPEAN · 0–36</div>
+            </div>
+          </div>
+          <div class="home-tools">
+            <div class="tool-btn">PROFILE</div>
+            <div class="tool-btn">STORE</div>
+            <div class="tool-btn">SEASON</div>
+          </div>
+          <div class="home-foot">
+            <div class="ghost">⚙ Settings</div>
+            <div class="ghost">Log out</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLACKJACK -->
+    <div>
+      <div class="phone-label">2 · Blackjack Table</div>
+      <div class="phone">
+        <div class="notch"><span></span></div>
+        <div class="screen" style="background:#07090c;">
+          <div class="bj-top">
+            <div class="icon-sm">←</div>
+            <div>
+              <div class="room">TABLE A3F2 · 3/6</div>
+              <div style="opacity:.5;font-size:.55rem;text-align:center">BETTING</div>
+            </div>
+            <div class="cash">$5,200</div>
+          </div>
+          <div class="felt">
+            <div class="shoe">
+              <div class="c"></div><div class="c"></div><div class="c"></div>
+              <div class="shoe-lbl">SHOE</div>
+            </div>
+            <div class="dealer-zone">
+              <div class="zone-label">DEALER</div>
+              <div class="cards">
+                <div class="card red">A♥</div>
+                <div class="card back">?</div>
+              </div>
+            </div>
+            <div class="center-msg">PLACE YOUR BETS</div>
+            <div class="players-row">
+              <div class="seat">
+                <div class="avatar">J</div>
+                <div class="seat-name">Jade</div>
+                <div class="chip-mini">25</div>
+              </div>
+              <div class="seat">
+                <div class="avatar me">Y</div>
+                <div class="seat-name">You</div>
+                <div class="seat-cards">
+                  <div class="card">K♠</div>
+                  <div class="card red">7♦</div>
+                </div>
+                <div class="chip-mini">50</div>
+              </div>
+              <div class="seat">
+                <div class="avatar">R</div>
+                <div class="seat-name">Rex</div>
+              </div>
+            </div>
+          </div>
+          <div class="bj-dock">
+            <div class="chip-row">
+              <div class="chip c5">5</div>
+              <div class="chip c10">10</div>
+              <div class="chip c25">25</div>
+              <div class="chip c100">100</div>
+            </div>
+            <div class="action-row">
+              <div class="btn good">HIT</div>
+              <div class="btn primary">STAND</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROULETTE -->
+    <div>
+      <div class="phone-label">3 · Roulette Table</div>
+      <div class="phone">
+        <div class="notch"><span></span></div>
+        <div class="screen" style="background:#07090c;">
+          <div class="bj-top">
+            <div class="icon-sm">←</div>
+            <div>
+              <div class="room">ROULETTE · 2/5</div>
+              <div style="opacity:.5;font-size:.55rem;text-align:center">BETTING</div>
+            </div>
+            <div class="cash">$8,100</div>
+          </div>
+          <div class="roulette-body">
+            <div class="wheel-area">
+              <div class="wheel-title">THE WHEEL</div>
+              <div class="wheel">
+                <div class="wheel-ptr"></div>
+                <div class="wheel-hub">CASINO X</div>
+              </div>
+              <div class="result-line">PLACE YOUR BETS</div>
+            </div>
+            <div class="bet-area">
+              <div class="zero-btn">0</div>
+              <div class="num-grid">
+                <div class="num red">1</div><div class="num black">2</div><div class="num red">3</div>
+                <div class="num black">4</div><div class="num red">5</div><div class="num black">6</div>
+                <div class="num red">7</div><div class="num black">8</div><div class="num red">9</div>
+                <div class="num black">10</div><div class="num black">11</div><div class="num red">12</div>
+                <div class="num black">13</div><div class="num red">14</div><div class="num black">15</div>
+                <div class="num red">16</div><div class="num black">17</div><div class="num red">18</div>
+              </div>
+              <div class="outside">
+                <div class="out">1–18</div>
+                <div class="out">EVEN</div>
+                <div class="out">RED</div>
+                <div class="out">BLACK</div>
+                <div class="out">ODD</div>
+                <div class="out">19–36</div>
+              </div>
+            </div>
+            <div class="roulette-dock">
+              <div class="chip-row">
+                <div class="chip c5">5</div>
+                <div class="chip c25">25</div>
+                <div class="chip c100">100</div>
+              </div>
+              <div class="roulette-actions">
+                <div class="btn secondary">CLEAR</div>
+                <div class="btn primary">SPIN</div>
+                <div class="btn danger">LEAVE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="notes">
+    <h2>Layout rules for 9:16 mobile</h2>
+    <ul>
+      <li><strong>Top bar (fixed height ~48px)</strong> — Leave / room code / player count / balance. Never overlaps the table.</li>
+      <li><strong>Middle = game stage (flex: 1)</strong> — Felt or wheel + betting grid. Everything centered. No horizontal scroll.</li>
+      <li><strong>Bottom dock (thumb zone)</strong> — Chips + primary actions (Hit/Stand or Spin/Leave). Min touch target ~44–48px.</li>
+      <li><strong>Blackjack</strong> — Dealer at top of felt, shoe top-right, players along bottom arc of felt, dock under felt.</li>
+      <li><strong>Roulette</strong> — Compact wheel on top third, number grid + outside bets in middle (scroll only if needed), dock fixed at bottom with Clear / Spin / Leave always visible.</li>
+      <li><strong>Leave</strong> always reachable without opening Settings (bottom bar on Roulette, top-left / settings on Blackjack).</li>
+      <li>Aspect ratio of the phone frame above is exactly <code>9 / 16</code> — this is the target canvas for all mobile UI work.</li>
+    </ul>
+  </div>
+</body>
+</html>

@@ -26,11 +26,19 @@
         <div class="field"><label>Username</label><input id="auth-username" type="text" maxlength="16" autocomplete="username" placeholder="Your username"></div>
         <div class="field"><label>Password</label><input id="auth-password" type="password" minlength="8" autocomplete="current-password" placeholder="Minimum 8 characters"></div>
         <div class="field hidden" id="confirm-wrap"><label>Confirm password</label><input id="auth-confirm" type="password" minlength="8" autocomplete="new-password" placeholder="Repeat your password"></div>
+        <div class="settings-row auth-mobile-row">
+          <div><label>Mobile mode</label><small class="settings-help">Vertical phone layout — turn on for smaller screens.</small></div>
+          <div class="toggle" id="toggle-mobile-auth"><div class="toggle-knob"></div></div>
+        </div>
         <div class="auth-error" id="join-error"></div>
         <button class="btn auth-submit" id="btn-auth">LOGIN</button>
       </div>
       <div id="room-form" class="hidden">
         <div class="casino-home">
+          <button type="button" class="update-log-btn" id="btn-update-log" title="Update Log" aria-label="Update Log">
+            <span class="ul-icon" aria-hidden="true">📓</span>
+            <span class="ul-badge" id="update-log-badge">1</span>
+          </button>
           <div class="casino-brand">CASINO X</div>
           <div class="welcome-user" id="welcome-user"></div>
           <div class="menu-level" id="menu-level">LEVEL 1 • ROOKIE</div>
@@ -46,9 +54,12 @@
             <button class="btn secondary" id="btn-profile">PROFILE</button>
             <button class="btn secondary" id="btn-store">STORE</button>
             <button class="btn secondary" id="btn-season">SEASON 1</button>
+            <button class="btn secondary" id="btn-friends">FRIENDS</button>
+            <button class="btn secondary" id="btn-rankings">HIGH ROLLERS</button>
+            <button class="btn secondary" id="btn-daily-home">DAILY</button>
           </div>
           <div class="home-footer"><button class="icon-btn menu-settings" id="btn-settings-menu" type="button" aria-label="Settings" title="Settings">⚙</button><button class="btn ghost-btn" id="btn-logout">LOG OUT</button></div>
-          <div class="hidden" aria-hidden="true"><button id="btn-play"></button><button id="btn-friends"></button><button id="btn-stats"></button><button id="btn-rankings"></button><button id="btn-achievements"></button><button id="btn-daily"></button></div>
+          <div class="hidden" aria-hidden="true"><button id="btn-play"></button><button id="btn-stats"></button><button id="btn-achievements"></button><button id="btn-daily"></button></div>
         </div>
       </div>
     </div>
@@ -64,6 +75,20 @@
       <div class="lobby-or"><span>OR</span></div>
       <div class="field compact-field"><label>PRIVATE TABLE CODE</label><input id="input-room" type="text" maxlength="12" placeholder="Enter a table code" autocomplete="off"></div>
       <div class="auth-error" id="room-error"></div>
+      <div class="field compact-field" style="margin-top:8px">
+        <label>TABLE SIZE (PLAYERS)</label>
+        <select id="bj-max-players" class="table-size-select">
+          <option value="2">2 Players</option>
+          <option value="3">3 Players</option>
+          <option value="4">4 Players</option>
+          <option value="5" selected>5 Players</option>
+          <option value="6">6 Players</option>
+          <option value="7">7 Players</option>
+          <option value="8">8 Players</option>
+          <option value="9">9 Players</option>
+          <option value="10">10 Players</option>
+        </select>
+      </div>
       <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-create-public">CREATE PUBLIC TABLE</button><button class="btn secondary auth-submit" id="btn-join-table">JOIN PRIVATE TABLE</button></div>
       <button class="btn secondary auth-submit" id="btn-back-menu">BACK TO CASINO</button>
     </div>
@@ -78,6 +103,20 @@
       <div class="lobby-or"><span>OR</span></div>
       <div class="field compact-field"><label>PRIVATE TABLE CODE</label><input id="roulette-room" maxlength="12" placeholder="Enter a table code" autocomplete="off"></div>
       <div class="auth-error" id="roulette-room-error"></div>
+      <div class="field compact-field" style="margin-top:8px">
+        <label>TABLE SIZE (PLAYERS)</label>
+        <select id="roulette-max-players" class="table-size-select">
+          <option value="2">2 Players</option>
+          <option value="3">3 Players</option>
+          <option value="4">4 Players</option>
+          <option value="5" selected>5 Players</option>
+          <option value="6">6 Players</option>
+          <option value="7">7 Players</option>
+          <option value="8">8 Players</option>
+          <option value="9">9 Players</option>
+          <option value="10">10 Players</option>
+        </select>
+      </div>
       <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-roulette-create">CREATE PUBLIC TABLE</button><button class="btn secondary auth-submit" id="btn-roulette-join">JOIN PRIVATE TABLE</button></div>
       <button class="btn secondary auth-submit" id="btn-roulette-back">BACK TO CASINO</button>
     </div>
@@ -137,7 +176,7 @@
           <div class="hand" id="dealer-hand"></div>
         </div>
 
-        <div class="seats-row" id="seats-row"></div>
+        <div class="seats-ring" id="seats-row"></div>
       </div>
 
       <div id="turn-banner-slot"></div>
@@ -181,6 +220,16 @@
     <div class="overlay-card progress-card">
       <div class="overlay-title">PLAYER PROFILE</div>
       <div class="profile-hero" id="profile-hero"></div>
+      <div class="section-mini-title">AVATAR</div>
+      <div class="avatar-editor">
+        <div class="avatar-preview" id="avatar-preview">?</div>
+        <div class="avatar-presets" id="avatar-presets"></div>
+        <label class="avatar-upload-btn btn secondary">
+          UPLOAD IMAGE
+          <input type="file" id="avatar-upload" accept="image/*" hidden />
+        </label>
+        <button class="btn secondary" id="btn-avatar-reset" type="button">USE INITIAL</button>
+      </div>
       <div class="profile-stats-grid" id="profile-stats-grid"></div>
       <div class="section-mini-title">FRIENDS</div>
       <div id="profile-friends" class="friend-list"></div>
@@ -210,7 +259,8 @@
 
   <div class="overlay" id="leaderboard-overlay">
     <div class="overlay-card progress-card leaderboard-card">
-      <div class="overlay-title">GLOBAL RANKINGS</div>
+      <div class="overlay-title">HIGH ROLLERS</div>
+      <div class="auth-sub" style="margin-bottom:10px">RICHEST PLAYERS • UPDATES EVERY 20 MIN</div>
       <div class="rank-tabs" id="rank-tabs">
         <button class="rank-tab active" data-rank="balance">BALANCE</button>
         <button class="rank-tab" data-rank="wins">WINS</button>
@@ -283,10 +333,30 @@
   </div>
 
   <div class="overlay" id="season-overlay">
-    <div class="overlay-card progress-card season-card">
-      <div class="season-art"><div class="season-art-copy"><span>SEASON 1 • 21 DAYS</span><strong>CASINO X: 1927</strong><small>THE GOLDEN AGE OF THE HOUSE</small></div><div class="season-countdown"><span>SEASON ENDS IN</span><strong id="season-countdown">21D 00H 00M</strong><small id="season-season-status">ACTIVE</small></div></div>
-      <div class="season-summary"><div><span>SEASONAL XP</span><strong id="season-xp">0 XP</strong></div><div><span>THEME</span><strong>ART DECO</strong></div><div><span>REWARDS</span><strong>10 TIERS</strong></div></div>
-      <div class="season-progress"><div id="season-progress-fill"></div></div><div id="season-tier-list" class="season-tier-list"></div>
+    <div class="overlay-card progress-card season-card season-1927-pass">
+      <div class="season-art">
+        <div class="season-art-ornament" aria-hidden="true"></div>
+        <div class="season-art-copy">
+          <span class="season-eyebrow">SEASON 1 • THE SPEAKEASY</span>
+          <strong>CASINO X: 1927</strong>
+          <small>THE GOLDEN AGE OF THE HOUSE</small>
+        </div>
+        <div class="season-countdown">
+          <span>SEASON ENDS IN</span>
+          <strong id="season-countdown">21D 00H 00M</strong>
+          <small id="season-season-status">ACTIVE</small>
+        </div>
+      </div>
+      <div class="season-pass-rail">
+        <div class="season-pass-label">SEASON PASS</div>
+        <div class="season-summary">
+          <div><span>SEASONAL XP</span><strong id="season-xp">0 XP</strong></div>
+          <div><span>THEME</span><strong>ART DECO</strong></div>
+          <div><span>REWARDS</span><strong>10 TIERS</strong></div>
+        </div>
+        <div class="season-progress"><div id="season-progress-fill"></div></div>
+      </div>
+      <div id="season-tier-list" class="season-tier-list"></div>
       <button class="btn panel-btn" id="btn-season-close">CLOSE</button>
     </div>
   </div>
@@ -305,6 +375,10 @@
   <div class="overlay" id="host-overlay">
     <div class="overlay-card">
       <div class="overlay-title">HOST CONTROLS</div>
+      <div class="settings-row">
+        <div><label>Double Cash</label><small class="settings-help">All cash rewards at this table are doubled while active. Visible to all players.</small></div>
+        <div class="toggle" id="toggle-double-cash"><div class="toggle-knob"></div></div>
+      </div>
       <div id="host-list" class="host-list"></div>
       <button class="btn panel-btn" id="btn-host-close">CLOSE</button>
     </div>
@@ -323,6 +397,19 @@
         <div class="admin-actions"><button class="btn secondary" id="btn-admin-refresh">REFRESH</button><button class="btn secondary" id="admin-preview-toggle">DEALER PREVIEW</button></div>
         <section class="admin-section"><h3>ECONOMY</h3><div id="admin-economy"></div></section>
         <section class="admin-section"><h3>PLAYER CONTROLS</h3><div id="admin-users"></div></section>
+        <section class="admin-section"><h3>FUN TABLE MODIFIERS</h3>
+          <div class="admin-fun-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <button class="btn secondary" id="admin-fun-double">TOGGLE 2× CASH</button>
+            <button class="btn secondary" id="admin-fun-rain">RAIN +$500 ALL</button>
+            <button class="btn secondary" id="admin-fun-xp">+100 SEASON XP ALL</button>
+            <button class="btn secondary" id="admin-fun-refill">REFILL SHOE</button>
+            <button class="btn secondary" id="admin-fun-chaos">CHAOS BET WINDOW</button>
+            <button class="btn secondary" id="admin-fun-force0">FORCE NEXT 0</button>
+            <button class="btn secondary" id="admin-fun-force-red">BIAS RED</button>
+            <button class="btn secondary" id="admin-fun-clear-luck">CLEAR LUCK</button>
+          </div>
+          <small class="settings-help" style="display:block;margin-top:8px;opacity:.65">Affects the table you are in. Players see banners when modifiers fire.</small>
+        </section>
         <section class="admin-section"><h3>SEASON</h3><div id="admin-season-controls"></div></section>
         <section class="admin-section"><h3>ADMIN ITEMS</h3><div id="admin-item-controls"></div></section>
         <div id="admin-preview"></div>
@@ -356,7 +443,8 @@
         <div class="toggle" id="toggle-dark"><div class="toggle-knob"></div></div>
       </div>
       <div class="settings-row"><label>Sound effects</label><div class="toggle on" id="toggle-sound"><div class="toggle-knob"></div></div></div>
-      <div class="settings-row"><div><label>Mobile mode</label><small class="settings-help">Optimizes tables and menus for touch.</small></div><div class="toggle" id="toggle-mobile"><div class="toggle-knob"></div></div></div>
+      <div class="settings-row"><div><label>Mobile mode</label><small class="settings-help">9:16 vertical layout for phones. Rearranges tables &amp; menus.</small></div><div class="toggle" id="toggle-mobile"><div class="toggle-knob"></div></div></div>
+      <div class="settings-row"><div><label>Fullscreen</label><small class="settings-help">Fill the whole display. Press Esc to exit.</small></div><div class="toggle" id="toggle-fullscreen"><div class="toggle-knob"></div></div></div>
       <div class="settings-row"><div><label>Seasonal UI &amp; Theme</label><small class="settings-help">Applies the active season's full visual overhaul across Casino X.</small></div><div class="toggle on" id="toggle-seasonal-ui"><div class="toggle-knob"></div></div></div>
       <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
         <label>SFX volume — <span id="volume-pct">60%</span></label>
@@ -366,9 +454,76 @@
         <label>GUI scale — <span id="scale-pct">100%</span></label>
         <input type="range" id="slider-scale" min="80" max="130" value="100" step="5" />
       </div>
+      <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>Visual quality — <span id="quality-label">High</span></label>
+        <input type="range" id="slider-quality" min="0" max="2" value="2" step="1" />
+        <small class="settings-help">Live: lowers particles &amp; effects for better mobile performance.</small>
+      </div>
       <button class="btn secondary panel-btn" id="btn-settings-appearance">APPEARANCE</button>
       <button class="btn panel-btn" id="btn-leave-table">LEAVE TABLE</button>
       <button class="btn panel-btn settings-close-bottom" id="btn-settings-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- (Host overlay defined earlier) -->
+
+  <!-- Update Log overlay -->
+  <div class="overlay" id="update-log-overlay">
+    <div class="overlay-card progress-card update-log-card">
+      <div class="update-log-header">
+        <div class="update-log-title-row">
+          <span class="ul-notebook" aria-hidden="true">📓</span>
+          <div>
+            <div class="overlay-title" style="margin:0">UPDATE LOG <span id="update-log-version">1</span></div>
+            <div class="auth-sub" style="margin:4px 0 0">What's new in Casino X</div>
+          </div>
+        </div>
+        <button type="button" class="icon-btn" id="btn-update-log-close" aria-label="Close">×</button>
+      </div>
+      <div class="update-log-body" id="update-log-body">
+        <!-- filled by JS -->
+      </div>
+      <button class="btn panel-btn" id="btn-update-log-gotit">GOT IT</button>
+    </div>
+  </div>
+
+  <!-- Side notification stack (friend requests, season level, invites fallback) -->
+  <div id="side-notif-stack" class="side-notif-stack" aria-live="polite"></div>
+
+  <!-- Table invite toast (bottom-right) -->
+
+  <div id="invite-toast" class="invite-toast hidden">
+    <div class="invite-toast-copy">
+      <strong id="invite-from">Player</strong>
+      <span>invited you to table <b id="invite-room">——</b></span>
+    </div>
+    <div class="invite-toast-actions">
+      <button class="btn good" id="invite-accept">ACCEPT</button>
+      <button class="btn secondary" id="invite-decline">DECLINE</button>
+    </div>
+  </div>
+
+  <!-- Friend boost HUD (bottom-right while at table) -->
+  <div id="friend-boost-hud" class="friend-boost-hud hidden">
+    <span class="fb-icon">🤝</span>
+    <span id="friend-boost-text">FRIEND BOOST +0%</span>
+  </div>
+
+  <!-- Discord-style avatar crop -->
+  <div id="avatar-crop-modal" class="avatar-crop-modal hidden">
+    <div class="avatar-crop-card">
+      <div class="overlay-title" style="margin:0">EDIT AVATAR</div>
+      <div class="avatar-crop-stage" id="avatar-crop-stage">
+        <img id="avatar-crop-img" alt="crop" draggable="false" />
+      </div>
+      <div class="avatar-crop-controls">
+        <label>ZOOM</label>
+        <input type="range" id="avatar-crop-zoom" min="100" max="250" value="100" />
+      </div>
+      <div class="avatar-crop-actions">
+        <button class="btn secondary" id="avatar-crop-cancel" type="button">CANCEL</button>
+        <button class="btn" id="avatar-crop-apply" type="button">APPLY</button>
+      </div>
     </div>
   </div>
 

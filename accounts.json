@@ -1,10 +1,10 @@
 {
-  "test1234": {
-    "username": "test1234",
-    "salt": "ce34b22fd1f565b72c3caed48e732353",
-    "password": "ddbe4c7837690c749c883e5bb086bb5a12ff85749e357b525aeb23c9dc635fd7",
+  "test12345": {
+    "username": "test12345",
+    "salt": "614b502af9bc115c59472636d1718e79",
+    "password": "ed23accb247c2e7084b372bd4c579bea3ee8b10509c6416b35d22552de57dbca",
     "money": 5000,
-    "created": 1787750906.9722366,
+    "created": 1788489505.1104405,
     "games_played": 0,
     "wins": 0,
     "losses": 0,
@@ -22,9 +22,11 @@
       "blackjack1": 0,
       "roulette1": 0
     },
-    "daily_challenge_date": "2026-08-26",
+    "daily_challenge_date": "2026-09-04",
     "daily_challenge_claimed": [],
     "friends": [],
+    "avatar": null,
+    "avatar_color": null,
     "owned_themes": [
       "classic"
     ],
@@ -61,6 +63,6 @@
         "wins": 0
       }
     },
-    "session_token": "44509e05ac1e197324d2473f3d97cddbed42c93e720a40f8"
+    "session_token": "8ec9febdc015636a4a2d4d9adfda288243af714deb35b9c2"
   }
 }

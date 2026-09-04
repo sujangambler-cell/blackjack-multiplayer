@@ -24,6 +24,17 @@ If `DATABASE_URL` is configured but PostgreSQL cannot be reached, the server int
 - Prevented one account from occupying multiple active table seats.
 - Kept local `accounts.json` fallback for development only.
 
+### UI / Lobby / Host fixes (this build)
+
+- **Lobby leave**: leave + disconnect fully remove the player, refund pending roulette bets, transfer host, and broadcast immediately (no ghost players).
+- **Table size**: create table can choose **2–10 players** (server stores per-room `max_players`).
+- **Blackjack shoe**: always visible with higher z-index; scales on desktop.
+- **Mobile mode default ON** (user can switch to PC mode in Settings). Larger touch targets, centered seats.
+- **Dark mode chips**: no longer forced pure white; skin colors (gold, 1927, silver) remain visible.
+- **Host Panel**: Kick + **Transfer Host** + **Double Cash** toggle (applies 2× to Blackjack and Roulette payouts; visible banner on table).
+- **Visual quality slider** (Low / Medium / High) with live particle/effect reduction.
+- Seasonal 1927 theme and shop equip path preserved and compatible with dark mode.
+
 
 ## Universal Casino X systems
 
@@ -48,3 +59,11 @@ Roulette is a server-authoritative European wheel (0–36) with red/black, odd/e
 
 ## Season 1
 **Casino X: 1927** runs for 21 days from first production initialization. The start time is persisted in PostgreSQL `app_settings`, so restarts do not reset the countdown. Seasonal cosmetics remain permanently owned after the acquisition window closes.
+
+### Final UI pass (Update Log 1)
+
+- Contained **CASINO X** logo glow so it no longer leaks across the lobby; mobile title scales and stays fully visible.
+- **Update Log** notebook button (top-right of main menu). Opens once after login/signup per player when the log version changes; version badge = Update Log 1 (bump `UPDATE_LOG_VERSION` in `game.js` for future releases).
+- **Season 1 · 1927** pass restyle: art-deco rail, gold progress, single-column tiers; unclaimed tier unlocks slide in from the right (“You reached level X — claim it in the main menu”).
+- Side notification stack + invite toast layouts adjusted for phone so they fit cleanly.
+- Blackjack felt/seats given more vertical room and a wider arc so the table no longer feels squashed.

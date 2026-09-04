@@ -39,7 +39,8 @@ STARTING_MONEY = 5000
 ZERO_CLAIM = 100
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 ACCOUNTS_FILE = pathlib.Path(__file__).parent / "accounts.json"
-MAX_PLAYERS = 5
+MAX_PLAYERS_DEFAULT = 5
+MAX_PLAYERS_HARD_CAP = 10
 READY_GRACE_S = 0.8      # small pause after last player hits ready before dealing
 ROUND_OVER_S = 4.5       # results screen duration before next betting phase
 ROULETTE_BET_WINDOW_S = 12
@@ -378,7 +379,8 @@ def ensure_account_progress(account):
         "pushes": 0, "blackjacks": 0, "best_win_streak": 0, "current_win_streak": 0,
         "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
         "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
-        "friends": [], "owned_themes": ["classic"], "owned_chips": ["classic"], "owned_decks": ["classic"], "owned_tables": ["classic"], "owned_balls": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "equipped_deck": "classic", "equipped_table": "classic", "equipped_ball": "classic", "season_xp": 0, "season_claimed": [], "season_title": "",
+        "friends": [], "avatar": None, "avatar_color": None,
+        "owned_themes": ["classic"], "owned_chips": ["classic"], "owned_decks": ["classic"], "owned_tables": ["classic"], "owned_balls": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "equipped_deck": "classic", "equipped_table": "classic", "equipped_ball": "classic", "season_xp": 0, "season_claimed": [], "season_title": "",
         "roulette_games": 0, "roulette_wins": 0, "roulette_biggest_win": 0,
         "game_stats": {"blackjack": {"games": 0, "wins": 0}, "roulette": {"games": 0, "wins": 0}},
         "session_token": account.get("session_token"),
@@ -445,12 +447,28 @@ def is_user_online(username_key):
                 return True
     return False
 
+def find_user_table(username_key_str):
+    """Return room code + game if this account is seated at a table."""
+    for room in rooms.values():
+        for p in room.get("players", []):
+            if p.get("username_key") == username_key_str and p.get("connected") and not p.get("spectator"):
+                return {"room": room.get("code"), "game": room.get("game", "blackjack")}
+    return None
+
 def friends_payload(account):
     out = []
     for key in account.get("friends", []):
         friend = ACCOUNTS.get(key)
         if friend:
-            out.append({"username": friend["username"], "online": is_user_online(key), "level": account_level(int(friend.get("xp",0)))[0]})
+            loc = find_user_table(key)
+            out.append({
+                "username": friend["username"],
+                "online": is_user_online(key),
+                "level": account_level(int(friend.get("xp", 0)))[0],
+                "avatar": friend.get("avatar"),
+                "avatarColor": friend.get("avatar_color"),
+                "location": loc,
+            })
     return out
 
 def profile_payload(account):
@@ -459,8 +477,15 @@ def profile_payload(account):
     level, title = account_level(int(account.get("xp", 0)))
     games = int(account.get("games_played", 0))
     wins = int(account.get("wins", 0))
+    # Default avatar color from username hash if missing
+    if not account.get("avatar_color"):
+        h = sum(ord(c) for c in account.get("username", "P"))
+        hues = ["#6366f1", "#ec4899", "#14b8a6", "#f59e0b", "#8b5cf6", "#ef4444", "#22c55e", "#0ea5e9"]
+        account["avatar_color"] = hues[h % len(hues)]
     return {
         "username": account["username"], "balance": int(account.get("money", 0)),
+        "avatar": account.get("avatar"),
+        "avatarColor": account.get("avatar_color"),
         "stats": {
             "gamesPlayed": games, "wins": wins, "losses": int(account.get("losses", 0)),
             "pushes": int(account.get("pushes", 0)), "blackjacks": int(account.get("blackjacks", 0)),
@@ -534,12 +559,18 @@ def add_xp(account, amount):
     account["xp"] = max(0, int(account.get("xp", 0)) + int(amount))
 
 
-def get_room(code: str, public=False, game="blackjack") -> dict:
+def get_room(code: str, public=False, game="blackjack", max_players=None) -> dict:
     if code not in rooms:
+        try:
+            mp = int(max_players) if max_players is not None else MAX_PLAYERS_DEFAULT
+        except (TypeError, ValueError):
+            mp = MAX_PLAYERS_DEFAULT
+        mp = max(2, min(MAX_PLAYERS_HARD_CAP, mp))
         rooms[code] = {
             "code": code,
             "public": bool(public),
             "game": game,
+            "max_players": mp,
             "phase": "LOBBY",
             "players": [],
             "host_id": None,
@@ -558,6 +589,7 @@ def get_room(code: str, public=False, game="blackjack") -> dict:
             "roulette_last_result": None,
             "roulette_phase": "BETTING",
             "roulette_task": None,
+            "double_cash": False,
             # asyncio task handles for cancellation
             "_ready_task": None,
             "_round_task": None,
@@ -583,11 +615,13 @@ def public_tables_payload():
         players = active_players(room)
         spectators = connected_spectators(room)
         host = find_player(room, room.get("host_id")) if room.get("host_id") else None
+        max_p = int(room.get("max_players", MAX_PLAYERS_DEFAULT))
         rows.append({
-            "code": room["code"], "game": room.get("game", "blackjack"), "players": len(players), "maxPlayers": MAX_PLAYERS,
+            "code": room["code"], "game": room.get("game", "blackjack"), "players": len(players), "maxPlayers": max_p,
             "spectators": len(spectators), "host": host.get("username") if host else "—",
-            "phase": room.get("phase", "LOBBY"), "canJoin": len(players) < MAX_PLAYERS,
+            "phase": room.get("phase", "LOBBY"), "canJoin": len(players) < max_p,
             "canSpectate": bool(players) and room.get("phase") in ("PLAYING", "ROUND_OVER"),
+            "doubleCash": bool(room.get("double_cash")),
         })
     rows.sort(key=lambda r: (r["players"] >= r["maxPlayers"], -r["players"], r["code"]))
     return rows
@@ -637,6 +671,8 @@ def serialise(room) -> dict:
         "phase": room["phase"],
         "activePlayerId": room["active_player_id"],
         "hostId": room.get("host_id"),
+        "maxPlayers": int(room.get("max_players", MAX_PLAYERS_DEFAULT)),
+        "doubleCash": bool(room.get("double_cash")),
         "dealerHand": dealer_hand,
         "dealerDisplay": hand_display(room["dealer_hand"]) if show_dealer and room["dealer_hand"] else None,
         "players": [
@@ -657,6 +693,9 @@ def serialise(room) -> dict:
                 "pity":      p.get("pity_banner", False),
                 "lucky":     bool(room.get("lucky_players", {}).get(p.get("username_key"), 0)),
                 "cosmetics": p.get("cosmetics", {}),
+                "avatar": p.get("avatar"),
+                "avatarColor": p.get("avatar_color"),
+                "friendBoost": int(p.get("friendBoost", 0) or 0),
             }
             for p in room["players"]
         ],
@@ -763,15 +802,22 @@ def prepare_dealer_preview(room):
     room["dealer_preview_active"] = True
     return True
 
+def _player_has_admin_luck(player):
+    """Small permanent luck buff for admin cosmetics (star theme or admin chip)."""
+    cos = player.get("cosmetics") or {}
+    return cos.get("theme") == "admin_star" or cos.get("chip") == "admin_chip"
+
 def lucky_card(room, player, hand):
-    if not room.get("lucky_players", {}).get(player.get("username_key"), 0):
+    admin_luck = _player_has_admin_luck(player)
+    forced = bool(room.get("lucky_players", {}).get(player.get("username_key"), 0))
+    if not forced and not admin_luck:
         return draw_card(room)
-    # Lucky mode is deliberately player-specific: prefer a useful card.
+    # Admin-only mild luck: 35% chance to bias; full lucky mode always biases
+    if not forced and admin_luck and random.random() > 0.35:
+        return draw_card(room)
     candidates = [c for c in room["deck"] if hand_value(hand + [{**c, "faceUp": True}]) <= 21]
     if not candidates:
         return draw_card(room)
-    # Prefer 10-value cards when the player is on 11 or less, otherwise prefer
-    # a card that moves the hand close to 21 without busting.
     target = min(21, hand_value(hand) + 10)
     candidates.sort(key=lambda c: abs((hand_value(hand) + card_value(c["rank"])) - target))
     chosen = candidates[0]
@@ -911,23 +957,43 @@ async def dealer_play(room):
     await asyncio.sleep(0.4)
     await finish_round(room)
 
+def friend_boost_mult(room, player):
+    """+5% cash reward per friend seated at the same table (max +25%)."""
+    acc = ACCOUNTS.get(player.get("username_key"))
+    if not acc:
+        return 1.0
+    friend_keys = set(acc.get("friends", []))
+    if not friend_keys:
+        return 1.0
+    count = 0
+    for other in active_players(room):
+        if other.get("id") == player.get("id"):
+            continue
+        if other.get("username_key") in friend_keys:
+            count += 1
+    return 1.0 + min(0.25, count * 0.05)
+
 async def finish_round(room):
     dv = hand_value(room["dealer_hand"])
     dealer_bj = is_blackjack(room["dealer_hand"])
+    mult = 2 if room.get("double_cash") else 1
 
     for p in active_players(room):
         if not p["hand"] or p["status"] == "spectating":
             continue
+        fb = friend_boost_mult(room, p)
+        p["friendBoost"] = round((fb - 1) * 100)
         if p["status"] == "bust":
             p["result"] = "bust"
             p["consecutive_losses"] = p.get("consecutive_losses", 0) + 1
         elif p["status"] == "blackjack":
             if dealer_bj:
-                p["money"] += p["bet"]      # push
+                p["money"] += p["bet"]      # push (no mult on returned stake)
                 p["result"] = "push"
                 p["consecutive_losses"] = 0
             else:
-                p["money"] += round(p["bet"] * 2.5)  # 3:2
+                # 3:2 base; double_cash + friend boost multiply the total return
+                p["money"] += round(p["bet"] * 2.5 * mult * fb)
                 p["result"] = "blackjack"
                 p["consecutive_losses"] = 0
         else:
@@ -936,7 +1002,7 @@ async def finish_round(room):
                 p["result"] = "lose"
                 p["consecutive_losses"] = p.get("consecutive_losses", 0) + 1
             elif dv > 21 or dv < pv:
-                p["money"] += p["bet"] * 2
+                p["money"] += round(p["bet"] * 2 * mult * fb)
                 p["result"] = "win"
                 p["consecutive_losses"] = 0
             elif dv > pv:
@@ -1033,11 +1099,40 @@ def roulette_bet_wins(bet, number):
 
 def roulette_serialise(room):
     bets = []
+    board = []  # all individual bets for board markers
     for p in room.get("players", []):
-        total = sum(int(b["amount"]) for b in room.get("roulette_bets", {}).get(p["id"], []))
-        bets.append({"id":p["id"],"username":p["username"],"total":total,"isHost":p["id"]==room.get("host_id"),"connected":p.get("connected",False),"cosmetics":p.get("cosmetics",{})})
-    return {"code":room["code"],"game":"roulette","phase":room.get("roulette_phase","BETTING"),
-            "players":bets,"lastResult":room.get("roulette_last_result")}
+        plist = room.get("roulette_bets", {}).get(p["id"], [])
+        total = sum(int(b["amount"]) for b in plist)
+        letter = (p.get("username") or "?")[0].upper()
+        color = (p.get("avatar_color") or "#6366f1")
+        bets.append({
+            "id": p["id"], "username": p["username"], "total": total,
+            "isHost": p["id"] == room.get("host_id"),
+            "connected": p.get("connected", False),
+            "cosmetics": p.get("cosmetics", {}),
+            "avatar": p.get("avatar"),
+            "avatarColor": color,
+        })
+        for b in plist:
+            board.append({
+                "playerId": p["id"],
+                "username": p.get("username"),
+                "letter": letter,
+                "color": color,
+                "type": b.get("type"),
+                "value": b.get("value"),
+                "amount": int(b.get("amount", 0)),
+            })
+    return {
+        "code": room["code"], "game": "roulette",
+        "phase": room.get("roulette_phase", "BETTING"),
+        "players": bets,
+        "boardBets": board,
+        "lastResult": room.get("roulette_last_result"),
+        "maxPlayers": int(room.get("max_players", MAX_PLAYERS_DEFAULT)),
+        "doubleCash": bool(room.get("double_cash")),
+        "hostId": room.get("host_id"),
+    }
 
 async def roulette_broadcast(room):
     payload=json.dumps({"type":"roulette_state","state":roulette_serialise(room)})
@@ -1061,9 +1156,12 @@ def _roulette_candidates_for_luck(room):
     for p in active_players(room):
         key = p.get("username_key")
         p_strength = int(room.get("roulette_player_luck", {}).get(key, 0))
+        # Small permanent bias from admin cosmetics
+        if _player_has_admin_luck(p):
+            p_strength = max(p_strength, 18)
         if p_strength <= 0:
             continue
-        if room.get("roulette_player_luck", {}).get(key) and room.get("roulette_player_luck", {}).get(key) > 100:
+        if p_strength > 100:
             p_strength = 100
         winning_numbers = [n for n in ROULETTE_NUMBERS
                            if any(roulette_bet_wins(b, n) for b in roulette_player_bets(room, p["id"]))]
@@ -1095,7 +1193,12 @@ async def roulette_spin(room):
     await roulette_broadcast(room)
     await asyncio.sleep(ROULETTE_SPIN_DELAY_S)
 
-    number = random.choice(_roulette_candidates_for_luck(room))
+    if "force_next_number" in room and room["force_next_number"] is not None:
+        number = int(room.pop("force_next_number"))
+        if number < 0 or number > 36:
+            number = random.choice(_roulette_candidates_for_luck(room))
+    else:
+        number = random.choice(_roulette_candidates_for_luck(room))
     color = roulette_color(number)
     room["roulette_last_result"] = {"number": number, "color": color, "ts": int(time.time() * 1000)}
     room["roulette_phase"] = "RESULT"
@@ -1110,11 +1213,13 @@ async def roulette_spin(room):
         winning = False
         win_profit = 0
 
+        mult = 2 if room.get("double_cash") else 1
         for b in bets:
             if roulette_bet_wins(b, number):
                 winning = True
                 payout = roulette_bet_payout(b["type"])
-                ret = int(b["amount"]) * (payout + 1)
+                # double_cash multiplies total return (stake + profit)
+                ret = int(b["amount"]) * (payout + 1) * mult
                 total_return += ret
                 win_profit += ret - int(b["amount"])
 
@@ -1256,8 +1361,9 @@ async def ws_handler(websocket):
             code = random_room_code()
             game = str(msg.get("game", "blackjack")).lower()
             if game not in ("blackjack", "roulette"): game = "blackjack"
-            get_room(code, public=True, game=game)
-            await websocket.send(json.dumps({"type":"public_created","code":code,"game":game}))
+            max_players = msg.get("maxPlayers", MAX_PLAYERS_DEFAULT)
+            get_room(code, public=True, game=game, max_players=max_players)
+            await websocket.send(json.dumps({"type":"public_created","code":code,"game":game,"maxPlayers":rooms[code].get("max_players", MAX_PLAYERS_DEFAULT)}))
             await send_public_tables(websocket)
             continue
 
@@ -1301,9 +1407,38 @@ async def ws_handler(websocket):
             if key in ACCOUNTS and target_key in set(ACCOUNTS[key].get("friends", [])) and room:
                 target_ws = USER_SOCKETS.get(target_key)
                 if target_ws:
-                    await target_ws.send(json.dumps({"type":"table_invite","from":ACCOUNTS[key]["username"],"room":room["code"]}))
+                    await target_ws.send(json.dumps({
+                        "type": "table_invite",
+                        "from": ACCOUNTS[key]["username"],
+                        "room": room["code"],
+                        "game": room.get("game", "blackjack"),
+                    }))
+                    await websocket.send(json.dumps({"type": "info", "message": f"Invite sent to {msg.get('username')}"}))
                 else:
                     await websocket.send(json.dumps({"type":"error","scope":"friends","message":"That friend is offline."}))
+            continue
+
+        if kind == "set_avatar":
+            key = TOKENS.get(msg.get("token"))
+            account = ACCOUNTS.get(key)
+            if account is not None:
+                avatar = msg.get("avatar")  # data URL or preset id or null
+                color = msg.get("color")
+                if avatar is None or avatar == "" or avatar == "reset":
+                    account["avatar"] = None
+                elif isinstance(avatar, str) and len(avatar) < 400_000:
+                    # Allow data URLs and short preset ids
+                    account["avatar"] = avatar
+                if isinstance(color, str) and color.startswith("#") and len(color) <= 9:
+                    account["avatar_color"] = color
+                save_accounts()
+                # Sync to seated player objects
+                for r in rooms.values():
+                    for p in r.get("players", []):
+                        if p.get("username_key") == key:
+                            p["avatar"] = account.get("avatar")
+                            p["avatar_color"] = account.get("avatar_color")
+                await websocket.send(json.dumps({"type": "profile", "profile": profile_payload(account)}))
             continue
 
         if kind == "chat":
@@ -1460,7 +1595,8 @@ async def ws_handler(websocket):
                 room = None
                 continue
             connected_count = sum(1 for p in room["players"] if p["connected"] and not p.get("spectator"))
-            if not spectate and connected_count >= MAX_PLAYERS:
+            max_p = int(room.get("max_players", MAX_PLAYERS_DEFAULT))
+            if not spectate and connected_count >= max_p:
                 await websocket.send(json.dumps({"type": "error", "message": "Table is full."}))
                 room = None
                 continue
@@ -1469,14 +1605,42 @@ async def ws_handler(websocket):
             account = ACCOUNTS[account_key]
             ensure_account_progress(account)
 
-            # Prevent reconnect/refresh from creating duplicate active seats.
-            already_seated = any(
-                any(p.get("username_key") == account_key and p.get("connected") for p in r.get("players", []))
-                for r in rooms.values()
-            )
-            if already_seated:
-                await websocket.send(json.dumps({"type": "error", "scope": "table", "message": "You are already connected to a table. Leave that table before joining another."}))
-                continue
+            # Auto-leave any existing seat for this account (fixes ghost "already present" after leave/UI race)
+            for code_old, r_old in list(rooms.items()):
+                for p_old in list(r_old.get("players", [])):
+                    if p_old.get("username_key") != account_key:
+                        continue
+                    # Refund roulette stakes if any
+                    if r_old.get("game") == "roulette":
+                        refund = sum(int(b["amount"]) for b in r_old.get("roulette_bets", {}).get(p_old["id"], []))
+                        if refund:
+                            p_old["money"] = int(p_old.get("money", 0)) + refund
+                            persist_player_money(p_old)
+                        r_old.get("roulette_bets", {}).pop(p_old["id"], None)
+                    was_host_old = r_old.get("host_id") == p_old.get("id")
+                    was_active_old = r_old.get("active_player_id") == p_old.get("id")
+                    try:
+                        r_old["players"].remove(p_old)
+                    except ValueError:
+                        pass
+                    if not r_old["players"]:
+                        _cancel(r_old, "_ready_task")
+                        _cancel(r_old, "_round_task")
+                        rt = r_old.get("roulette_task")
+                        if rt and not rt.done():
+                            rt.cancel()
+                        rooms.pop(code_old, None)
+                    else:
+                        if was_host_old:
+                            r_old["host_id"] = r_old["players"][0]["id"]
+                        if was_active_old and r_old.get("game") != "roulette":
+                            r_old["active_player_id"] = None
+                            try:
+                                await move_to_next_or_dealer(r_old)
+                            except Exception:
+                                pass
+                        else:
+                            await (roulette_broadcast(r_old) if r_old.get("game") == "roulette" else broadcast(r_old))
 
             player = {
                 "id": pid,
@@ -1497,6 +1661,9 @@ async def ws_handler(websocket):
                 "cosmetics":{"theme":account.get("equipped_theme","classic"),"chip":account.get("equipped_chip","classic"),
                              "deck":account.get("equipped_deck","classic"),"table":account.get("equipped_table","classic"),
                              "ball":account.get("equipped_ball","classic")},
+                "avatar": account.get("avatar"),
+                "avatar_color": account.get("avatar_color"),
+                "friendBoost": 0,
             }
             if room.get("host_id") is None:
                 room["host_id"] = pid
@@ -1728,6 +1895,13 @@ async def ws_handler(websocket):
                 continue
             if target.get("username_key"):
                 room.setdefault("kicked", []).append(target["username_key"])
+            # Refund any pending roulette bets for the kicked player
+            if room.get("game") == "roulette":
+                refund = sum(int(b["amount"]) for b in room.get("roulette_bets", {}).get(target["id"], []))
+                if refund:
+                    target["money"] += refund
+                    persist_player_money(target)
+                room.get("roulette_bets", {}).pop(target["id"], None)
             target_ws = target.get("ws")
             try:
                 if target_ws:
@@ -1735,6 +1909,29 @@ async def ws_handler(websocket):
                     await target_ws.close()
             except Exception:
                 pass
+            try:
+                room["players"].remove(target)
+            except ValueError:
+                pass
+            await broadcast(room)
+            await broadcast_public_tables()
+
+        elif kind == "transfer_host":
+            if room.get("host_id") != player["id"]:
+                continue
+            target = find_player(room, msg.get("targetId"))
+            if not target or target.get("id") == player["id"] or target.get("spectator"):
+                continue
+            room["host_id"] = target["id"]
+            await broadcast(room)
+            await websocket.send(json.dumps({"type": "info", "message": f"Host transferred to {target.get('username', 'player')}."}))
+
+        elif kind == "toggle_double_cash":
+            if room.get("host_id") != player["id"] and not is_authorized_admin(websocket, room, player):
+                continue
+            room["double_cash"] = not bool(room.get("double_cash"))
+            await broadcast(room)
+            await broadcast_public_tables()
 
         elif kind == "admin_data":
             await send_admin_data(websocket, room)
@@ -1884,6 +2081,64 @@ async def ws_handler(websocket):
                 account[owned_key] = sorted(set(account.get(owned_key, [])) | {item_id})
                 save_accounts()
                 await websocket.send(json.dumps({"type":"store","store":store_payload(account)}))
+                await send_admin_data(websocket, room)
+
+        elif kind == "admin_fun":
+            if not is_authorized_admin(websocket, room, player) or not room:
+                continue
+            action = str(msg.get("action", ""))
+            banner = None
+            if action == "double_cash":
+                room["double_cash"] = not bool(room.get("double_cash"))
+                banner = "2× CASH " + ("ON" if room["double_cash"] else "OFF")
+            elif action == "rain_money":
+                for p in active_players(room):
+                    p["money"] = int(p.get("money", 0)) + 500
+                    persist_player_money(p)
+                banner = "CHIP RAIN +$500"
+            elif action == "season_xp":
+                for p in active_players(room):
+                    acc = ACCOUNTS.get(p.get("username_key"))
+                    if acc:
+                        ensure_account_progress(acc)
+                        acc["season_xp"] = int(acc.get("season_xp", 0)) + 100
+                        add_xp(acc, 10)
+                save_accounts()
+                banner = "+100 SEASON XP"
+            elif action == "refill_shoe":
+                room["deck"] = fresh_shoe()
+                banner = "SHOE REFILLED"
+            elif action == "chaos_bets":
+                # Shorten or extend roulette bet window feel via table luck flag
+                room["chaos_bets"] = not bool(room.get("chaos_bets"))
+                banner = "CHAOS BETS " + ("ON" if room["chaos_bets"] else "OFF")
+            elif action == "force_zero":
+                room["force_next_number"] = 0
+                banner = "NEXT SPIN → 0"
+            elif action == "bias_red":
+                room["roulette_table_luck"] = {"strength": 80, "expires_at": time.time() + 120, "bias": "red"}
+                banner = "RED BIAS 2 MIN"
+            elif action == "clear_luck":
+                room["roulette_table_luck"] = {"strength": 0, "expires_at": 0}
+                room.pop("force_next_number", None)
+                room["lucky_players"] = {}
+                room["roulette_player_luck"] = {}
+                banner = "LUCK CLEARED"
+            if banner:
+                # Notify everyone at the table
+                note = json.dumps({"type": "info", "message": "ADMIN: " + banner})
+                for p in room.get("players", []):
+                    ws = p.get("ws")
+                    if ws:
+                        try:
+                            await ws.send(note)
+                        except Exception:
+                            pass
+                if room.get("game") == "roulette":
+                    await roulette_broadcast(room)
+                else:
+                    await broadcast(room)
+                await broadcast_public_tables()
                 await send_admin_data(websocket, room)
 
         elif kind == "admin_add_money":

@@ -37,48 +37,245 @@ let rouletteAnimationTimer = null;
 const ROULETTE_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 
 // ---------------------------------------------------------------------------
-// Audio — synthesized SFX (no asset files needed), same idea as the desktop build
+// Update Log — versioned changelog shown once per account after update
+// ---------------------------------------------------------------------------
+const UPDATE_LOG_VERSION = 1;
+const UPDATE_LOG_ENTRIES = [
+  {
+    icon: "♠",
+    title: "Blackjack tables refined",
+    body: "Roomier felt, clearer OPEN seats, and a shoe that always stays in view — play without the UI feeling squashed."
+  },
+  {
+    icon: "📓",
+    title: "Update Log",
+    body: "A notebook on the main menu tracks every release. Opens once after each update so you never miss what’s new."
+  },
+  {
+    icon: "🎩",
+    title: "Season 1 · 1927 pass",
+    body: "Art-deco season pass with golden rail progress. Reach a tier and a slide-in tells you to claim it from the main menu."
+  },
+  {
+    icon: "📱",
+    title: "Phone-ready slide-ins",
+    body: "Friend invites, lobby invites, and season level-ups slide in cleanly on mobile without covering the action."
+  },
+  {
+    icon: "✨",
+    title: "Logo polish",
+    body: "CASINO X glow stays on the title — no more light leaking across the lobby, and the name stays fully readable on phones."
+  }
+];
+
+function updateLogStorageKey() {
+  const u = (loggedUsername || localStorage.getItem("bj_username_hint") || "guest").toLowerCase();
+  return `cx_update_log_seen_v${UPDATE_LOG_VERSION}_${u}`;
+}
+
+function hasSeenUpdateLog() {
+  try { return localStorage.getItem(updateLogStorageKey()) === "1"; } catch (e) { return false; }
+}
+
+function markUpdateLogSeen() {
+  try { localStorage.setItem(updateLogStorageKey(), "1"); } catch (e) {}
+  const btn = $("#btn-update-log");
+  if (btn) btn.classList.add("seen");
+}
+
+function renderUpdateLogBody() {
+  const body = $("#update-log-body");
+  if (!body) return;
+  body.innerHTML = UPDATE_LOG_ENTRIES.map(e => `
+    <div class="ul-entry">
+      <div class="ul-illust" aria-hidden="true">${e.icon}</div>
+      <div>
+        <strong>${escapeHtml(e.title)}</strong>
+        <p>${escapeHtml(e.body)}</p>
+      </div>
+    </div>`).join("");
+  const ver = $("#update-log-version");
+  if (ver) ver.textContent = String(UPDATE_LOG_VERSION);
+  const badge = $("#update-log-badge");
+  if (badge) badge.textContent = String(UPDATE_LOG_VERSION);
+}
+
+function openUpdateLog(force) {
+  renderUpdateLogBody();
+  const ov = $("#update-log-overlay");
+  if (!ov) return;
+  ov.classList.add("open");
+  if (!force) markUpdateLogSeen();
+}
+
+function closeUpdateLog() {
+  $("#update-log-overlay")?.classList.remove("open");
+  markUpdateLogSeen();
+}
+
+function maybeShowUpdateLogAfterAuth() {
+  // Once per player per version: after login/signup (or resume) on main menu
+  if (hasSeenUpdateLog()) {
+    $("#btn-update-log")?.classList.add("seen");
+    return;
+  }
+  // slight delay so menu paints first
+  setTimeout(() => {
+    if (!hasSeenUpdateLog()) openUpdateLog(false);
+  }, 550);
+}
+
+// ---------------------------------------------------------------------------
+// Side notifications (season level, friend-style, invites)
+// ---------------------------------------------------------------------------
+function pushSideNotif({ icon = "✦", title, body, kind = "info", actions = [], ttl = 12000 }) {
+  const stack = $("#side-notif-stack");
+  if (!stack) return null;
+  const eln = document.createElement("div");
+  eln.className = "side-notif " + (kind || "");
+  const actionsHtml = (actions || []).map((a, i) =>
+    `<button type="button" class="btn ${a.primary ? "good" : "secondary"}" data-ni="${i}">${escapeHtml(a.label)}</button>`
+  ).join("");
+  eln.innerHTML = `
+    <div class="side-notif-icon">${icon}</div>
+    <div class="side-notif-copy"><strong>${escapeHtml(title || "")}</strong><span>${escapeHtml(body || "")}</span></div>
+    <div class="side-notif-actions">${actionsHtml || `<button type="button" class="btn secondary" data-ni="dismiss">OK</button>`}</div>`;
+  stack.appendChild(eln);
+  const dismiss = () => {
+    if (eln.classList.contains("leaving")) return;
+    eln.classList.add("leaving");
+    setTimeout(() => eln.remove(), 280);
+  };
+  eln.querySelectorAll("[data-ni]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = btn.getAttribute("data-ni");
+      if (idx === "dismiss") { dismiss(); return; }
+      const act = actions[Number(idx)];
+      try { act && act.onClick && act.onClick(); } catch (e) {}
+      dismiss();
+    });
+  });
+  if (ttl > 0) setTimeout(dismiss, ttl);
+  return eln;
+}
+
+function showSeasonLevelToast(level) {
+  pushSideNotif({
+    icon: "🎩",
+    kind: "season",
+    title: `You reached level ${level}`,
+    body: "Claim it in the main menu — open Season 1 for your pass rewards.",
+    actions: [
+      {
+        label: "CLAIM",
+        primary: true,
+        onClick: () => {
+          showMainMenu();
+          openProgress("#season-overlay");
+          send({ type: "season", token: authToken });
+        }
+      },
+      { label: "LATER", onClick: () => {} }
+    ],
+    ttl: 16000
+  });
+  play("blackjack");
+}
+
+let _lastSeasonTierUnlocked = null;
+function checkSeasonLevelUps(prevXp, nextPayload) {
+  if (!nextPayload) return;
+  const tiers = nextPayload.tiers || [];
+  const xp = Number(nextPayload.xp || 0);
+  const unlocked = tiers.filter(t => xp >= Number(t.xp || 0) && !t.claimed);
+  if (!unlocked.length) return;
+  // notify for the highest newly unlocked unclaimed tier
+  const top = unlocked[unlocked.length - 1];
+  const key = String(top.tier ?? top.level ?? top.xp);
+  if (_lastSeasonTierUnlocked === key) return;
+  // only toast if we crossed a threshold this session (or first load with unclaimed)
+  const prev = Number(prevXp);
+  if (!Number.isFinite(prev) || xp > prev) {
+    _lastSeasonTierUnlocked = key;
+    const levelLabel = top.tier ?? top.level ?? key;
+    showSeasonLevelToast(levelLabel);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Audio — synthesized SFX (no asset files needed)
 // ---------------------------------------------------------------------------
 const actx = new (window.AudioContext || window.webkitAudioContext)();
 
+function ensureAudio() {
+  if (actx.state === "suspended") {
+    actx.resume().catch(() => {});
+  }
+}
+
 function tone(freq, duration, kind = "sine", sweep = 0, vol = 0.5) {
-  if (actx.state === "suspended") actx.resume();
-  const t0 = actx.currentTime;
-  const osc = actx.createOscillator();
-  const gain = actx.createGain();
-  osc.type = kind;
-  osc.frequency.setValueAtTime(freq, t0);
-  if (sweep) osc.frequency.linearRampToValueAtTime(freq + sweep, t0 + duration);
-  gain.gain.setValueAtTime(vol * sfxVolume, t0);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-  osc.connect(gain).connect(actx.destination);
-  osc.start(t0);
-  osc.stop(t0 + duration + 0.02);
+  ensureAudio();
+  try {
+    const t0 = actx.currentTime;
+    const osc = actx.createOscillator();
+    const gain = actx.createGain();
+    osc.type = kind;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (sweep) osc.frequency.linearRampToValueAtTime(Math.max(40, freq + sweep), t0 + duration);
+    const v = Math.max(0.0001, vol * sfxVolume);
+    gain.gain.setValueAtTime(v, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain).connect(actx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.03);
+  } catch (e) { /* ignore */ }
+}
+
+function chord(notes, duration = 0.2, kind = "sine", vol = 0.25) {
+  notes.forEach((f, i) => setTimeout(() => tone(f, duration, kind, 0, vol), i * 30));
 }
 
 const SFX = {
-  click: () => tone(700, 0.06, "square", 0, 0.4),
-  hover: () => tone(500, 0.03, "sine", 0, 0.12),
-  chip: () => tone(900, 0.05, "sine", -200, 0.3),
-  deal: () => tone(320, 0.08, "sine", 180, 0.35),
-  flip: () => tone(500, 0.07, "sine", 150, 0.3),
-  hit: () => tone(420, 0.09, "triangle", 100, 0.32),
-  stand: () => tone(250, 0.12, "triangle", -40, 0.28),
-  blackjack: () => { tone(660, 0.16, "sine", 180, 0.42); setTimeout(() => tone(990, 0.28, "sine", 80, 0.35), 90); },
-  join: () => tone(560, 0.12, "sine", 160, 0.3),
-  leave: () => tone(300, 0.14, "sine", -100, 0.25),
-  win: () => { tone(660, 0.35, "sine", 220, 0.45); },
-  lose: () => tone(180, 0.4, "sine", -80, 0.45),
-  bust: () => tone(140, 0.35, "square", -60, 0.45),
-  push: () => tone(420, 0.2, "sine", 0, 0.3),
-  pity: () => { tone(500, 0.15, "sine", 100, 0.4); setTimeout(() => tone(700, 0.25, "sine", 150, 0.4), 120); },
+  click: () => { tone(820, 0.05, "square", -40, 0.28); tone(420, 0.04, "sine", 0, 0.12); },
+  hover: () => tone(640, 0.025, "sine", 30, 0.08),
+  chip: () => { tone(1100, 0.04, "triangle", -300, 0.28); tone(700, 0.06, "sine", -100, 0.15); },
+  deal: () => { tone(280, 0.07, "triangle", 200, 0.3); tone(480, 0.05, "sine", 0, 0.12); },
+  flip: () => tone(520, 0.06, "triangle", 180, 0.28),
+  hit: () => { tone(400, 0.08, "triangle", 120, 0.3); tone(260, 0.05, "sine", 0, 0.12); },
+  stand: () => tone(240, 0.12, "triangle", -30, 0.26),
+  blackjack: () => { chord([523, 659, 784, 1046], 0.18, "sine", 0.28); },
+  join: () => chord([440, 554, 659], 0.1, "sine", 0.22),
+  leave: () => tone(280, 0.14, "sine", -90, 0.22),
+  win: () => { chord([523, 659, 784], 0.22, "sine", 0.32); setTimeout(() => tone(1046, 0.35, "sine", 0, 0.28), 120); },
+  lose: () => { tone(200, 0.25, "sawtooth", -60, 0.22); tone(140, 0.35, "sine", -40, 0.3); },
+  bust: () => { tone(120, 0.3, "square", -40, 0.3); tone(90, 0.2, "sine", 0, 0.2); },
+  push: () => { tone(360, 0.12, "sine", 0, 0.22); tone(360, 0.12, "sine", 0, 0.15); },
+  pity: () => { tone(500, 0.12, "sine", 80, 0.3); setTimeout(() => tone(720, 0.2, "sine", 100, 0.28), 100); },
+  toggle: () => tone(900, 0.04, "square", -100, 0.2),
 };
 function play(name) {
   if (!soundEnabled || sfxVolume <= 0) return;
-  try { SFX[name] && SFX[name](); } catch (e) { /* audio may not be unlocked yet */ }
+  try { ensureAudio(); SFX[name] && SFX[name](); } catch (e) { /* audio may not be unlocked yet */ }
 }
-// unlock audio on first interaction (mobile browsers require a gesture)
-document.addEventListener("pointerdown", () => { if (actx.state === "suspended") actx.resume(); }, { once: true });
+// unlock audio on any user gesture (browsers block autoplay)
+["pointerdown", "keydown", "touchstart"].forEach(ev => {
+  document.addEventListener(ev, () => ensureAudio(), { passive: true });
+});
+// Hover + click SFX for interactive UI (delegated, low cost)
+let _lastHover = 0;
+document.addEventListener("pointerover", (e) => {
+  const t = e.target.closest?.(".btn, .icon-btn, .chip, .game-card, .toggle, .auth-tab, .seat-plus, .roulette-number, .roulette-bet");
+  if (!t) return;
+  const now = performance.now();
+  if (now - _lastHover < 40) return;
+  _lastHover = now;
+  play("hover");
+}, { passive: true });
+document.addEventListener("click", (e) => {
+  const t = e.target.closest?.(".btn, .icon-btn, .toggle, .auth-tab, .seat-plus");
+  if (t) play("click");
+}, { passive: true });
 
 // ---------------------------------------------------------------------------
 // Small DOM helpers
@@ -91,12 +288,50 @@ function el(tag, cls, text) {
   return e;
 }
 
+function clearTableClientState() {
+  myId = null;
+  myRoom = null;
+  lastState = null;
+  rouletteState = null;
+  isAdmin = false;
+  $("#settings-overlay")?.classList.remove("open");
+  $("#host-overlay")?.classList.remove("open");
+  $("#claim-overlay")?.classList.remove("open");
+  $("#admin-overlay")?.classList.remove("open");
+  $("#invite-toast")?.classList.add("hidden");
+  $("#friend-boost-hud")?.classList.add("hidden");
+  $("#double-cash-banner")?.remove();
+  $("#roulette-admin")?.classList.add("hidden");
+  $("#btn-admin-table")?.classList.add("hidden");
+  $("#btn-host")?.classList.add("hidden");
+  $("#roulette-host")?.classList.add("hidden");
+  // Clear any leftover seat DOM so re-entering doesn't flash old seats
+  const seats = $("#seats-row");
+  if (seats) seats.innerHTML = "";
+  const dealer = $("#dealer-hand");
+  if (dealer) dealer.innerHTML = "";
+  const dval = $("#dealer-value");
+  if (dval) dval.textContent = "";
+  toggleChat?.(false);
+}
+
 function showMainMenu() {
-  document.querySelector("#screen-join .auth-card").classList.add("main-menu-mode");
-  $("#auth-form").classList.add("hidden");
-  $("#room-form").classList.remove("hidden");
-  $("#room-error").textContent = "";
+  clearTableClientState();
+  document.querySelector("#screen-join .auth-card")?.classList.add("main-menu-mode");
+  $("#auth-form")?.classList.add("hidden");
+  $("#room-form")?.classList.remove("hidden");
+  $("#room-error") && ($("#room-error").textContent = "");
   showScreen("#screen-join");
+  // Mobile: always land at top so logo / name / XP are visible
+  requestAnimationFrame(() => {
+    const card = document.querySelector("#screen-join .auth-card.main-menu-mode");
+    if (card) card.scrollTop = 0;
+    const home = document.querySelector(".casino-home");
+    if (home) home.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  });
 }
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
@@ -377,9 +612,10 @@ requestAnimationFrame(stepParticles);
 
 function flash(kind) {
   const f = $("#flash");
+  if (!f) return;
   f.className = "";
   void f.offsetWidth; // restart animation
-  f.classList.add(kind);
+  f.classList.add(kind, "flash-" + kind);
 }
 function shakeTable() {
   const tw = $("#table-wrap");
@@ -451,6 +687,7 @@ function connect() {
       showMainMenu();
       if (msg.profile) updateProfileUI(msg.profile);
       localStorage.setItem("bj_username_hint", loggedUsername);
+      maybeShowUpdateLogAfterAuth();
       return;
     }
     if (msg.type === "session_invalid") {
@@ -480,11 +717,7 @@ function connect() {
       return;
     }
     if (msg.type === "table_invite") {
-      if (confirm(`${msg.from} invited you to table ${msg.room}. Join now?`)) {
-        $("#input-room").value = msg.room;
-        showScreen("#screen-lobby");
-        send({type:"join",token:authToken,room:msg.room});
-      }
+      showInviteToast(msg.from, msg.room, msg.game || "blackjack");
       return;
     }
     if (msg.type === "joined") {
@@ -511,15 +744,10 @@ function connect() {
       return;
     }
     if (msg.type === "left_table") {
-      myId = null; myRoom = null; lastState = null; isAdmin = false;
-      $("#settings-overlay").classList.remove("open");
-      $("#claim-overlay").classList.remove("open");
-      $("#admin-overlay").classList.remove("open");
-      $("#roulette-admin").classList.add("hidden");
-      $("#btn-admin-table").classList.add("hidden");
-      $("#btn-admin-float").classList.add("hidden");
-      $("#menu-balance").textContent = $("#balance-chip").textContent || "$0";
-      toggleChat(false);
+      const bal = $("#balance-chip")?.textContent || $("#menu-balance")?.textContent || "$0";
+      clearTableClientState();
+      $("#btn-admin-float")?.classList.add("hidden");
+      if ($("#menu-balance")) $("#menu-balance").textContent = bal;
       showMainMenu();
       play("leave");
       return;
@@ -534,6 +762,10 @@ function connect() {
       $("#balance-chip").textContent = "$" + msg.balance;
       $("#menu-balance").textContent = "$" + msg.balance;
       $("#roulette-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
+      return;
+    }
+    if (msg.type === "info") {
+      if (msg.message) centerBanner(String(msg.message).replace(/^ADMIN:\s*/i, ""), "win");
       return;
     }
     if (msg.type === "profile") {
@@ -572,17 +804,28 @@ function connect() {
         myProfile.cosmetics.deck = msg.store.decks?.find(x => x.equipped)?.id || myProfile.cosmetics.deck || "classic";
         myProfile.cosmetics.table = msg.store.tables?.find(x => x.equipped)?.id || myProfile.cosmetics.table || "classic";
         myProfile.cosmetics.ball = msg.store.balls?.find(x => x.equipped)?.id || myProfile.cosmetics.ball || "classic";
-        applyCosmeticTheme(myProfile.cosmetics.theme); applyGameCosmetics(myProfile.cosmetics);
+        applyCosmeticTheme(myProfile.cosmetics.theme);
+        applyGameCosmetics(myProfile.cosmetics);
       }
       if (msg.purchased) { play("win"); centerBanner("ITEM UNLOCKED", "win"); }
-      if (msg.equipped) play("chip");
+      if (msg.equipped) {
+        play("chip");
+        centerBanner("EQUIPPED", "win");
+        // Re-apply from profile payload path as well
+        if (myProfile?.cosmetics) {
+          applyCosmeticTheme(myProfile.cosmetics.theme);
+          applyGameCosmetics(myProfile.cosmetics);
+        }
+      }
       renderAppearance();
       return;
     }
     if (msg.type === "season") {
+      const _prevXp = seasonData ? Number(seasonData.xp || 0) : null;
       seasonData = msg.season || null;
       if (msg.profile) updateProfileUI(msg.profile);
       renderSeason();
+      checkSeasonLevelUps(_prevXp, seasonData);
       if (msg.claimedTier) { play("win"); centerBanner("SEASON REWARD CLAIMED", "win"); }
       return;
     }
@@ -655,6 +898,11 @@ function setAuthMode(mode) {
 // Rendering the authoritative state
 // ---------------------------------------------------------------------------
 function onState(state) {
+  // Ignore table updates if we've already left (prevents "ghost still seated" UI)
+  if (!myId && !myRoom) return;
+  if (!$("#screen-table")?.classList.contains("active") && !$("#screen-roulette")?.classList.contains("active")) {
+    return;
+  }
   const prev = lastState;
   lastState = state;
 
@@ -666,6 +914,20 @@ function onState(state) {
     applyGameCosmetics(me.cosmetics || myProfile?.cosmetics || {});
     $("#btn-admin-float").classList.add("hidden"); $("#btn-admin-table").classList.remove("hidden");
     $("#btn-host").classList.toggle("hidden", !me.isHost);
+    // Double cash indicator
+    let dcBanner = document.getElementById("double-cash-banner");
+    if (state.doubleCash) {
+      if (!dcBanner) {
+        dcBanner = document.createElement("div");
+        dcBanner.id = "double-cash-banner";
+        dcBanner.className = "double-cash-banner";
+        dcBanner.textContent = "2× CASH ACTIVE";
+        (document.querySelector(".felt-table") || document.querySelector("#screen-table") || document.body).appendChild(dcBanner);
+      }
+      dcBanner.style.display = "";
+    } else if (dcBanner) {
+      dcBanner.style.display = "none";
+    }
     if (me.canClaim && state.phase === "BETTING") {
       $("#claim-overlay").classList.add("open");
     } else if (!me.canClaim) {
@@ -766,30 +1028,97 @@ function handleResult(result) {
   if (table) setTimeout(() => table.classList.remove("result-kick-win","result-pain-loss","result-push"), 1200);
 }
 
+function avatarHTML(p) {
+  const letter = (p.username || p.name || "?").charAt(0).toUpperCase();
+  const color = p.avatarColor || p.avatar_color || "#6366f1";
+  if (p.avatar && String(p.avatar).startsWith("data:")) {
+    return `<div class="seat-avatar" style="background-image:url('${p.avatar}');background-size:cover;background-position:center"></div>`;
+  }
+  if (p.avatar && String(p.avatar).startsWith("preset:")) {
+    return `<div class="seat-avatar preset-${p.avatar.slice(7)}" style="background:${color}">${letter}</div>`;
+  }
+  return `<div class="seat-avatar" style="background:${color}">${letter}</div>`;
+}
+
 function renderSeats(state, prev) {
   const row = $("#seats-row");
+  if (!row) return;
   row.innerHTML = "";
-  for (const p of state.players) {
-    if (!p.connected) continue;
-    const seat = el("div", "seat" + (p.id === myId ? " me" : "") + (state.activePlayerId === p.id ? " active-turn" : ""));
+  const maxP = Math.max(2, Math.min(10, Number(state.maxPlayers) || 5));
+  const seated = (state.players || []).filter(p => p.connected && !p.spectator);
+  // Discord-style: evenly spaced along lower inner arc of the oval
+  for (let i = 0; i < maxP; i++) {
+    const t = maxP === 1 ? 0.5 : i / (maxP - 1); // 0..1 left → right
+    // Wide bottom arc inside the rail — extra vertical air so seats aren't squashed
+    const x = 14 + t * 72;
+    const y = 66 + Math.sin(t * Math.PI) * 8;
+    const p = seated[i];
+    const seat = el("div", "seat-slot" + (p ? (p.id === myId ? " me" : "") : " empty") + (p && state.activePlayerId === p.id ? " active-turn" : ""));
+    seat.style.left = x + "%";
+    seat.style.top = y + "%";
 
-    seat.appendChild(el("div", "seat-name", p.name + (p.id === myId ? " (you)" : "")));
-    seat.appendChild(el("div", "seat-money", "$" + p.money));
-    if (p.bet > 0) seat.appendChild(el("div", "seat-bet", "Bet $" + p.bet));
-
-    const handDiv = el("div", "seat-hand");
-    (p.hand || []).forEach((c) => handDiv.appendChild(buildCard(c, true)));
-    seat.appendChild(handDiv);
-
-    if (p.display) seat.appendChild(el("div", "seat-value", p.display));
-
-    if (p.result) {
-      const label = { win: "WIN", lose: "LOSE", push: "PUSH", bust: "BUST", blackjack: "BLACKJACK" }[p.result] || "";
-      const statusClass = p.result === "blackjack" ? "blackjack" : p.result;
-      seat.appendChild(el("div", "seat-status " + statusClass, label));
+    if (p) {
+      // Identity first (like Discord), cards above when dealt
+      const handDiv = el("div", "seat-hand");
+      (p.hand || []).forEach((c) => handDiv.appendChild(buildCard(c, true)));
+      if ((p.hand || []).length) seat.appendChild(handDiv);
+      if (p.display) seat.appendChild(el("div", "seat-value", p.display));
+      if (p.bet > 0) seat.appendChild(el("div", "seat-bet", "Bet $" + p.bet));
+      const identity = el("div", "seat-identity");
+      identity.innerHTML = avatarHTML(p);
+      identity.appendChild(el("div", "seat-name", p.name + (p.id === myId ? " (you)" : "")));
+      identity.appendChild(el("div", "seat-money", "$" + Number(p.money).toLocaleString()));
+      seat.appendChild(identity);
+      if (p.result) {
+        const label = { win: "WIN", lose: "LOSE", push: "PUSH", bust: "BUST", blackjack: "BLACKJACK" }[p.result] || "";
+        const statusClass = p.result === "blackjack" ? "blackjack" : p.result;
+        seat.appendChild(el("div", "seat-status " + statusClass, label));
+      }
+    } else {
+      // Empty seat: dashed + with OPEN under it
+      const plus = el("button", "seat-plus", "+");
+      plus.title = "Invite a friend";
+      wireButton(plus, () => openSeatInvite());
+      seat.appendChild(plus);
+      seat.appendChild(el("div", "seat-open-label", "OPEN"));
     }
-
     row.appendChild(seat);
+  }
+
+  // Friend boost HUD
+  updateFriendBoostHUD(state);
+}
+
+function openSeatInvite() {
+  // Prefer friends overlay for invite; if at table, prompt username of friend
+  const friends = myProfile?.friends || friendsData || [];
+  if (!friends.length) {
+    centerBanner("ADD FRIENDS FIRST", "lose");
+    openProgress("#friends-overlay");
+    send({ type: "friends", token: authToken });
+    return;
+  }
+  const names = friends.map(f => f.username).join(", ");
+  const pick = prompt("Invite which friend?\n\nYour friends: " + names);
+  if (!pick) return;
+  send({ type: "invite_friend", token: authToken, username: pick.trim() });
+}
+
+function updateFriendBoostHUD(state) {
+  const hud = $("#friend-boost-hud");
+  if (!hud || !state) return;
+  const me = (state.players || []).find(p => p.id === myId);
+  const friends = new Set((myProfile?.friends || []).map(f => f.username?.toLowerCase()));
+  let count = 0;
+  (state.players || []).forEach(p => {
+    if (p.id !== myId && p.connected && !p.spectator && friends.has((p.username || p.name || "").toLowerCase())) count++;
+  });
+  const pct = Math.min(25, count * 5);
+  if (count > 0) {
+    hud.classList.remove("hidden");
+    $("#friend-boost-text").textContent = `FRIEND BOOST +${pct}% (${count} friend${count > 1 ? "s" : ""})`;
+  } else {
+    hud.classList.add("hidden");
   }
 }
 
@@ -797,18 +1126,41 @@ function renderSeats(state, prev) {
 function renderHostList() {
   if (!lastState) return;
   const box = $("#host-list");
+  if (!box) return;
   box.innerHTML = "";
+  const dc = $("#toggle-double-cash");
+  if (dc) dc.classList.toggle("on", !!lastState.doubleCash);
   lastState.players.forEach((p) => {
+    if (p.spectator) return;
     const row = el("div", "host-player");
     row.appendChild(el("span", null, p.username || p.name));
-    if (p.id === myId) row.appendChild(el("span", null, "HOST"));
-    else {
-      const b = el("button", "kick-btn", "KICK");
-      wireButton(b, () => send({ type: "kick", targetId: p.id }));
-      row.appendChild(b);
+    if (p.id === myId || p.isHost) {
+      row.appendChild(el("span", "host-badge", "HOST"));
+    } else {
+      const actions = el("div", "host-actions");
+      const transferBtn = el("button", "btn secondary kick-btn", "MAKE HOST");
+      wireButton(transferBtn, () => {
+        if (confirm("Transfer host to " + (p.username || p.name) + "?")) {
+          send({ type: "transfer_host", targetId: p.id });
+          $("#host-overlay").classList.remove("open");
+        }
+      });
+      const kickBtn = el("button", "kick-btn", "KICK");
+      wireButton(kickBtn, () => {
+        if (confirm("Kick " + (p.username || p.name) + "?")) {
+          send({ type: "kick", targetId: p.id });
+        }
+      });
+      actions.appendChild(transferBtn);
+      actions.appendChild(kickBtn);
+      row.appendChild(actions);
     }
     box.appendChild(row);
   });
+}
+function openHostPanel() {
+  renderHostList();
+  $("#host-overlay")?.classList.add("open");
 }
 
 function renderAdminUsers(users, tablePlayers = [], previewActive = false, preview = null, tableLuck = null) {
@@ -881,8 +1233,10 @@ function renderAdminUsers(users, tablePlayers = [], previewActive = false, previ
 function updateProfileUI(profile) {
   if (!profile) return;
   myProfile = profile;
-  if(profile.season) { seasonData = profile.season; applySeasonTheme(); }
+  if(profile.season) { const _prevXp = seasonData ? Number(seasonData.xp||0) : null; seasonData = profile.season; applySeasonTheme(); checkSeasonLevelUps(_prevXp, seasonData); }
+  applyCosmeticTheme(profile.cosmetics?.theme || "classic");
   applyGameCosmetics(profile.cosmetics || {});
+  refreshAvatarPreview();
   $("#menu-balance").textContent = "$" + Number(profile.balance || 0).toLocaleString();
   $("#menu-level").textContent = `LEVEL ${profile.level || 1} • ${(profile.levelTitle || "Rookie").toUpperCase()}`;
   $("#menu-xp").textContent = `${Number(profile.xp || 0).toLocaleString()} XP`;
@@ -916,10 +1270,33 @@ function renderLeaderboard() {
   if (!leaderboardData) return;
   const rows = leaderboardData[activeRank] || [];
   $("#leaderboard-list").innerHTML = rows.length ? rows.map((r,i) => {
+    const podium = i === 0 ? "gold" : i === 1 ? "silver" : i === 2 ? "bronze" : "";
+    const trophy = i < 3 ? "🏆" : "";
     const medal = i < 3 ? ["🥇","🥈","🥉"][i] : `#${i+1}`;
     const me = r.username.toLowerCase() === (loggedUsername || "").toLowerCase();
-    return `<div class="rank-row ${me ? "me" : ""}"><span class="rank-place">${medal}</span><div class="rank-name"><strong>${r.username}</strong><small>Lv ${r.level} • ${r.levelTitle}</small></div><strong>${rankValue(r, activeRank)}</strong></div>`;
+    return `<div class="rank-row ${me ? "me" : ""} ${podium}"><span class="rank-place">${medal}</span><div class="rank-name"><strong>${trophy} ${escapeHtml(r.username)}</strong><small>Lv ${r.level} • ${escapeHtml(r.levelTitle||"")}</small></div><strong>${rankValue(r, activeRank)}</strong></div>`;
   }).join("") : '<div class="admin-empty">No players yet.</div>';
+}
+
+function showInviteToast(from, room, game) {
+  const toast = $("#invite-toast");
+  if (!toast) {
+    if (confirm(`${from} invited you to ${game} table ${room}. Join?`)) {
+      send({ type: "join", token: authToken, room, game });
+    }
+    return;
+  }
+  $("#invite-from").textContent = from;
+  $("#invite-room").textContent = room;
+  toast.dataset.room = room;
+  toast.dataset.game = game || "blackjack";
+  // Restart glow/particle entrance from bottom-right
+  toast.classList.add("hidden");
+  void toast.offsetWidth;
+  toast.classList.remove("hidden");
+  play("join");
+  clearTimeout(window._inviteTimer);
+  window._inviteTimer = setTimeout(() => toast.classList.add("hidden"), 45000);
 }
 
 function renderAchievements(defs, earned, fresh) {
@@ -944,8 +1321,42 @@ function renderDaily(claimed, challenges) {
   $("#challenge-list").innerHTML = challenges.length ? challenges.map(c => `<div class="challenge ${c.complete ? "complete" : ""}"><div><strong>${c.title}</strong><span>${c.desc}</span></div><div class="challenge-right"><b>${c.progress}/${c.target}</b><small>+${c.reward} chips</small></div></div>`).join("") : '<div class="admin-empty">No challenges today.</div>';
 }
 
-function applyCosmeticTheme(theme){const t=theme||"classic";document.documentElement.setAttribute("data-cosmetic-theme",t);document.body.dataset.cosmeticTheme=t;if(myProfile){myProfile.cosmetics=myProfile.cosmetics||{};myProfile.cosmetics.theme=t;}applySeasonTheme();}
-function applyGameCosmetics(c={}){document.documentElement.setAttribute("data-casino-chip",c.chip||"classic");document.documentElement.setAttribute("data-blackjack-deck",c.deck||"classic");document.documentElement.setAttribute("data-table-skin",c.table||"classic");document.documentElement.setAttribute("data-roulette-ball",c.ball||"classic");if(myProfile)myProfile.cosmetics={...(myProfile.cosmetics||{}),...c};}
+function applyCosmeticTheme(theme){
+  const t = theme || "classic";
+  const root = document.documentElement;
+  // Clear previous theme-* classes
+  root.classList.forEach(cls => { if (cls.startsWith("theme-")) root.classList.remove(cls); });
+  root.setAttribute("data-cosmetic-theme", t);
+  root.classList.add("theme-" + t);
+  document.body.dataset.cosmeticTheme = t;
+  if (myProfile) {
+    myProfile.cosmetics = myProfile.cosmetics || {};
+    myProfile.cosmetics.theme = t;
+  }
+  applySeasonTheme();
+}
+function applyGameCosmetics(c = {}) {
+  const chip = c.chip || "classic";
+  const deck = c.deck || "classic";
+  const table = c.table || "classic";
+  const ball = c.ball || "classic";
+  const root = document.documentElement;
+  root.setAttribute("data-casino-chip", chip);
+  root.setAttribute("data-blackjack-deck", deck);
+  root.setAttribute("data-table-skin", table);
+  root.setAttribute("data-roulette-ball", ball);
+  // Also mirror onto body for any descendant-only selectors
+  document.body.setAttribute("data-casino-chip", chip);
+  document.body.setAttribute("data-blackjack-deck", deck);
+  document.body.setAttribute("data-table-skin", table);
+  document.body.setAttribute("data-roulette-ball", ball);
+  if (myProfile) {
+    myProfile.cosmetics = { ...(myProfile.cosmetics || {}), ...c, chip, deck, table, ball };
+  }
+  // Force a tiny style recalc so chip/deck/table skins paint immediately
+  document.body.style.opacity = "0.999";
+  requestAnimationFrame(() => { document.body.style.opacity = ""; });
+}
 function applySeasonTheme(){
   const enabled = localStorage.getItem("bj_seasonal_ui") !== "0";
   const active = !!(seasonData?.season?.active===true && seasonData?.season?.theme==="casino1927");
@@ -1038,7 +1449,10 @@ function renderProfileFriends(){
 }
 function renderFriends(){
   const box=$("#friends-list"); if(!box) return;
-  box.innerHTML = friendsData.length ? friendsData.map(f=>`<div class="friend-row"><span class="online-dot ${f.online?'online':''}"></span><strong>${escapeHtml(f.username)}</strong><small>Lv ${f.level} • ${f.online?'ONLINE':'OFFLINE'}</small><button class="btn secondary friend-invite" data-user="${escapeAttr(f.username)}">INVITE</button><button class="btn secondary friend-remove" data-user="${escapeAttr(f.username)}">REMOVE</button></div>`).join("") : '<div class="admin-empty">No friends yet. Add someone by username.</div>';
+  box.innerHTML = friendsData.length ? friendsData.map(f=>{
+    const loc = f.location ? `${(f.location.game||'').toUpperCase()} ${f.location.room}` : (f.online ? "ONLINE" : "OFFLINE");
+    return `<div class="friend-row"><span class="online-dot ${f.online?'online':''}"></span><div class="friend-meta"><strong>${escapeHtml(f.username)}</strong><small>Lv ${f.level} • ${escapeHtml(loc)}</small></div><button class="btn secondary friend-invite" data-user="${escapeAttr(f.username)}">INVITE</button><button class="btn secondary friend-remove" data-user="${escapeAttr(f.username)}">REMOVE</button></div>`;
+  }).join("") : '<div class="admin-empty">No friends yet. Add someone by username.</div>';
   box.querySelectorAll('.friend-remove').forEach(b=>wireButton(b,()=>send({type:'remove_friend',token:authToken,username:b.dataset.user})));
   box.querySelectorAll('.friend-invite').forEach(b=>wireButton(b,()=>send({type:'invite_friend',token:authToken,username:b.dataset.user})));
 }
@@ -1063,6 +1477,7 @@ function buildRouletteNumbers(){
   box.innerHTML="";
   for(let n=1;n<=36;n++){
     const b=el("button","roulette-number",String(n));
+    b.dataset.n = String(n);
     b.classList.add(ROULETTE_RED_SET.has(n)?"red":"black");
     wireButton(b,()=>placeRouletteBet("straight",n));
     box.appendChild(b);
@@ -1076,7 +1491,52 @@ function placeRouletteBet(type,value=null){
   if(!rouletteState || rouletteState.phase!=="BETTING") return;
   send({type:"roulette_bet",token:authToken,betType:type,value,amount:rouletteBetAmount});
 }
-function animateRouletteResult(number){const wheel=$("#roulette-wheel"),ball=$("#roulette-ball");if(!wheel)return;if(rouletteAnimationTimer)clearTimeout(rouletteAnimationTimer);const idx=Math.max(0,ROULETTE_ORDER.indexOf(Number(number))),rotations=7*360+idx*(360/37);if(ball){ball.style.setProperty("--ball-rotation",rotations+"deg");ball.classList.remove("ball-spinning");void ball.offsetWidth;ball.classList.add("ball-spinning");}wheel.classList.remove("wheel-live");rouletteAnimationTimer=setTimeout(()=>{ball?.classList.remove("ball-spinning");wheel.classList.remove("wheel-live")},6000);}
+function animateRouletteResult(number) {
+  const wheel = $("#roulette-wheel");
+  const ball = $("#roulette-ball");
+  const panel = document.querySelector(".roulette-wheel-wrap");
+  if (!wheel) return;
+  if (rouletteAnimationTimer) clearTimeout(rouletteAnimationTimer);
+
+  const n = Number(number);
+  const idx = Math.max(0, ROULETTE_ORDER.indexOf(n));
+  const slotAngle = 360 / 37;
+  // Ball ends at the winning pocket under the top pointer
+  const endDeg = 5 * 360 + (360 - idx * slotAngle);
+  // Wheel spins opposite direction a bit for depth
+  const wheelEnd = -(3 * 360 + idx * slotAngle * 0.3);
+
+  wheel.classList.remove("spinning");
+  ball?.classList.remove("ball-spinning");
+  void wheel.offsetWidth;
+
+  wheel.style.transform = `rotate(${wheelEnd}deg)`;
+  wheel.classList.add("spinning");
+  if (ball) {
+    ball.style.setProperty("--ball-end", endDeg + "deg");
+    void ball.offsetWidth;
+    ball.classList.add("ball-spinning");
+  }
+  play("deal");
+
+  rouletteAnimationTimer = setTimeout(() => {
+    ball?.classList.remove("ball-spinning");
+    wheel.classList.remove("spinning");
+    // Snap ball to final position
+    if (ball) ball.style.transform = `rotate(${endDeg}deg) translateY(-92px)`;
+    // Result banner on wheel
+    if (panel) {
+      const color = n === 0 ? "green" : ROULETTE_RED_SET.has(n) ? "red" : "black";
+      const old = panel.querySelector(".roulette-result-flash");
+      if (old) old.remove();
+      const flash = el("div", "roulette-result-flash " + color, String(n));
+      panel.appendChild(flash);
+      if (color === "green" || color === "red") play("win");
+      else play("chip");
+      setTimeout(() => flash.remove(), 2200);
+    }
+  }, 5600);
+}
 function renderRouletteState(state){
   rouletteState=state; if(!state) return;
   $("#roulette-room-chip").textContent="ROULETTE " + state.code;
@@ -1086,7 +1546,8 @@ function renderRouletteState(state){
   $("#roulette-seat-info").textContent=me ? `YOUR BETS: $${total.toLocaleString()}` : "PLACE A BET TO JOIN THE ROUND";
   $("#roulette-total-bets").textContent="$"+total.toLocaleString();
   $("#roulette-balance-meta").textContent=$("#roulette-balance").textContent;
-  $("#roulette-player-count").textContent=`${state.players?.length||0}/5`;
+  const maxP = state.maxPlayers || 5;
+  $("#roulette-player-count").textContent=`${state.players?.length||0}/${maxP}` + (state.doubleCash ? " • 2×" : "");
   $("#roulette-status").textContent=state.phase;
   $("#roulette-round-state").textContent=state.phase;
   const r=state.lastResult;
@@ -1097,11 +1558,53 @@ function renderRouletteState(state){
   const host=(state.players||[]).find(x=>x.id===myId)?.isHost;
   $("#roulette-host").classList.toggle("hidden",!host);
   $("#roulette-admin").classList.toggle("hidden",!isAdmin);
-  if(r && state.phase==='RESULT'){
-    animateRouletteResult(r.number);
-    const history=$("#roulette-history");
-    if(history && !history.dataset.lastTs || history?.dataset.lastTs !== String(r.ts)){
-      if(history){ history.dataset.lastTs=String(r.ts); const chip=el("span","history-number",String(r.number)); chip.classList.add(r.number===0?"green":r.color); history.prepend(chip); while(history.children.length>12) history.lastElementChild.remove(); }
+
+  // Show player bet markers on board spots
+  document.querySelectorAll(".bet-stack").forEach(s => s.remove());
+  const board = state.boardBets || [];
+  board.forEach(b => {
+    let target = null;
+    if (b.type === "straight") {
+      if (Number(b.value) === 0) target = $("#roulette-zero-bet");
+      else target = document.querySelector(`.roulette-number[data-n="${b.value}"]`) ||
+        [...document.querySelectorAll(".roulette-number")].find(el => el.textContent.trim() === String(b.value));
+    } else {
+      target = document.querySelector(`.roulette-bet[data-bet="${b.type}"]`) ||
+        document.querySelector(`[data-bet="${b.type}"]`);
+    }
+    if (!target) return;
+    let stack = target.querySelector(".bet-stack");
+    if (!stack) {
+      stack = el("div", "bet-stack");
+      target.appendChild(stack);
+    }
+    const av = el("div", "bet-avatar", b.letter || "?");
+    av.style.background = b.color || "#6366f1";
+    av.title = `${b.username}: $${b.amount}`;
+    stack.appendChild(av);
+  });
+
+  if (state.phase === "SPINNING" || (r && state.phase === "RESULT")) {
+    if (r && state.phase === "RESULT") {
+      if (!window._lastRouletteAnimTs || window._lastRouletteAnimTs !== r.ts) {
+        window._lastRouletteAnimTs = r.ts;
+        animateRouletteResult(r.number);
+        // Win/loss feedback for me
+        if (me && me.total > 0) {
+          // rough: if we had bets, celebrate on result screen
+          setTimeout(() => {
+            centerBanner(`RESULT ${r.number} ${String(r.color).toUpperCase()}`, r.number === 0 ? "win" : (r.color === "red" ? "win" : "push"));
+          }, 5600);
+        }
+      }
+      const history = $("#roulette-history");
+      if (history && history.dataset.lastTs !== String(r.ts)) {
+        history.dataset.lastTs = String(r.ts);
+        const chip = el("span", "history-number", String(r.number));
+        chip.classList.add(r.number === 0 ? "green" : r.color);
+        history.prepend(chip);
+        while (history.children.length > 12) history.lastElementChild.remove();
+      }
     }
   }
 }
@@ -1109,21 +1612,42 @@ function renderRouletteState(state){
 function renderRouletteHostList(){
   const box=$("#host-list"); if(!box || !rouletteState) return;
   box.innerHTML="";
+  const dc = $("#toggle-double-cash");
+  if (dc) dc.classList.toggle("on", !!rouletteState.doubleCash);
   (rouletteState.players||[]).forEach(p=>{
     const row=el("div","host-player");
     row.appendChild(el("span",null,p.username+(p.id===myId?" (you)":"")));
-    if(p.id===myId) row.appendChild(el("span",null,"HOST"));
+    if(p.id===myId || p.isHost) row.appendChild(el("span","host-badge","HOST"));
     else {
-      const b=el("button","kick-btn","KICK");
-      wireButton(b,()=>send({type:"kick",targetId:p.id}));
-      row.appendChild(b);
+      const actions=el("div","host-actions");
+      const transferBtn=el("button","btn secondary kick-btn","MAKE HOST");
+      wireButton(transferBtn,()=>{ if(confirm("Transfer host to "+p.username+"?")){ send({type:"transfer_host",targetId:p.id}); $("#host-overlay").classList.remove("open"); }});
+      const kickBtn=el("button","kick-btn","KICK");
+      wireButton(kickBtn,()=>{ if(confirm("Kick "+p.username+"?")) send({type:"kick",targetId:p.id}); });
+      actions.appendChild(transferBtn); actions.appendChild(kickBtn);
+      row.appendChild(actions);
     }
     box.appendChild(row);
   });
 }
 
-function openRouletteLobby(){ currentGame="roulette"; $("#roulette-room-error").textContent=""; showScreen("#screen-roulette-lobby"); send({type:"public_tables",game:"roulette"}); }
-function openBlackjackLobby(){ currentGame="blackjack"; $("#room-error").textContent=""; showScreen("#screen-lobby"); send({type:"public_tables",game:"blackjack"}); }
+function openRouletteLobby(){
+  // If still seated, leave first so server doesn't keep a ghost seat
+  if (myId || myRoom) send({ type: "leave_table" });
+  clearTableClientState();
+  currentGame = "roulette";
+  $("#roulette-room-error") && ($("#roulette-room-error").textContent = "");
+  showScreen("#screen-roulette-lobby");
+  send({ type: "public_tables", game: "roulette" });
+}
+function openBlackjackLobby(){
+  if (myId || myRoom) send({ type: "leave_table" });
+  clearTableClientState();
+  currentGame = "blackjack";
+  $("#room-error") && ($("#room-error").textContent = "");
+  showScreen("#screen-lobby");
+  send({ type: "public_tables", game: "blackjack" });
+}
 
 function appendChat(username,text){
   if(chatMuted) return;
@@ -1161,7 +1685,215 @@ function applyScale(v) {
   $("#slider-scale").value = uiScale;
   localStorage.setItem("bj_scale", String(uiScale));
 }
-function applyMobileMode(enabled){const on=!!enabled;document.documentElement.setAttribute("data-mobile",on?"1":"0");$("#toggle-mobile")?.classList.toggle("on",on);localStorage.setItem("bj_mobile",on?"1":"0");}
+function applyQuality(level) {
+  const labels = ["Low", "Medium", "High"];
+  const v = Math.max(0, Math.min(2, Number(level) || 2));
+  document.documentElement.setAttribute("data-quality", String(v));
+  const lbl = $("#quality-label");
+  if (lbl) lbl.textContent = labels[v] || "High";
+  const slider = $("#slider-quality");
+  if (slider) slider.value = v;
+  localStorage.setItem("bj_quality", String(v));
+  document.documentElement.classList.toggle("opt-low", v === 0);
+  document.documentElement.classList.toggle("opt-medium", v === 1);
+  document.documentElement.classList.toggle("opt-high", v === 2);
+}
+
+function applyMobileMode(enabled) {
+  const on = !!enabled;
+  document.documentElement.setAttribute("data-mobile", on ? "1" : "0");
+  $("#toggle-mobile")?.classList.toggle("on", on);
+  $("#toggle-mobile-auth")?.classList.toggle("on", on);
+  localStorage.setItem("bj_mobile", on ? "1" : "0");
+}
+
+function syncFullscreenToggle() {
+  const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  $("#toggle-fullscreen")?.classList.toggle("on", on);
+}
+
+async function applyFullscreen(enabled) {
+  try {
+    if (enabled) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (document.exitFullscreen) await document.exitFullscreen();
+      else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+    }
+  } catch (e) { /* denied / unsupported */ }
+  syncFullscreenToggle();
+}
+
+const AVATAR_PRESETS = [
+  { id: "fox", color: "#f59e0b" },
+  { id: "wolf", color: "#64748b" },
+  { id: "dragon", color: "#ef4444" },
+  { id: "cat", color: "#ec4899" },
+  { id: "dice", color: "#8b5cf6" },
+  { id: "suit", color: "#14b8a6" },
+];
+
+function refreshAvatarPreview() {
+  const prev = $("#avatar-preview");
+  if (!prev) return;
+  const letter = (loggedUsername || myProfile?.username || "?").charAt(0).toUpperCase();
+  const color = myProfile?.avatarColor || "#6366f1";
+  const av = myProfile?.avatar;
+  if (av && String(av).startsWith("data:")) {
+    prev.style.backgroundImage = `url(${av})`;
+    prev.style.backgroundSize = "cover";
+    prev.textContent = "";
+  } else {
+    prev.style.backgroundImage = "";
+    prev.style.background = color;
+    prev.textContent = letter;
+  }
+}
+
+let avatarCrop = { img: null, scale: 1, x: 0, y: 0, dragging: false, lastX: 0, lastY: 0 };
+
+function openAvatarCrop(dataUrl) {
+  const modal = $("#avatar-crop-modal");
+  const img = $("#avatar-crop-img");
+  const stage = $("#avatar-crop-stage");
+  const zoom = $("#avatar-crop-zoom");
+  if (!modal || !img || !stage) return;
+  img.onload = () => {
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    avatarCrop.scale = stage.clientWidth / side;
+    avatarCrop.x = (stage.clientWidth - img.naturalWidth * avatarCrop.scale) / 2;
+    avatarCrop.y = (stage.clientHeight - img.naturalHeight * avatarCrop.scale) / 2;
+    zoom.value = 100;
+    applyAvatarCropTransform();
+  };
+  img.src = dataUrl;
+  avatarCrop.img = dataUrl;
+  modal.classList.remove("hidden");
+}
+
+function applyAvatarCropTransform() {
+  const img = $("#avatar-crop-img");
+  if (!img) return;
+  const z = (parseInt($("#avatar-crop-zoom")?.value || "100", 10) / 100);
+  const s = avatarCrop.scale * z;
+  img.style.width = (img.naturalWidth * s) + "px";
+  img.style.height = (img.naturalHeight * s) + "px";
+  img.style.left = avatarCrop.x + "px";
+  img.style.top = avatarCrop.y + "px";
+}
+
+function exportAvatarCrop() {
+  const stage = $("#avatar-crop-stage");
+  const img = $("#avatar-crop-img");
+  if (!stage || !img) return null;
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const z = (parseInt($("#avatar-crop-zoom")?.value || "100", 10) / 100);
+  const s = avatarCrop.scale * z;
+  // Draw circular crop of the visible stage area
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  const scaleToCanvas = size / stage.clientWidth;
+  ctx.drawImage(
+    img,
+    avatarCrop.x * scaleToCanvas,
+    avatarCrop.y * scaleToCanvas,
+    img.naturalWidth * s * scaleToCanvas,
+    img.naturalHeight * s * scaleToCanvas
+  );
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+function initAvatarEditor() {
+  const presets = $("#avatar-presets");
+  if (presets && !presets.dataset.ready) {
+    presets.dataset.ready = "1";
+    presets.innerHTML = AVATAR_PRESETS.map(p =>
+      `<button type="button" class="avatar-preset" data-preset="${p.id}" data-color="${p.color}" style="background:${p.color}" title="${p.id}">${p.id.charAt(0).toUpperCase()}</button>`
+    ).join("");
+    presets.querySelectorAll(".avatar-preset").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        play("click");
+        send({ type: "set_avatar", token: authToken, avatar: "preset:" + btn.dataset.preset, color: btn.dataset.color });
+      });
+    });
+  }
+  const upload = $("#avatar-upload");
+  if (upload && !upload.dataset.ready) {
+    upload.dataset.ready = "1";
+    upload.addEventListener("change", () => {
+      const file = upload.files?.[0];
+      if (!file) return;
+      if (file.size > 2_500_000) { centerBanner("IMAGE TOO LARGE", "lose"); return; }
+      const reader = new FileReader();
+      reader.onload = () => openAvatarCrop(reader.result);
+      reader.readAsDataURL(file);
+      upload.value = "";
+    });
+  }
+  const resetBtn = $("#btn-avatar-reset");
+  if (resetBtn && !resetBtn.dataset.ready) {
+    resetBtn.dataset.ready = "1";
+    resetBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      play("click");
+      send({ type: "set_avatar", token: authToken, avatar: "reset" });
+    });
+  }
+
+  // Crop modal interactions
+  const stage = $("#avatar-crop-stage");
+  const zoom = $("#avatar-crop-zoom");
+  if (stage && !stage.dataset.ready) {
+    stage.dataset.ready = "1";
+    const onDown = (e) => {
+      avatarCrop.dragging = true;
+      avatarCrop.lastX = e.clientX ?? e.touches?.[0]?.clientX;
+      avatarCrop.lastY = e.clientY ?? e.touches?.[0]?.clientY;
+    };
+    const onMove = (e) => {
+      if (!avatarCrop.dragging) return;
+      const cx = e.clientX ?? e.touches?.[0]?.clientX;
+      const cy = e.clientY ?? e.touches?.[0]?.clientY;
+      avatarCrop.x += cx - avatarCrop.lastX;
+      avatarCrop.y += cy - avatarCrop.lastY;
+      avatarCrop.lastX = cx;
+      avatarCrop.lastY = cy;
+      applyAvatarCropTransform();
+    };
+    const onUp = () => { avatarCrop.dragging = false; };
+    stage.addEventListener("pointerdown", onDown);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+  if (zoom && !zoom.dataset.ready) {
+    zoom.dataset.ready = "1";
+    zoom.addEventListener("input", applyAvatarCropTransform);
+  }
+  const applyBtn = $("#avatar-crop-apply");
+  const cancelBtn = $("#avatar-crop-cancel");
+  if (applyBtn && !applyBtn.dataset.ready) {
+    applyBtn.dataset.ready = "1";
+    applyBtn.addEventListener("click", () => {
+      const data = exportAvatarCrop();
+      if (data) send({ type: "set_avatar", token: authToken, avatar: data });
+      $("#avatar-crop-modal")?.classList.add("hidden");
+      play("chip");
+    });
+  }
+  if (cancelBtn && !cancelBtn.dataset.ready) {
+    cancelBtn.dataset.ready = "1";
+    cancelBtn.addEventListener("click", () => $("#avatar-crop-modal")?.classList.add("hidden"));
+  }
+}
 
 function initSettings() {
   const savedDark = localStorage.getItem("bj_dark") === "1";
@@ -1170,21 +1902,62 @@ function initSettings() {
   applySound(savedSound);
   const savedVol = parseInt(localStorage.getItem("bj_volume") || "60", 10);
   applyVolume(savedVol);
-  const savedScale=parseInt(localStorage.getItem("bj_scale")||"100",10); applyScale(savedScale); applyMobileMode(localStorage.getItem("bj_mobile")==="1");
+  const savedScale = parseInt(localStorage.getItem("bj_scale") || "100", 10);
+  applyScale(savedScale);
+  // Mobile mode: remember preference (default off until user turns on)
+  applyMobileMode(localStorage.getItem("bj_mobile") === "1");
+  const savedQuality = parseInt(localStorage.getItem("bj_quality") || "2", 10);
+  applyQuality(savedQuality);
   applySeasonTheme();
 
   $("#toggle-sound").addEventListener("click", () => {
-    applySound(!soundEnabled); play("click");
+    applySound(!soundEnabled); play("toggle");
   });
-  $("#toggle-dark").addEventListener("click",()=>{play("click");applyTheme(!(document.documentElement.getAttribute("data-theme")==="dark"));});
-  $("#toggle-mobile").addEventListener("click",()=>{play("click");applyMobileMode(!(document.documentElement.getAttribute("data-mobile")==="1"));});
-  $("#toggle-seasonal-ui").addEventListener("click",()=>{play("click");applySeasonalUI(!(localStorage.getItem("bj_seasonal_ui") !== "0"));});
+  $("#toggle-dark").addEventListener("click",()=>{play("toggle");applyTheme(!(document.documentElement.getAttribute("data-theme")==="dark"));});
+  $("#toggle-mobile")?.addEventListener("click",()=>{play("toggle");applyMobileMode(!(document.documentElement.getAttribute("data-mobile")==="1"));});
+  $("#toggle-mobile-auth")?.addEventListener("click",()=>{play("toggle");applyMobileMode(!(document.documentElement.getAttribute("data-mobile")==="1"));});
+  $("#toggle-fullscreen")?.addEventListener("click",()=>{
+    play("toggle");
+    const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    applyFullscreen(!on);
+  });
+  document.addEventListener("fullscreenchange", syncFullscreenToggle);
+  document.addEventListener("webkitfullscreenchange", syncFullscreenToggle);
+  $("#toggle-seasonal-ui").addEventListener("click",()=>{play("toggle");applySeasonalUI(!(localStorage.getItem("bj_seasonal_ui") !== "0"));});
   $("#slider-volume").addEventListener("input", (e) => applyVolume(parseInt(e.target.value, 10)));
   $("#slider-scale").addEventListener("input", (e) => applyScale(parseInt(e.target.value, 10)));
+  $("#slider-quality")?.addEventListener("input", (e) => applyQuality(parseInt(e.target.value, 10)));
 
   wireButton($("#btn-settings"), () => { $("#btn-leave-table").classList.remove("hidden"); $("#settings-overlay").classList.add("open"); });
   wireButton($("#btn-settings-menu"), () => { $("#btn-leave-table").classList.add("hidden"); $("#settings-overlay").classList.add("open"); });
   wireButton($("#btn-settings-close"), () => $("#settings-overlay").classList.remove("open"));
+
+  // Update Log
+  wireButton($("#btn-update-log"), () => openUpdateLog(true));
+  wireButton($("#btn-update-log-close"), () => closeUpdateLog());
+  wireButton($("#btn-update-log-gotit"), () => closeUpdateLog());
+  $("#update-log-overlay")?.addEventListener("click", (e) => {
+    if (e.target === $("#update-log-overlay")) closeUpdateLog();
+  });
+
+  // Invite toast actions
+  wireButton($("#invite-accept"), () => {
+    const toast = $("#invite-toast");
+    if (!toast) return;
+    const room = toast.dataset.room;
+    const game = toast.dataset.game || "blackjack";
+    toast.classList.add("hidden");
+    if (room) send({ type: "join", token: authToken, room, game });
+  });
+  wireButton($("#invite-decline"), () => $("#invite-toast")?.classList.add("hidden"));
+
+  // Avatar editor
+  initAvatarEditor();
+
+  // High Rollers auto-refresh every 20 minutes
+  setInterval(() => {
+    if (authToken) send({ type: "leaderboard", token: authToken });
+  }, 20 * 60 * 1000);
   wireButton($("#btn-settings-appearance"), () => {
     $("#settings-overlay").classList.remove("open");
     $("#appearance-overlay").classList.add("open");
@@ -1192,12 +1965,32 @@ function initSettings() {
     renderAppearance();
   });
   wireButton($("#btn-appearance-close"), () => $("#appearance-overlay").classList.remove("open"));
+
+  // Host panel
+  wireButton($("#btn-host"), () => openHostPanel());
+  wireButton($("#roulette-host"), () => openHostPanel());
+  wireButton($("#btn-host-close"), () => $("#host-overlay").classList.remove("open"));
+  $("#toggle-double-cash")?.addEventListener("click", () => {
+    play("click");
+    send({type: "toggle_double_cash"});
+  });
   wireButton($("#btn-appearance-store"), () => {
     $("#appearance-overlay").classList.remove("open");
     openProgress("#store-overlay");
     send({type:"store",token:authToken});
   });
-  wireButton($("#btn-leave-table"), () => { send({type:"leave_table"}); });
+  wireButton($("#btn-leave-table"), () => {
+    send({ type: "leave_table" });
+    // Immediate local exit — server confirms with left_table; fail-safe if not
+    clearTableClientState();
+    showMainMenu();
+    setTimeout(() => {
+      if ($("#screen-table")?.classList.contains("active") || $("#screen-roulette")?.classList.contains("active")) {
+        clearTableClientState();
+        showMainMenu();
+      }
+    }, 600);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1273,19 +2066,50 @@ function initJoin() {
   });
   wireButton($("#btn-admin-close"), () => $("#admin-overlay").classList.remove("open"));
 
+  // Fun admin table modifiers
+  const funAdmin = (action) => () => { if (isAdmin) send({ type: "admin_fun", action }); };
+  wireButton($("#admin-fun-double"), funAdmin("double_cash"));
+  wireButton($("#admin-fun-rain"), funAdmin("rain_money"));
+  wireButton($("#admin-fun-xp"), funAdmin("season_xp"));
+  wireButton($("#admin-fun-refill"), funAdmin("refill_shoe"));
+  wireButton($("#admin-fun-chaos"), funAdmin("chaos_bets"));
+  wireButton($("#admin-fun-force0"), funAdmin("force_zero"));
+  wireButton($("#admin-fun-force-red"), funAdmin("bias_red"));
+  wireButton($("#admin-fun-clear-luck"), funAdmin("clear_luck"));
+
   wireButton($("#btn-profile"), () => { openProgress("#profile-overlay"); renderProfile(); send({type:"profile", token:authToken}); });
   wireButton($("#btn-profile-close"), () => closeProgress("#profile-overlay"));
   wireButton($("#btn-friends"), () => { openProgress("#friends-overlay"); $("#friends-error").textContent=""; send({type:"friends",token:authToken}); });
   wireButton($("#btn-friends-close"), () => closeProgress("#friends-overlay"));
   wireButton($("#btn-add-friend"), () => { $("#friends-error").textContent=""; send({type:"add_friend",token:authToken,username:$("#friend-username").value.trim()}); });
-  wireButton($("#btn-create-public"), () => send({type:"create_public",token:authToken,game:"blackjack"}));
-  wireButton($("#btn-roulette-create"), () => send({type:"create_public",token:authToken,game:"roulette"}));
+  wireButton($("#btn-create-public"), () => {
+    const maxPlayers = parseInt($("#bj-max-players")?.value || "5", 10) || 5;
+    send({type:"create_public", token:authToken, game:"blackjack", maxPlayers});
+  });
+  wireButton($("#btn-roulette-create"), () => {
+    const maxPlayers = parseInt($("#roulette-max-players")?.value || "5", 10) || 5;
+    send({type:"create_public", token:authToken, game:"roulette", maxPlayers});
+  });
   wireButton($("#btn-roulette-join"),()=>{const room=$("#roulette-room").value.trim();$("#roulette-room-error").textContent="";if(!room){$("#roulette-room-error").textContent="Enter a private table code, or use CREATE PUBLIC TABLE.";return;}send({type:"join",token:authToken,room,game:"roulette"});});
   wireButton($("#btn-roulette-back"), showMainMenu);
   wireButton($("#roulette-clear"), () => send({type:"roulette_clear"}));
   wireButton($("#roulette-chip-amount"), () => { const vals=[100,500,1000,5000]; rouletteBetAmount=vals[(vals.indexOf(rouletteBetAmount)+1)%vals.length]; $("#roulette-chip-amount").textContent="$"+rouletteBetAmount.toLocaleString(); $("#roulette-chip-amount").classList.add("selected-chip"); });
   wireButton($("#roulette-spin"), () => send({type:"roulette_spin"}));
-  wireButton($("#roulette-leave"), () => send({type:"leave_table"}));
+  wireButton($("#roulette-leave"), () => {
+    send({ type: "leave_table" });
+    clearTableClientState();
+    showMainMenu();
+    // Fail-safe: if still on roulette screen, force exit
+    setTimeout(() => {
+      if ($("#screen-roulette")?.classList.contains("active")) {
+        clearTableClientState();
+        showMainMenu();
+        $("#host-overlay")?.classList.remove("open");
+        $("#settings-overlay")?.classList.remove("open");
+        showMainMenu();
+      }
+    }, 800);
+  });
   wireButton($("#roulette-settings"), () => { $("#btn-leave-table").classList.remove("hidden"); $("#settings-overlay").classList.add("open"); });
   document.querySelectorAll(".roulette-bet").forEach(b => wireButton(b, () => placeRouletteBet(b.dataset.bet)));
   buildRouletteNumbers();
@@ -1299,6 +2123,7 @@ function initJoin() {
   wireButton($("#btn-rankings"), () => { openProgress("#leaderboard-overlay"); send({type:"leaderboard"}); });
   wireButton($("#btn-achievements"), () => { openProgress("#achievements-overlay"); send({type:"achievements", token:authToken}); });
   wireButton($("#btn-daily"), () => { openProgress("#daily-overlay"); send({type:"daily", token:authToken}); });
+  wireButton($("#btn-daily-home"), () => { openProgress("#daily-overlay"); send({type:"daily", token:authToken}); });
   wireButton($("#btn-store"), () => { openProgress("#store-overlay"); send({type:"store", token:authToken}); });
   wireButton($("#btn-season"), () => { openProgress("#season-overlay"); send({type:"season", token:authToken}); });
   wireButton($("#btn-stats-close"), () => closeProgress("#stats-overlay"));
