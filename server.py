@@ -2261,6 +2261,15 @@ async def process_http_request(connection, request):
             "Content-Length": str(len(body)),
         }), body)
 
+    if request.path == "/ads.txt":
+        body = b"google.com, pub-4526604443102763, DIRECT, f08c47fec0942fa0\n"
+        return Response(200, "OK", Headers({
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Length": str(len(body)),
+        }), body)
+
+    return None
+
     # Never intercept a WebSocket handshake. Returning None lets websockets
     # continue with the normal upgrade process.
     if request.headers.get("Upgrade", "").lower() == "websocket":
