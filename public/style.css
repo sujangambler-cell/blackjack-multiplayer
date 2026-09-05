@@ -6354,3 +6354,90 @@ html[data-mobile="1"] .update-log-btn {
     overflow: hidden;
   }
 }
+
+
+/* ==========================================================================
+   CASINO X — MOBILE MODE DESKTOP SIDE AD RAILS
+   The game remains a centered 430px phone column. Ads are shown only while
+   the existing Mobile Mode state is ON (html[data-mobile="1"]).
+   ========================================================================== */
+
+/* Safe default: Mobile Mode OFF = absolutely no side-ad rail. */
+#mobile-ad-rails {
+  display: none !important;
+}
+
+@media (min-width: 1120px) {
+  /* Mobile Mode ON + enough horizontal space:
+     keep the rail outside the 430px #app column. */
+  html[data-mobile="1"] #mobile-ad-rails {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  html[data-mobile="1"] .mobile-ad-rail {
+    position: fixed;
+    top: 12px;
+    bottom: 12px;
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    pointer-events: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* 430px central game => 215px on either side of viewport center.
+     Keep a clear 80px gap between the game and each 300px ad rail. */
+  html[data-mobile="1"] .mobile-ad-rail-left {
+    left: max(16px, calc(50% - 215px - 300px - 80px));
+  }
+
+  html[data-mobile="1"] .mobile-ad-rail-right {
+    right: max(16px, calc(50% - 215px - 300px - 80px));
+  }
+
+  html[data-mobile="1"] .mobile-ad-slot {
+    flex: 0 0 auto;
+    width: 300px;
+    min-height: 250px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    overflow: hidden;
+  }
+
+  html[data-mobile="1"] .mobile-ad-slot .adsbygoogle {
+    display: block !important;
+    width: 300px !important;
+    min-height: 250px;
+  }
+}
+
+/* Extra-wide screens: reduce the visual gap while keeping ads completely
+   outside the centered 430px game area. */
+@media (min-width: 1500px) {
+  html[data-mobile="1"] .mobile-ad-rail-left {
+    left: calc(50% - 215px - 300px - 48px);
+  }
+
+  html[data-mobile="1"] .mobile-ad-rail-right {
+    right: calc(50% - 215px - 300px - 48px);
+  }
+}
+
+/* Narrow screens: never squeeze, cover, or interfere with the game. */
+@media (max-width: 1119px) {
+  #mobile-ad-rails {
+    display: none !important;
+  }
+}
