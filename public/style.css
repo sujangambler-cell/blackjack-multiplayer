@@ -6433,7 +6433,7 @@ aside.mobile-ad-rail-right {
   min-width: 300px !important;
   max-width: 300px !important;
   height: auto !important;
-  min-height: 100px !important;
+  min-height: 250px !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
@@ -6444,12 +6444,12 @@ aside.mobile-ad-rail-right {
 .mobile-ad-slot > .adsbygoogle,
 .mobile-ad-slot ins.adsbygoogle,
 .mobile-ad-rail .mobile-ad-slot .adsbygoogle {
-  display: block !important;
+  display: inline-block !important;
   width: 300px !important;
   min-width: 300px !important;
   max-width: 300px !important;
-  height: auto !important;
-  min-height: 100px !important;
+  height: 250px !important;
+  min-height: 250px !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
