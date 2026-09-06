@@ -2253,45 +2253,60 @@ CONTENT_TYPES = {
 }
 
 async def process_http_request(connection, request):
-    """Serve normal browser requests while leaving WebSocket upgrades alone."""
-    if request.path == "/health":
+    """
+    Handle ordinary HTTP requests on the same port as WebSockets.
+
+    IMPORTANT: WebSocket upgrade requests must return None so the websockets
+    library can complete the 101 Switching Protocols handshake. Normal browser
+    requests are served from the public/ directory.
+    """
+    # A WebSocket handshake is still an HTTP request at this stage. Never serve
+    # index.html (or any static file) for an upgrade request. Returning None
+    # hands the request back to websockets for the WebSocket handshake.
+    if request.headers.get("Upgrade", "").lower() == "websocket":
+        return None
+
+    path = request.path.split("?", 1)[0]
+
+    if path == "/health":
         body = b"ok"
         return Response(200, "OK", Headers({
             "Content-Type": "text/plain; charset=utf-8",
             "Content-Length": str(len(body)),
+            "Cache-Control": "no-cache",
         }), body)
 
-    if request.path == "/ads.txt":
+    if path == "/ads.txt":
         body = b"google.com, pub-4526604443102763, DIRECT, f08c47fec0942fa0\n"
         return Response(200, "OK", Headers({
             "Content-Type": "text/plain; charset=utf-8",
             "Content-Length": str(len(body)),
         }), body)
 
-    return None
-
-    # Never intercept a WebSocket handshake. Returning None lets websockets
-    # continue with the normal upgrade process.
-    if request.headers.get("Upgrade", "").lower() == "websocket":
-        return None
-
-    path = request.path.split("?", 1)[0]
+    # The browser's normal HTTP request to the Render URL should load the game.
     if path == "/":
         path = "/index.html"
 
     # Prevent path traversal outside public/.
     try:
-        requested = (PUBLIC_DIR / path.lstrip("/" )).resolve()
+        requested = (PUBLIC_DIR / path.lstrip("/")).resolve()
         public_root = PUBLIC_DIR.resolve()
         requested.relative_to(public_root)
     except ValueError:
-        return Response(403, "Forbidden", Headers({"Content-Type": "text/plain"}), b"Forbidden")
+        return Response(403, "Forbidden", Headers({
+            "Content-Type": "text/plain; charset=utf-8"
+        }), b"Forbidden")
 
     if not requested.is_file():
-        return Response(404, "Not Found", Headers({"Content-Type": "text/plain"}), b"Not Found")
+        return Response(404, "Not Found", Headers({
+            "Content-Type": "text/plain; charset=utf-8"
+        }), b"Not Found")
 
     body = requested.read_bytes()
-    content_type = CONTENT_TYPES.get(requested.suffix.lower(), "application/octet-stream")
+    content_type = CONTENT_TYPES.get(
+        requested.suffix.lower(),
+        "application/octet-stream"
+    )
     return Response(200, "OK", Headers({
         "Content-Type": content_type,
         "Content-Length": str(len(body)),
