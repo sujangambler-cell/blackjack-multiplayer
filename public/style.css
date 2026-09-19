@@ -7553,3 +7553,149 @@ html.season-crimson[data-theme="light"] .auth-logo {
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
 }
+
+
+/* Live presence — bottom-left of main menu card */
+.live-presence {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 5;
+  min-width: 120px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.45);
+  border: 1px solid rgba(212,184,122,.28);
+  color: #f4eee6;
+  font-size: 0.78rem;
+  overflow: hidden;
+}
+.auth-card.main-menu-mode { position: relative; }
+.live-presence .presence-glow {
+  position: absolute; inset: -20%; 
+  background: radial-gradient(circle at 30% 50%, rgba(34,197,94,.35), transparent 60%);
+  opacity: 0.7; pointer-events: none;
+  animation: presencePulse 2.4s ease-in-out infinite;
+}
+.live-presence .presence-row {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 700; letter-spacing: 0.04em;
+}
+.live-presence .presence-row.sub { opacity: 0.75; font-size: 0.72rem; margin-top: 4px; }
+.live-presence .presence-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 10px rgba(34,197,94,.8);
+  animation: presenceDot 1.6s ease-in-out infinite;
+}
+.live-presence.bump .presence-count {
+  animation: presenceBump 0.55s ease;
+  color: #4ade80;
+}
+@keyframes presencePulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.08); }
+}
+@keyframes presenceDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.7; }
+}
+@keyframes presenceBump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+.playtime-board { max-height: 220px; overflow: auto; margin: 8px 0 12px; }
+.pt-row {
+  display: grid; grid-template-columns: 36px 1fr auto; gap: 8px;
+  padding: 8px 10px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  margin-bottom: 6px; align-items: center;
+  font-size: 0.82rem;
+}
+.pt-rank { opacity: 0.55; font-weight: 800; }
+.pt-time { color: #d4b87a; font-weight: 700; }
+
+/* Mobile: spectator top-right near settings */
+html[data-mobile="1"] .spectator-panel {
+  left: auto !important;
+  right: 8px !important;
+  top: 56px !important;
+  bottom: auto !important;
+  width: 118px;
+  max-height: 30vh;
+}
+html[data-mobile="1"] .top-bar {
+  display: flex; flex-wrap: wrap; align-items: center;
+}
+html[data-mobile="1"] .top-actions {
+  margin-left: auto;
+  display: flex; gap: 6px;
+  order: 3;
+}
+html[data-mobile="1"] .poker-actions {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 8px;
+}
+html[data-mobile="1"] .poker-act {
+  min-height: 48px;
+  width: 100%;
+}
+html[data-mobile="1"] .poker-table-footer {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  padding: 8px 10px 16px;
+}
+html[data-mobile="1"] .poker-table-footer .btn {
+  flex: 1 1 30%;
+  min-height: 48px;
+}
+html[data-mobile="1"] #screen-poker-lobby .lobby-card,
+html[data-mobile="1"] #screen-lobby .lobby-card {
+  width: 100%;
+  max-width: 100%;
+  padding: 16px 12px;
+}
+html[data-mobile="1"] .lobby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+html[data-mobile="1"] .lobby-actions .btn {
+  width: 100%;
+  min-height: 48px;
+}
+html[data-orient="landscape"][data-mobile="1"] .felt-table {
+  max-height: 58vh;
+}
+html[data-orient="landscape"][data-mobile="1"] .poker-felt {
+  max-height: 52vh;
+  min-height: 220px;
+}
+
+.poker-buyin-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  width: min(480px, 94vw);
+  margin: 0 auto;
+  background: rgba(0,0,0,.4);
+  border: 1px solid rgba(212,184,122,.3);
+  border-radius: 12px;
+}
+.poker-buyin-bar input {
+  width: 120px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+#btn-split:disabled { opacity: 0.4; }

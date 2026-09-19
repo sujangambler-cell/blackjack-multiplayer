@@ -29,6 +29,40 @@ let pokerState = null;
 let pokerBetAmount = 100;
 let currentGame = "blackjack";
 let friendsData = [];
+
+let presenceData = { online: 0, playing: 0 };
+let playtimeBoard = [];
+function formatPlayTime(sec) {
+  sec = Math.max(0, Math.floor(Number(sec) || 0));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (h > 0) return h + "h " + m + "m";
+  return m + "m";
+}
+function renderPresence() {
+  const el = $("#live-presence");
+  if (!el) return;
+  const o = Number(presenceData.online || 0);
+  const p = Number(presenceData.playing || 0);
+  const prev = Number(el.dataset.prevOnline || 0);
+  el.innerHTML = `<div class="presence-glow"></div>
+    <div class="presence-row"><span class="presence-dot"></span><strong class="presence-count" id="presence-online">${o}</strong><span>online</span></div>
+    <div class="presence-row sub"><strong id="presence-playing">${p}</strong><span>in tables</span></div>`;
+  if (o > prev) {
+    el.classList.remove("bump");
+    void el.offsetWidth;
+    el.classList.add("bump");
+  }
+  el.dataset.prevOnline = String(o);
+}
+function renderPlaytimeBoard() {
+  const box = $("#playtime-board");
+  if (!box) return;
+  box.innerHTML = (playtimeBoard || []).length
+    ? playtimeBoard.map((r,i) => `<div class="pt-row"><span class="pt-rank">#${i+1}</span><span class="pt-name">${escapeHtml(r.username)}</span><span class="pt-time">${formatPlayTime(r.playSeconds)}</span></div>`).join("")
+    : '<div class="admin-empty">No playtime data yet.</div>';
+}
+
 let friendRequests = [];
 let friendOutgoing = [];
 let chatMuted = localStorage.getItem("bj_chat_muted") === "1";
@@ -359,6 +393,12 @@ function clearTableClientState() {
   toggleChat?.(false);
 }
 
+function requestPresence() {
+  if (authToken) {
+    send({ type: "presence", token: authToken });
+    send({ type: "leaderboard_playtime", token: authToken });
+  }
+}
 function showMainMenu() {
   clearTableClientState();
   document.querySelector("#screen-join .auth-card")?.classList.add("main-menu-mode");
@@ -769,6 +809,16 @@ function connect() {
       }
       return;
     }
+    if (msg.type === "presence") {
+      presenceData = { online: msg.online || 0, playing: msg.playing || 0 };
+      renderPresence();
+      return;
+    }
+    if (msg.type === "leaderboard_playtime") {
+      playtimeBoard = msg.leaderboard || [];
+      renderPlaytimeBoard();
+      return;
+    }
     if (msg.type === "friends") {
       friendsData = msg.friends || [];
       friendRequests = msg.requests || [];
@@ -932,6 +982,14 @@ function connect() {
     }
     if (msg.type === "poker_state") { renderPokerState(msg.state); return; }
     if (msg.type === "error") {
+      if (msg.code === "table_full") {
+        const ok = confirm(msg.message || "Table full — Spectate instead?");
+        if (ok) {
+          send({ type: "join", token: authToken, room: msg.room, game: msg.game || "blackjack", spectate: true });
+        }
+        return;
+      }
+
       let target = null;
       if (msg.scope === "auth") target = $("#join-error");
       else if (msg.scope === "admin") target = $("#admin-error");
@@ -1218,6 +1276,18 @@ function renderSeats(state, prev) {
   }
 
   // Friend boost HUD
+
+  // Split button visibility
+  const splitBtn = $("#btn-split");
+  if (splitBtn) {
+    const can = !!(me && state.phase === "PLAYING" && state.activePlayerId === me.id && (me.canSplit || (
+      Array.isArray(me.hand) && me.hand.length === 2 &&
+      String(me.hand[0]?.rank||"").toUpperCase() === String(me.hand[1]?.rank||"").toUpperCase() &&
+      Number(me.money||0) >= Number(me.bet||0) && Number(me.bet||0) > 0 && !me.splitUsed
+    )));
+    splitBtn.disabled = !can;
+    splitBtn.classList.toggle("hidden", !(me && state.phase === "PLAYING"));
+  }
   updateFriendBoostHUD(state);
   renderSpectatorPanel(state, "#spectator-list", "#btn-sit-down");
 }
@@ -1493,16 +1563,21 @@ function applyGameCosmetics(c = {}) {
 function applySeasonTheme(){
   const enabled = localStorage.getItem("bj_seasonal_ui") !== "0";
   const theme = seasonData?.season?.theme || "";
-  const active = !!(seasonData?.season?.active===true && theme);
-  document.documentElement.classList.toggle("season-1927", active && enabled && theme==="casino1927");
-  document.documentElement.classList.toggle("season-crimson", active && enabled && theme==="crimson_royale");
-  document.documentElement.setAttribute("data-seasonal-ui", active && enabled ? "1" : "0");
-  document.documentElement.setAttribute("data-season-theme", active && enabled ? theme : "");
-  $("#toggle-seasonal-ui")?.classList.toggle("on", active && enabled);
+  const seasonLive = !!(seasonData?.season?.active===true && theme);
+  // Toggle visual follows preference always; classes only when season is live
+  document.documentElement.classList.toggle("season-1927", enabled && seasonLive && theme==="casino1927");
+  document.documentElement.classList.toggle("season-crimson", enabled && seasonLive && theme==="crimson_royale");
+  document.documentElement.setAttribute("data-seasonal-ui", enabled ? "1" : "0");
+  document.documentElement.setAttribute("data-season-theme", enabled && seasonLive ? theme : "");
+  $("#toggle-seasonal-ui")?.classList.toggle("on", enabled);
   const btn = $("#btn-season");
   if (btn && seasonData?.season?.name) {
     const id = seasonData.season.id || 2;
     btn.textContent = "SEASON " + id;
+  }
+  // If user wants seasonal UI but we have no season payload yet, ask server
+  if (enabled && !seasonData && typeof authToken === "string" && authToken) {
+    try { send({ type: "season", token: authToken }); } catch (e) {}
   }
 }
 function applySeasonalUI(enabled){
@@ -1657,8 +1732,9 @@ function renderPublicTables(){
 function renderPokerTables(){
   const box=$("#poker-table-list"); if(!box) return;
   const tables=pokerTables.filter(t=>t.game==="poker");
-  box.innerHTML=tables.length ? tables.map(t=>`<div class="public-table-row"><div><strong>POKER • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host||"—")} • ${t.players}/${t.maxPlayers} • Buy-in $${Number(t.buyIn||1000).toLocaleString()} • ${escapeHtml(t.phase||"WAITING")}</small></div><div class="public-table-actions">${t.canJoin!==false?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}</div></div>`).join("") : '<div class="admin-empty">No Poker tables yet. Create one!</div>';
+  box.innerHTML=tables.length ? tables.map(t=>`<div class="public-table-row"><div><strong>POKER • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host||"—")} • ${t.players}/${t.maxPlayers} • Buy-in $${Number(t.buyIn||1000).toLocaleString()} • ${escapeHtml(t.phase||"WAITING")}</small></div><div class="public-table-actions">${t.canJoin!==false?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}<button class="btn secondary" data-rspec="${t.code}">WATCH</button></div></div>`).join("") : '<div class="admin-empty">No Poker tables yet. Create one!</div>';
   box.querySelectorAll("[data-rjoin]").forEach(b=>wireButton(b,()=>send({type:"join",token:authToken,room:b.dataset.rjoin,game:"poker"})));
+  box.querySelectorAll("[data-rspec]").forEach(b=>wireButton(b,()=>send({type:"join",token:authToken,room:b.dataset.rspec,game:"poker",spectate:true})));
 }
 
 function pokerCardHTML(c, small){
@@ -1927,9 +2003,22 @@ function applyQuality(level) {
   document.documentElement.classList.toggle("opt-high", v === 2);
 }
 
+
+function updateOrientation() {
+  if (document.documentElement.getAttribute("data-mobile") !== "1") {
+    document.documentElement.removeAttribute("data-orient");
+    return;
+  }
+  const landscape = window.innerWidth > window.innerHeight;
+  document.documentElement.setAttribute("data-orient", landscape ? "landscape" : "portrait");
+}
+window.addEventListener("resize", updateOrientation);
+window.addEventListener("orientationchange", updateOrientation);
+
 function applyMobileMode(enabled) {
   const on = !!enabled;
   document.documentElement.setAttribute("data-mobile", on ? "1" : "0");
+  updateOrientation();
   $("#toggle-mobile")?.classList.toggle("on", on);
   $("#toggle-mobile-auth")?.classList.toggle("on", on);
   localStorage.setItem("bj_mobile", on ? "1" : "0");
@@ -2244,6 +2333,7 @@ function initControls() {
   wireButton($("#btn-ready"), () => send({ type: "ready" }));
   wireButton($("#btn-hit"), () => { play("hit"); send({ type: "hit" }); });
   wireButton($("#btn-stand"), () => { play("stand"); send({ type: "stand" }); });
+  wireButton($("#btn-split"), () => send({ type: "split", token: authToken }));
   wireButton($("#btn-double"), () => send({ type: "double" }));
 }
 
@@ -2256,6 +2346,7 @@ function initJoin() {
   wireButton($("#game-blackjack"), openBlackjackLobby);
   wireButton($("#game-poker"), openPokerLobby);
   wireButton($("#btn-join-table"),()=>{const room=$("#input-room").value.trim();$("#room-error").textContent="";if(!room){$("#room-error").textContent="Enter a private table code, or use CREATE PUBLIC TABLE.";return;}send({type:"join",token:authToken,room,game:"blackjack"});});
+  wireButton($("#btn-spectate-table"),()=>{const room=$("#input-room").value.trim();$("#room-error").textContent="";if(!room){$("#room-error").textContent="Enter a table code to spectate.";return;}send({type:"join",token:authToken,room,game:"blackjack",spectate:true});});
   wireButton($("#btn-back-menu"), () => {
     $("#room-error").textContent = "";
     showMainMenu();
@@ -2337,6 +2428,7 @@ function initJoin() {
     if (err) err.textContent = "Creating table…";
     send({type:"create_public", token:authToken, game:"poker", maxPlayers, buyIn});
   });
+  wireButton($("#btn-poker-spectate"),()=>{const room=($("#poker-join-code")||$("#poker-room-input")||$("#input-poker-room"))?.value?.trim();if(!room){const el=$("#poker-lobby-error");if(el)el.textContent="Enter a code to spectate.";return;}send({type:"join",token:authToken,room,game:"poker",spectate:true});});
   wireButton($("#btn-poker-join"),()=>{
     const err = $("#poker-room-error");
     if (err) err.textContent = "";
@@ -2397,6 +2489,11 @@ function initJoin() {
       if (msgEl) { msgEl.className = "poker-table-msg error"; msgEl.textContent = "Not connected."; }
     }
   });
+  wireButton($("#btn-poker-buyin-go"), () => {
+    const amt = Math.floor(Number($("#poker-buyin-amt")?.value || 0));
+    if (amt <= 0) return;
+    send({ type: "poker_buyin", token: authToken, amount: amt });
+  });
   wireButton($("#btn-poker-cashout"), () => send({type:"poker_cashout"}));
   wireButton($("#btn-chat-open"), () => toggleChat(true));
   wireButton($("#btn-chat-toggle"), () => toggleChat(false));
@@ -2405,7 +2502,7 @@ function initJoin() {
   $("#chat-input").addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
 
   wireButton($("#btn-stats"), () => { renderStats(); openProgress("#stats-overlay"); send({type:"profile", token:authToken}); });
-  wireButton($("#btn-rankings"), () => { openProgress("#leaderboard-overlay"); send({type:"leaderboard"}); });
+  wireButton($("#btn-rankings"), () => { openProgress("#leaderboard-overlay"); send({type:"leaderboard_playtime",token:authToken}); send({type:"leaderboard",token:authToken}); send({type:"leaderboard"}); });
   wireButton($("#btn-achievements"), () => { openProgress("#achievements-overlay"); send({type:"achievements", token:authToken}); });
   wireButton($("#btn-daily"), () => { openProgress("#daily-overlay"); send({type:"daily", token:authToken}); });
   wireButton($("#btn-daily-home"), () => { openProgress("#daily-overlay"); send({type:"daily", token:authToken}); });
@@ -2440,3 +2537,10 @@ initJoin();
 startSeasonTicker();
 $("#btn-chat-mute").textContent = chatMuted ? "🔇" : "🔊";
 if (localStorage.getItem("bj_session_token")) { setTimeout(() => { if (!ws || ws.readyState === WebSocket.CLOSED) connect(); }, 50); }
+
+// Keep presence fresh while logged in
+setInterval(() => {
+  if (authToken) {
+    try { send({ type: "presence", token: authToken }); } catch (e) {}
+  }
+}, 20000);

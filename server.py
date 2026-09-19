@@ -111,6 +111,40 @@ ACCOUNTS: dict[str, dict] = {}
 TOKENS: dict[str, str] = {}
 ADMIN_SOCKETS = set()
 USER_SOCKETS = {}
+PRESENCE_LAST = {"online": 0, "playing": 0}
+
+def presence_payload():
+    online = len(USER_SOCKETS)
+    playing = 0
+    for room in rooms.values():
+        for p in room.get("players", []):
+            if p.get("connected") and not p.get("spectator"):
+                playing += 1
+    return {"type": "presence", "online": online, "playing": playing}
+
+async def broadcast_presence():
+    payload = json.dumps(presence_payload())
+    for ws in list(USER_SOCKETS.values()):
+        try:
+            await ws.send(payload)
+        except Exception:
+            pass
+
+def leaderboard_playtime_payload(limit=20):
+    rows = []
+    for key, acc in ACCOUNTS.items():
+        if acc.get("banned"):
+            continue
+        rows.append({
+            "username": acc.get("username"),
+            "playSeconds": int(acc.get("play_seconds", 0) or 0),
+            "level": account_level(int(acc.get("xp", 0)))[0],
+            "avatar": acc.get("avatar"),
+            "avatarColor": acc.get("avatar_color"),
+        })
+    rows.sort(key=lambda r: (-r["playSeconds"], r["username"].lower()))
+    return rows[:limit]
+
 BANNED_WORDS = {
     "fuck", "shit", "bitch", "asshole", "nigger", "nigga", "cunt",
     "dick", "pussy", "porn", "sex", "rape", "slut", "whore"
@@ -406,7 +440,7 @@ def ensure_account_progress(account):
         "pushes": 0, "blackjacks": 0, "best_win_streak": 0, "current_win_streak": 0,
         "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
         "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
-        "friends": [], "friend_requests": [], "friend_outgoing": [], "avatar": None, "avatar_color": None,
+        "friends": [], "friend_requests": [], "friend_outgoing": [], "avatar": None, "avatar_color": None, "play_seconds": 0,
         "owned_themes": ["classic"], "owned_chips": ["classic"], "owned_decks": ["classic"], "owned_tables": ["classic"], "owned_balls": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "equipped_deck": "classic", "equipped_table": "classic", "equipped_ball": "classic", "season_xp": 0, "season_claimed": [], "season_title": "",
         "roulette_games": 0, "roulette_wins": 0, "roulette_biggest_win": 0,
         "game_stats": {"blackjack": {"games": 0, "wins": 0}, "poker": {"games": 0, "wins": 0}, "roulette": {"games": 0, "wins": 0}},
@@ -468,7 +502,26 @@ def unlock_achievements(account):
         save_accounts()
     return new
 
+_PLAY_BUMP_TS = {}
+def bump_play_time(account_key, seconds=15):
+    """Accumulate play time at most once per interval per user."""
+    if not account_key or account_key not in ACCOUNTS:
+        return
+    now = time.time()
+    last = _PLAY_BUMP_TS.get(account_key, 0)
+    if now - last < 10:
+        return
+    _PLAY_BUMP_TS[account_key] = now
+    acc = ACCOUNTS[account_key]
+    acc["play_seconds"] = int(acc.get("play_seconds", 0) or 0) + int(seconds)
+    # persist lightly
+    try:
+        save_accounts()
+    except Exception:
+        pass
+
 def is_user_online(username_key):
+
     # Connected to the game socket counts as online (lobby or table)
     if username_key in USER_SOCKETS:
         return True
@@ -772,6 +825,22 @@ def serialise(room) -> dict:
                 "avatar": p.get("avatar"),
                 "avatarColor": p.get("avatar_color"),
                 "friendBoost": int(p.get("friendBoost", 0) or 0),
+                "splitUsed": bool(p.get("split_used")),
+                "hands": p.get("hands"),
+                "handBets": p.get("hand_bets"),
+                "handStatus": p.get("hand_status"),
+                "handResults": p.get("hand_results"),
+                "activeHand": p.get("active_hand", 0),
+                "canSplit": (
+                    room.get("phase") == "PLAYING"
+                    and not p.get("split_used")
+                    and isinstance(p.get("hand"), list)
+                    and len(p.get("hand") or []) == 2
+                    and str((p.get("hand") or [{}])[0].get("rank","")).upper()
+                        == str((p.get("hand") or [{},{}])[1].get("rank","")).upper()
+                    and int(p.get("money", 0)) >= int(p.get("bet", 0) or 0)
+                    and int(p.get("bet", 0) or 0) > 0
+                ),
             }
             for p in room["players"] if not p.get("spectator")
         ],
@@ -1065,20 +1134,60 @@ async def finish_round(room):
     mult = 2 if room.get("double_cash") else 1
 
     for p in active_players(room):
-        if not p["hand"] or p["status"] == "spectating":
+        if p["status"] == "spectating":
             continue
         fb = friend_boost_mult(room, p)
         p["friendBoost"] = round((fb - 1) * 100)
+        # Split hands: settle each hand separately
+        if p.get("hands") and p.get("hand_bets"):
+            total_win = 0
+            results = []
+            for i, hand in enumerate(p["hands"]):
+                hb = int(p["hand_bets"][i])
+                st = (p.get("hand_status") or [None]*len(p["hands"]))[i]
+                if st == "bust" or hand_value(hand) > 21:
+                    results.append("bust")
+                    continue
+                pv = hand_value(hand)
+                if dealer_bj:
+                    results.append("lose")
+                elif dv > 21 or dv < pv:
+                    total_win += round(hb * 2 * mult * fb)
+                    results.append("win")
+                elif dv > pv:
+                    results.append("lose")
+                else:
+                    total_win += hb
+                    results.append("push")
+            p["money"] += total_win
+            p["hand_results"] = results
+            if all(r == "bust" for r in results):
+                p["result"] = "bust"
+                p["consecutive_losses"] = p.get("consecutive_losses", 0) + 1
+            elif any(r == "win" for r in results) and not any(r in ("lose", "bust") for r in results):
+                p["result"] = "win"
+                p["consecutive_losses"] = 0
+            elif any(r == "win" for r in results):
+                p["result"] = "win"
+                p["consecutive_losses"] = 0
+            elif all(r == "push" for r in results):
+                p["result"] = "push"
+                p["consecutive_losses"] = 0
+            else:
+                p["result"] = "lose"
+                p["consecutive_losses"] = p.get("consecutive_losses", 0) + 1
+            continue
+        if not p.get("hand"):
+            continue
         if p["status"] == "bust":
             p["result"] = "bust"
             p["consecutive_losses"] = p.get("consecutive_losses", 0) + 1
         elif p["status"] == "blackjack":
             if dealer_bj:
-                p["money"] += p["bet"]      # push (no mult on returned stake)
+                p["money"] += p["bet"]
                 p["result"] = "push"
                 p["consecutive_losses"] = 0
             else:
-                # 3:2 base; double_cash + friend boost multiply the total return
                 p["money"] += round(p["bet"] * 2.5 * mult * fb)
                 p["result"] = "blackjack"
                 p["consecutive_losses"] = 0
@@ -1095,7 +1204,7 @@ async def finish_round(room):
                 p["result"] = "lose"
                 p["consecutive_losses"] = p.get("consecutive_losses", 0) + 1
             else:
-                p["money"] += p["bet"]      # push
+                p["money"] += p["bet"]
                 p["result"] = "push"
                 p["consecutive_losses"] = 0
 
@@ -1785,6 +1894,10 @@ async def ws_handler(websocket):
             TOKENS[token] = key
             ACCOUNTS[key]["session_token"] = token
             USER_SOCKETS[key] = websocket
+            try:
+                asyncio.create_task(broadcast_presence())
+            except Exception:
+                pass
             save_accounts()
             await websocket.send(json.dumps({"type": "auth_ok", "mode": "signup", "username": username, "balance": STARTING_MONEY, "token": token, "profile": profile_payload(ACCOUNTS[key])}))
             continue
@@ -1858,6 +1971,17 @@ async def ws_handler(websocket):
                 room["phase"] = "WAITING"
             await websocket.send(json.dumps({"type":"public_created","code":code,"game":game,"maxPlayers":rooms[code].get("max_players", MAX_PLAYERS_DEFAULT),"buyIn":room.get("poker_buyin")}))
             await send_public_tables(websocket)
+            continue
+
+        if kind == "presence":
+            key = TOKENS.get(msg.get("token"))
+            if key:
+                bump_play_time(key, 20)
+            await websocket.send(json.dumps(presence_payload()))
+            continue
+
+        if kind == "leaderboard_playtime":
+            await websocket.send(json.dumps({"type": "leaderboard_playtime", "leaderboard": leaderboard_playtime_payload()}))
             continue
 
         if kind == "friends":
@@ -2030,6 +2154,9 @@ async def ws_handler(websocket):
             continue
 
         if kind == "profile":
+            key = TOKENS.get(msg.get("token"))
+            if key: bump_play_time(key)
+
             token = msg.get("token")
             key = TOKENS.get(token)
             if key in ACCOUNTS:
@@ -2173,9 +2300,16 @@ async def ws_handler(websocket):
             max_p = int(room.get("max_players", MAX_PLAYERS_DEFAULT))
             auto_spec = False
             if not spectate and connected_count >= max_p:
-                # Table full — join as spectator instead of rejecting
-                spectate = True
-                auto_spec = True
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "code": "table_full",
+                    "scope": "table",
+                    "message": "Table full — Spectate instead?",
+                    "room": code,
+                    "game": room.get("game", "blackjack"),
+                }))
+                room = None
+                continue
 
             pid = new_id()
             account = ACCOUNTS[account_key]
@@ -2293,7 +2427,6 @@ async def ws_handler(websocket):
                 "type": "joined", "id": pid, "room": code, "game": room.get("game","blackjack"),
                 "username": account["username"], "balance": player["money"], "isHost": room["host_id"] == pid,
                 "spectator": bool(player.get("spectator")),
-                "tableFull": bool(auto_spec),
             }))
             if room.get("game") == "poker":
                 await poker_broadcast(room)
@@ -2580,43 +2713,143 @@ async def ws_handler(websocket):
             if room["phase"] != "BETTING": continue
             if player["bet"] <= 0 or player["bet"] > player["money"]: continue
             player["status"] = "ready"
+            player["split_used"] = False
+            player["hands"] = None
+            player["hand_bets"] = None
+            player["hand_status"] = None
+            player["hand_results"] = None
+            player["active_hand"] = 0
             await broadcast(room)
             await maybe_start_round(room)
 
         # ---- play actions ----
         elif kind == "hit":
             if room["phase"] != "PLAYING" or room["active_player_id"] != player["id"]: continue
-            card = lucky_card(room, player, player["hand"])
-            card["faceUp"] = True
-            player["hand"].append(card)
-            if hand_value(player["hand"]) > 21:
-                player["status"] = "bust"
-                player["result"] = "bust"
-                await move_to_next_or_dealer(room)
+            if player.get("hands"):
+                ah = int(player.get("active_hand", 0))
+                hand = player["hands"][ah]
+                card = lucky_card(room, player, hand); card["faceUp"] = True; hand.append(card)
+                player["hand"] = hand
+                if hand_value(hand) > 21:
+                    player["hand_status"][ah] = "bust"
+                    player["hand_results"][ah] = "bust"
+                    if ah + 1 < len(player["hands"]):
+                        player["active_hand"] = ah + 1
+                        player["hand_status"][ah + 1] = "playing"
+                        player["hand"] = player["hands"][ah + 1]
+                        player["status"] = "playing"
+                    else:
+                        player["status"] = "bust"
+                        player["result"] = "bust"
+                        await move_to_next_or_dealer(room)
+            else:
+                card = lucky_card(room, player, player["hand"])
+                card["faceUp"] = True
+                player["hand"].append(card)
+                if hand_value(player["hand"]) > 21:
+                    player["status"] = "bust"
+                    player["result"] = "bust"
+                    await move_to_next_or_dealer(room)
             await broadcast(room)
 
         elif kind == "stand":
             if room["phase"] != "PLAYING" or room["active_player_id"] != player["id"]: continue
-            player["status"] = "stood"
-            await move_to_next_or_dealer(room)
+            if player.get("hands"):
+                ah = int(player.get("active_hand", 0))
+                player["hand_status"][ah] = "stood"
+                if ah + 1 < len(player["hands"]):
+                    player["active_hand"] = ah + 1
+                    player["hand_status"][ah + 1] = "playing"
+                    player["hand"] = player["hands"][ah + 1]
+                    player["status"] = "playing"
+                else:
+                    player["status"] = "stood"
+                    await move_to_next_or_dealer(room)
+            else:
+                player["status"] = "stood"
+                await move_to_next_or_dealer(room)
+            await broadcast(room)
+
+        elif kind == "split":
+            if room["phase"] != "PLAYING" or room["active_player_id"] != player["id"]: continue
+            if player.get("spectator"): continue
+            if player.get("split_used"): continue
+            hand = player.get("hand") or []
+            if len(hand) != 2: continue
+            # Same rank (A,A or 8,8 etc.) — face cards: compare rank field
+            r0 = str(hand[0].get("rank", "")).upper()
+            r1 = str(hand[1].get("rank", "")).upper()
+            # 10/J/Q/K all split together as tens optionally — stick to exact rank match
+            if r0 != r1: continue
+            bet = int(player.get("bet", 0))
+            if bet <= 0 or int(player.get("money", 0)) < bet: continue
+            player["money"] -= bet
+            persist_player_money(player)
+            player["split_used"] = True
+            c0, c1 = hand[0], hand[1]
+            # Two hands from the pair
+            h0 = [c0]
+            h1 = [c1]
+            # Deal one card to each
+            n0 = lucky_card(room, player, h0); n0["faceUp"] = True; h0.append(n0)
+            n1 = lucky_card(room, player, h1); n1["faceUp"] = True; h1.append(n1)
+            player["hands"] = [h0, h1]
+            player["hand_bets"] = [bet, bet]
+            player["hand_status"] = ["playing", "waiting"]
+            player["hand_results"] = [None, None]
+            player["active_hand"] = 0
+            player["hand"] = h0
+            player["bet"] = bet * 2  # total risk for UI
+            player["status"] = "playing"
+            # Ace split: often one card only — auto-stand both if aces
+            if r0 in ("A", "ACE", "1"):
+                player["hand_status"] = ["stood", "stood"]
+                player["status"] = "stood"
+                player["hand"] = h0
+                await move_to_next_or_dealer(room)
             await broadcast(room)
 
         elif kind == "double":
             if room["phase"] != "PLAYING" or room["active_player_id"] != player["id"]: continue
-            if player["double_used"] or len(player["hand"]) != 2 or player["money"] < player["bet"]: continue
-            player["money"] -= player["bet"]
-            persist_player_money(player)
-            player["bet"] *= 2
-            player["double_used"] = True
-            card = lucky_card(room, player, player["hand"])
-            card["faceUp"] = True
-            player["hand"].append(card)
-            if hand_value(player["hand"]) > 21:
-                player["status"] = "bust"
-                player["result"] = "bust"
+            if player.get("hands"):
+                ah = int(player.get("active_hand", 0))
+                hand = player["hands"][ah]
+                hb = int(player["hand_bets"][ah])
+                if len(hand) != 2 or int(player.get("money", 0)) < hb: continue
+                player["money"] -= hb
+                persist_player_money(player)
+                player["hand_bets"][ah] = hb * 2
+                player["bet"] = sum(int(x) for x in player["hand_bets"])
+                card = lucky_card(room, player, hand); card["faceUp"] = True; hand.append(card)
+                player["hand"] = hand
+                if hand_value(hand) > 21:
+                    player["hand_status"][ah] = "bust"
+                    player["hand_results"][ah] = "bust"
+                else:
+                    player["hand_status"][ah] = "stood"
+                if ah + 1 < len(player["hands"]):
+                    player["active_hand"] = ah + 1
+                    player["hand_status"][ah + 1] = "playing"
+                    player["hand"] = player["hands"][ah + 1]
+                    player["status"] = "playing"
+                else:
+                    player["status"] = "stood" if player["hand_status"][ah] != "bust" else "bust"
+                    await move_to_next_or_dealer(room)
             else:
-                player["status"] = "stood"
-            await move_to_next_or_dealer(room)
+                if player.get("double_used") or len(player.get("hand") or []) != 2 or player["money"] < player["bet"]: continue
+                player["money"] -= player["bet"]
+                persist_player_money(player)
+                player["bet"] *= 2
+                player["double_used"] = True
+                card = lucky_card(room, player, player["hand"])
+                card["faceUp"] = True
+                player["hand"].append(card)
+                if hand_value(player["hand"]) > 21:
+                    player["status"] = "bust"
+                    player["result"] = "bust"
+                else:
+                    player["status"] = "stood"
+                await move_to_next_or_dealer(room)
             await broadcast(room)
 
         elif kind == "claim_100":
