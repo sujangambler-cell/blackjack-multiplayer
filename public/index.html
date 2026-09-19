@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="poker.css" />
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4526604443102763" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -270,7 +271,7 @@
         <button class="icon-btn" id="poker-settings" aria-label="Settings">⚙</button>
       </div>
     </div>
-    <div class="spectator-panel" id="poker-spectator-panel">
+    <div class="spectator-panel hidden" id="poker-spectator-panel">
       <div class="spec-title">SPECTATORS</div>
       <div class="spec-list" id="poker-spectator-list"></div>
       <button class="btn secondary spec-sit hidden" id="btn-poker-sit-down">TAKE SEAT</button>
@@ -280,7 +281,8 @@
         <div class="poker-winners" id="poker-winners"></div>
         <div class="poker-community" id="poker-community"></div>
         <div class="poker-pot-display" id="poker-pot">POT $0</div>
-        <div class="poker-hole-row" id="poker-hole"></div>
+        <div class="poker-hole-row hidden" id="poker-hole"></div>
+        <!-- Seats live inside the felt so the table itself owns the seating layout. -->
         <div class="poker-seats-row" id="poker-seats"></div>
       </div>
       <div class="poker-actions" id="poker-actions">
@@ -320,7 +322,7 @@
       <div class="top-actions"><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn table-admin-btn" id="btn-admin-table" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
     </div>
 
-    <div class="spectator-panel" id="spectator-panel">
+    <div class="spectator-panel hidden" id="spectator-panel">
       <div class="spec-title">SPECTATORS</div>
       <div class="spec-list" id="spectator-list"></div>
       <button class="btn secondary spec-sit hidden" id="btn-sit-down">TAKE SEAT</button>
@@ -360,7 +362,7 @@
         <div class="bet-amount" id="bet-amount">$0</div>
         <button class="btn secondary" id="btn-allin">ALL IN</button>
       </div>
-      <button class="btn good" id="btn-ready" style="width:220px">READY</button>
+      <button class="btn good" id="btn-ready">READY</button>
     </div>
 
     <!-- Action controls (hit/stand/double) -->

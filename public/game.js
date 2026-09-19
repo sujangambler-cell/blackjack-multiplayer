@@ -1145,9 +1145,19 @@ function onState(state) {
   const bettingDock = $("#betting-dock");
   const actionDock = $("#action-dock");
   const waitingDock = $("#waiting-dock");
-  if (bettingDock) bettingDock.classList.add("hidden");
-  if (actionDock) actionDock.classList.add("hidden");
-  if (waitingDock) waitingDock.classList.add("hidden");
+  function hideDock(d) {
+    if (!d) return;
+    d.classList.add("hidden");
+    d.style.setProperty("display", "none", "important");
+  }
+  function showDock(d) {
+    if (!d) return;
+    d.classList.remove("hidden");
+    d.style.removeProperty("display");
+  }
+  hideDock(bettingDock);
+  hideDock(actionDock);
+  hideDock(waitingDock);
 
   const myTurn = !!(me && !me.spectator && state.phase === "PLAYING" && (
     state.activePlayerId === me.id || me.status === "playing"
@@ -1156,7 +1166,7 @@ function onState(state) {
   const handBet = me?.handBets ? Number(me.handBets[me.activeHand || 0] || me.bet || 0) : Number(me?.bet || 0);
 
   if (state.phase === "BETTING" && me && !me.spectator) {
-    if (bettingDock) bettingDock.classList.remove("hidden");
+    showDock(bettingDock);
     if ($("#bet-amount")) $("#bet-amount").textContent = "$" + (me.bet || 0);
     if ($("#bet-hint")) $("#bet-hint").style.visibility = !me.bet ? "visible" : "hidden";
     if ($("#btn-ready")) {
@@ -1167,8 +1177,7 @@ function onState(state) {
     if ($("#btn-allin")) $("#btn-allin").disabled = me.money <= 0 || me.bet === me.money;
     document.querySelectorAll("#chip-row .chip").forEach((c) => (c.disabled = me.bet >= me.money));
   } else if (myTurn && actionDock) {
-    actionDock.classList.remove("hidden");
-    actionDock.style.display = "";
+    showDock(actionDock);
     const canDouble = handLen === 2 && Number(me.money || 0) >= handBet && handBet > 0;
     if ($("#btn-double")) $("#btn-double").disabled = !canDouble;
     if ($("#btn-hit")) $("#btn-hit").disabled = false;
@@ -1183,7 +1192,7 @@ function onState(state) {
       $("#btn-split").classList.toggle("hidden", false);
     }
   } else if (waitingDock) {
-    waitingDock.classList.remove("hidden");
+    showDock(waitingDock);
     const note = $("#waiting-note");
     if (note) {
       if (me && me.spectator) {
@@ -1287,6 +1296,10 @@ function avatarHTML(p) {
 function renderSeats(state, prev) {
   const row = $("#seats-row");
   if (!row) return;
+  // Keep the viewer in this function's scope. The spectator/seat refactor
+  // previously left `me` only inside onState(), causing a ReferenceError
+  // after every deal and preventing the action dock from rendering.
+  const me = (state.players || []).find((p) => p.id === myId);
   row.innerHTML = "";
   const maxP = Math.max(2, Math.min(10, Number(state.maxPlayers) || 5));
   const seated = (state.players || []).filter(p => p.connected && !p.spectator);
@@ -1329,19 +1342,8 @@ function renderSeats(state, prev) {
     row.appendChild(seat);
   }
 
-  // Friend boost HUD
-
-  // Split button visibility
-  const splitBtn = $("#btn-split");
-  if (splitBtn) {
-    const can = !!(me && state.phase === "PLAYING" && state.activePlayerId === me.id && (me.canSplit || (
-      Array.isArray(me.hand) && me.hand.length === 2 &&
-      String(me.hand[0]?.rank||"").toUpperCase() === String(me.hand[1]?.rank||"").toUpperCase() &&
-      Number(me.money||0) >= Number(me.bet||0) && Number(me.bet||0) > 0 && !me.splitUsed
-    )));
-    splitBtn.disabled = !can;
-    splitBtn.classList.toggle("hidden", !(me && state.phase === "PLAYING"));
-  }
+  // The action dock (including SPLIT) is owned by onState(). Keeping it in
+  // one place prevents spectator mode from fighting the normal BJ controls.
   updateFriendBoostHUD(state);
   renderSpectatorPanel(state, "#spectator-list", "#btn-sit-down");
 }
@@ -1803,6 +1805,8 @@ function renderSpectatorPanel(state, listId, btnId) {
   const list = $(listId);
   const btn = $(btnId);
   const panel = list ? list.closest(".spectator-panel") : null;
+  // The Poker spectator panel stays in normal document flow.
+  // Its responsive CSS keeps it compact so it cannot cover the felt or action dock.
   if (panel) panel.classList.remove("hidden");
   if (!list) return;
   const specs = state.spectators || [];
@@ -1833,10 +1837,10 @@ function renderPokerState(state){
   setChipAvatar($("#poker-profile-avatar"), me ? {username: me.username, avatar: me.avatar || myProfile?.avatar, avatarColor: me.avatarColor || me.avatar_color || myProfile?.avatarColor} : myProfile);
   $("#poker-room-chip") && ($("#poker-room-chip").textContent = "POKER " + (state.code||""));
   $("#poker-player-count") && ($("#poker-player-count").textContent = `${(state.seatedCount!=null?state.seatedCount:(state.players||[]).length)}/${state.maxPlayers||6}`);
-  const specN = (state.spectators||[]).length;
-  if ($("#poker-status") && specN) { /* keep phase text */ }
+  const isSpectator = !me && (state.spectators || []).some(s => s.id === myId);
+  renderSpectatorPanel(state, "#poker-spectator-list", "#btn-poker-sit-down");
 
-  $("#poker-status") && ($("#poker-status").textContent = state.phase || "WAITING");
+  $("#poker-status") && ($("#poker-status").textContent = isSpectator ? "SPECTATING" : (state.phase || "WAITING"));
   $("#poker-street") && ($("#poker-street").textContent = state.street || "—");
   $("#poker-pot") && ($("#poker-pot").textContent = "POT $" + Number(state.pot||0).toLocaleString());
 
@@ -1860,38 +1864,72 @@ function renderPokerState(state){
     }
   }
 
-  // Seats along bottom (blackjack-style) with empty invite slots
+  // Seats are anchored around the felt, Blackjack-style. The viewer is placed
+  // at the bottom centre when seated; the remaining players rotate around the
+  // oval. Empty positions remain visible so the table always feels like a
+  // real 6-seat table.
   const seats = $("#poker-seats");
-  if(seats){
+  if (seats) {
     seats.innerHTML = "";
     seats.className = "poker-seats-row";
-    const players = state.players||[];
-    const maxP = Math.min(Number(state.maxPlayers||6), 6);
-    const byId = {};
-    players.forEach(p => { byId[p.id] = p; });
-    // Put me first if present, then others
-    const ordered = [];
+    const players = (state.players || []).filter(p => p.connected !== false && !p.spectator);
+    const maxP = Math.max(2, Math.min(Number(state.maxPlayers || 6), 6));
+    seats.dataset.seatCount = String(maxP);
     const meP = players.find(p => p.id === myId);
+    const ordered = [];
     if (meP) ordered.push(meP);
     players.forEach(p => { if (p.id !== myId) ordered.push(p); });
+
+    const desktopPositionsByCount = {
+      // Fixed, evenly spaced positions around the desktop oval.
+      2: [[50, 82], [50, 21]],
+      3: [[50, 82], [18, 25], [82, 25]],
+      4: [[50, 82], [16, 56], [50, 21], [84, 56]],
+      5: [[50, 78], [15, 65], [22, 25], [78, 25], [85, 65]],
+      6: [[50, 82], [15, 68], [18, 25], [50, 21], [82, 25], [85, 68]]
+    };
+    const mobilePositionsByCount = {
+      // Phone geometry: seats follow the taller oval and stay clear of the centre stack.
+      2: [[50, 81], [50, 20]],
+      3: [[50, 81], [18, 28], [82, 28]],
+      4: [[50, 81], [16, 59], [50, 20], [84, 59]],
+      5: [[50, 81], [15, 62], [19, 28], [81, 28], [85, 62]],
+      6: [[50, 81], [15, 63], [19, 28], [50, 20], [81, 28], [85, 63]]
+    };
+    const mobileMode = document.documentElement.getAttribute("data-mobile") === "1";
+    const positionsByCount = mobileMode ? mobilePositionsByCount : desktopPositionsByCount;
+    const positions = positionsByCount[maxP] || positionsByCount[6];
+
     for (let i = 0; i < maxP; i++) {
       const p = ordered[i];
+      const [x, y] = positions[i];
+      const seat = el(
+        "div",
+        "poker-seat-slot" +
+          (p && p.isTurn ? " turn" : "") +
+          (p && p.id === myId ? " me" : "") +
+          (p && p.status === "folded" ? " folded" : "")
+      );
+      seat.style.setProperty("left", x + "%", "important");
+      seat.style.setProperty("top", y + "%", "important");
+
       if (p) {
-        const seat = el("div", "poker-seat-slot" + (p.isTurn?" turn":"") + (p.id===myId?" me":"") + (p.status==="folded"?" folded":""));
         const badges = [];
-        if(p.isDealer) badges.push('<span class="poker-badge dealer">D</span>');
-        if(p.isSB) badges.push('<span class="poker-badge sb">SB</span>');
-        if(p.isBB) badges.push('<span class="poker-badge bb">BB</span>');
-        const holeHtml = (p.hole||[]).map(c=>pokerCardHTML(c,true)).join("");
+        if (p.isDealer) badges.push('<span class="poker-badge dealer">D</span>');
+        if (p.isSB) badges.push('<span class="poker-badge sb">SB</span>');
+        if (p.isBB) badges.push('<span class="poker-badge bb">BB</span>');
+        const holeHtml = (p.hole || []).map(c => pokerCardHTML(c, true)).join("");
         seat.innerHTML = `${avatarHTML(p)}
           <div class="poker-seat-cards">${holeHtml}</div>
-          <div class="poker-seat-name">${escapeHtml(p.username||"?")}${badges.join("")}</div>
-          <div class="poker-seat-chips">$${Number(p.chips||0).toLocaleString()}</div>
-          <div class="poker-seat-bet">${p.bet?("Bet $"+Number(p.bet).toLocaleString()):""}</div>
-          <div class="poker-seat-status">${escapeHtml(p.status||"")}${p.handName?" • "+escapeHtml(p.handName):""}</div>`;
+          <div class="poker-seat-name">${escapeHtml(p.username || "?")}${p.id === myId ? " (YOU)" : ""}${badges.join("")}</div>
+          <div class="poker-seat-chips">$${Number(p.chips || 0).toLocaleString()}</div>
+          <div class="poker-seat-bet">${p.bet ? ("BET $" + Number(p.bet).toLocaleString()) : ""}</div>
+          <div class="poker-seat-status">${escapeHtml(p.status || "")}${p.handName ? " • " + escapeHtml(p.handName) : ""}</div>`;
         seats.appendChild(seat);
       } else {
         const empty = el("div", "poker-seat-slot empty");
+        empty.style.setProperty("left", x + "%", "important");
+        empty.style.setProperty("top", y + "%", "important");
         const plus = el("button", "seat-plus", "+");
         plus.type = "button";
         plus.title = "Invite a friend";
@@ -1945,7 +1983,10 @@ function renderPokerState(state){
     }
   }
   if(msgEl && canPhase){
-    if(seatedCount < 2){
+    if(isSpectator){
+      msgEl.className = "poker-table-msg";
+      msgEl.textContent = "SPECTATING — TAKE SEAT WHEN A SPOT OPENS";
+    } else if(seatedCount < 2){
       msgEl.className = "poker-table-msg";
       msgEl.textContent = `Waiting for players… ${seatedCount}/2 seated with chips`;
     } else if(isHost){
@@ -2076,6 +2117,9 @@ function applyMobileMode(enabled) {
   $("#toggle-mobile")?.classList.toggle("on", on);
   $("#toggle-mobile-auth")?.classList.toggle("on", on);
   localStorage.setItem("bj_mobile", on ? "1" : "0");
+  if (typeof pokerState !== "undefined" && pokerState && $("#screen-poker")?.classList.contains("active")) {
+    renderPokerState(pokerState);
+  }
 }
 
 function syncFullscreenToggle() {
@@ -2275,8 +2319,17 @@ function initSettings() {
   applyVolume(savedVol);
   const savedScale = parseInt(localStorage.getItem("bj_scale") || "100", 10);
   applyScale(savedScale);
-  // Mobile mode: remember preference (default off until user turns on)
-  applyMobileMode(localStorage.getItem("bj_mobile") === "1");
+  // Mobile mode: remember preference; auto-enable on narrow phones if never set
+  (function initMobileMode() {
+    const saved = localStorage.getItem("bj_mobile");
+    if (saved === "1" || saved === "0") {
+      applyMobileMode(saved === "1");
+    } else {
+      const narrow = window.matchMedia("(max-width: 700px), (max-aspect-ratio: 3/4)").matches
+        || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+      applyMobileMode(narrow);
+    }
+  })();
   const savedQuality = parseInt(localStorage.getItem("bj_quality") || "2", 10);
   applyQuality(savedQuality);
   applySeasonTheme();

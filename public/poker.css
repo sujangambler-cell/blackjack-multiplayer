@@ -1,0 +1,789 @@
+/* Poker lobby/card identity styling kept separate from the table geometry. */
+.game-card-poker { border-color: rgba(212,175,55,0.35); }
+.game-card-poker:hover { box-shadow: 0 0 24px rgba(212,175,55,0.25); }
+#screen-poker.active .profile-chip .chip-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+
+/* ========================================================================
+   CASINO X — POKER TABLE LAYOUT
+   One authoritative layout system for desktop + Mobile Mode.
+   Seats belong to the felt and are positioned by percentage coordinates.
+   Blackjack styles are intentionally not touched here.
+   ======================================================================== */
+
+#screen-poker.active {
+  min-width: 0;
+  overflow: hidden;
+}
+
+#screen-poker.active .poker-table-shell {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+#screen-poker.active .poker-felt {
+  position: relative;
+  flex: 0 1 auto;
+  width: min(920px, calc(100vw - 32px));
+  aspect-ratio: 1.82 / 1;
+  height: auto;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 0;
+  display: block;
+  overflow: visible;
+  box-sizing: border-box;
+  border-radius: 50% / 43%;
+  background: radial-gradient(ellipse at center, #9d2437 0%, #641322 52%, #2a0911 100%);
+  border: 5px solid #e8dcc8;
+  box-shadow:
+    inset 0 0 55px rgba(0,0,0,.48),
+    0 0 0 2px rgba(212,184,122,.28),
+    0 14px 34px rgba(0,0,0,.45);
+}
+
+#screen-poker.active .poker-seats-row,
+#screen-poker.active #poker-seats {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  display: block;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#screen-poker.active .poker-seat-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 112px;
+  min-width: 112px;
+  max-width: 112px;
+  min-height: 68px;
+  padding: 6px 6px 7px;
+  margin: 0;
+  border-radius: 11px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  text-align: center;
+  color: #f4eee6;
+  background: rgba(8,7,10,.88);
+  border: 1px solid rgba(255,255,255,.16);
+  box-shadow: 0 5px 16px rgba(0,0,0,.38);
+  font-size: 9px;
+  line-height: 1.15;
+  pointer-events: auto;
+  overflow: hidden;
+  z-index: 11;
+}
+
+#screen-poker.active .poker-seat-slot.me {
+  border-color: rgba(212,175,55,.95);
+  box-shadow: 0 0 0 1px rgba(212,175,55,.25), 0 0 16px rgba(212,175,55,.22);
+}
+
+#screen-poker.active .poker-seat-slot.turn {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 1px rgba(74,222,128,.22), 0 0 16px rgba(74,222,128,.22);
+}
+
+#screen-poker.active .poker-seat-slot.folded { opacity: .45; }
+
+#screen-poker.active .poker-seat-slot.empty {
+  min-height: 58px;
+  gap: 3px;
+  border-style: dashed;
+  background: rgba(0,0,0,.22);
+}
+
+#screen-poker.active .poker-seat-slot .seat-avatar {
+  width: 28px;
+  height: 28px;
+  margin: 0 0 2px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-weight: 800;
+  font-size: 11px;
+  color: #fff;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255,255,255,.24);
+}
+
+#screen-poker.active .poker-seat-slot.me .seat-avatar {
+  border-color: #d7b56d;
+  box-shadow: 0 0 0 1px rgba(215,181,109,.35);
+}
+
+#screen-poker.active .poker-seat-cards {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 0;
+  margin: 0 0 2px;
+}
+
+#screen-poker.active .poker-seat-cards .playing-card.small {
+  width: 20px;
+  min-width: 20px;
+  height: 28px;
+  border-radius: 3px;
+  font-size: 6px;
+}
+
+#screen-poker.active .poker-seat-name {
+  width: 100%;
+  max-width: 102px;
+  margin: 0;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#screen-poker.active .poker-seat-chips {
+  color: #f5e6a3;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+#screen-poker.active .poker-seat-bet {
+  min-height: 9px;
+  color: #b9d8ff;
+  font-size: 8px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+#screen-poker.active .poker-seat-status {
+  width: 100%;
+  min-height: 8px;
+  font-size: 6px;
+  line-height: 1;
+  opacity: .68;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#screen-poker.active .poker-badge {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  font-size: 5px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+#screen-poker.active .poker-badge.dealer { background: #d4af37; color: #111; }
+#screen-poker.active .poker-badge.sb { background: #64748b; color: #fff; }
+#screen-poker.active .poker-badge.bb { background: #3b82f6; color: #fff; }
+
+#screen-poker.active .poker-community {
+  position: absolute;
+  left: 50%;
+  top: 43%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 0;
+  margin: 0;
+}
+
+#screen-poker.active .poker-community .playing-card {
+  width: 44px;
+  height: 62px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+#screen-poker.active .poker-comm-placeholder {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.28);
+  color: rgba(244,238,230,.55);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+#screen-poker.active .poker-pot-display {
+  position: absolute;
+  left: 50%;
+  top: 61%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  margin: 0;
+  padding: 5px 13px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.52);
+  color: #f5e6a3;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+#screen-poker.active .poker-winners {
+  position: absolute;
+  left: 50%;
+  top: 74%;
+  transform: translate(-50%, -50%);
+  width: 52%;
+  z-index: 6;
+  margin: 0;
+  text-align: center;
+  pointer-events: none;
+  font-size: 8px;
+}
+
+#screen-poker.active .poker-winner-chip {
+  display: inline-block;
+  margin: 2px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: rgba(212,175,55,.18);
+  border: 1px solid rgba(212,175,55,.5);
+  color: #f5e6a3;
+}
+
+#screen-poker.active .poker-hole-row { display: none !important; }
+
+#screen-poker.active .poker-actions {
+  width: min(620px, calc(100vw - 32px));
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+#screen-poker.active .poker-act {
+  min-width: 82px;
+  max-width: 105px;
+  min-height: 38px;
+  padding: 6px 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+#screen-poker.active .poker-bet-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: min(500px, calc(100vw - 32px));
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+#screen-poker.active .poker-bet-input input {
+  width: 120px;
+  min-height: 38px;
+  padding: 7px 9px;
+}
+
+#screen-poker.active .poker-table-msg {
+  min-height: 15px;
+  margin: 0;
+  padding: 1px 6px;
+  text-align: center;
+  color: #f5e6a3;
+  font-size: 9px;
+  line-height: 1.15;
+  flex: 0 0 auto;
+}
+
+#screen-poker.active .poker-table-msg.ok { color: #4ade80; }
+#screen-poker.active .poker-table-msg.error { color: #f87171; }
+
+#screen-poker.active .poker-buyin-bar {
+  width: min(480px, calc(100vw - 32px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 7px;
+  box-sizing: border-box;
+}
+
+#screen-poker.active .poker-buyin-bar input {
+  width: 110px;
+  min-height: 38px;
+}
+
+#screen-poker.active .poker-table-footer {
+  width: min(620px, calc(100vw - 32px));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 0 max(4px, env(safe-area-inset-bottom, 0px));
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+#screen-poker.active .poker-table-footer .btn {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 9px;
+}
+
+/* The spectator strip is part of the flow; it never floats over the felt. */
+#screen-poker.active #poker-spectator-panel {
+  position: relative;
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  width: min(620px, calc(100vw - 24px));
+  max-height: 42px;
+  margin: 0 auto;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  z-index: 20;
+}
+
+#screen-poker.active #poker-spectator-panel .spec-title {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+#screen-poker.active #poker-spectator-panel .spec-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+
+#screen-poker.active #poker-spectator-panel .spec-row {
+  margin: 0;
+  white-space: nowrap;
+}
+
+#screen-poker.active #poker-spectator-panel .spec-empty {
+  white-space: nowrap;
+}
+
+#screen-poker.active #poker-spectator-panel .spec-sit {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 30px;
+  margin: 0;
+  padding: 5px 10px;
+}
+
+/* ========================================================================
+   MOBILE MODE — dedicated Poker phone layout
+   This section is intentionally scoped to the existing mobile breakpoint
+   and data-mobile mode. Desktop Poker geometry above remains unchanged.
+   ======================================================================== */
+@media (max-width: 700px), (max-aspect-ratio: 3/4) {
+  /* Mobile Poker is a dedicated phone composition, not a shrunken desktop table. */
+  #screen-poker.active .poker-table-shell {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 7px;
+    padding: 4px 6px max(8px, env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+
+  /* Keep the spectator strip in normal flow so it can never cover the felt. */
+  #screen-poker.active #poker-spectator-panel {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    width: calc(100% - 12px) !important;
+    max-width: 430px !important;
+    min-height: 30px;
+    max-height: 32px;
+    margin: 0 auto 2px !important;
+    padding: 3px 6px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    z-index: 30;
+  }
+
+  #screen-poker.active .poker-felt {
+    width: min(100%, 423px);
+    max-width: 423px;
+    aspect-ratio: 1.43 / 1;
+    min-height: 0;
+    height: auto;
+    flex: 0 0 auto;
+    border-width: 4px;
+    border-radius: 50% / 43%;
+    overflow: visible;
+    margin: 0 auto;
+  }
+
+  /* Slightly larger, still compact seats so the extra phone space is used. */
+  #screen-poker.active .poker-seat-slot {
+    width: clamp(62px, 17vw, 72px);
+    min-width: clamp(62px, 17vw, 72px);
+    max-width: clamp(62px, 17vw, 72px);
+    min-height: 50px;
+    padding: 4px 3px 4px;
+    border-radius: 9px;
+    gap: 1px;
+    font-size: 7px;
+  }
+
+  #screen-poker.active .poker-seat-slot.empty {
+    min-height: 50px;
+  }
+
+  #screen-poker.active .poker-seat-slot .seat-avatar {
+    width: 19px;
+    height: 19px;
+    margin-bottom: 1px;
+    font-size: 8px;
+  }
+
+  #screen-poker.active .poker-seat-cards {
+    gap: 1px;
+    margin-bottom: 1px;
+  }
+
+  #screen-poker.active .poker-seat-cards .playing-card.small {
+    width: 13px;
+    min-width: 13px;
+    height: 18px;
+    border-radius: 2px;
+    font-size: 4px;
+  }
+
+  #screen-poker.active .poker-seat-name {
+    max-width: 68px;
+    font-size: 6.1px;
+  }
+
+  #screen-poker.active .poker-seat-chips,
+  #screen-poker.active .poker-seat-bet {
+    font-size: 6.1px;
+  }
+
+  #screen-poker.active .poker-seat-bet {
+    min-height: 6px;
+  }
+
+  #screen-poker.active .poker-seat-status {
+    min-height: 5px;
+    font-size: 4.8px;
+  }
+
+  #screen-poker.active .poker-badge {
+    font-size: 4px;
+    padding: 1px 2px;
+    margin-left: 1px;
+  }
+
+  /* Rebalance the centre stack for the taller phone felt. */
+  #screen-poker.active .poker-community {
+    top: 45%;
+    gap: 3px;
+  }
+
+  #screen-poker.active .poker-community .playing-card {
+    width: 29px;
+    height: 41px;
+    border-radius: 4px;
+    font-size: 8px;
+  }
+
+  #screen-poker.active .poker-comm-placeholder {
+    padding: 4px 10px;
+    font-size: 7px;
+  }
+
+  #screen-poker.active .poker-pot-display {
+    top: 61%;
+    padding: 4px 10px;
+    font-size: 8px;
+  }
+
+  #screen-poker.active .poker-winners {
+    top: 74%;
+    width: 58%;
+    font-size: 6px;
+  }
+
+  #screen-poker.active .poker-winner-chip {
+    margin: 1px;
+    padding: 3px 5px;
+  }
+
+  #screen-poker.active .poker-actions {
+    width: 100%;
+    max-width: 423px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    padding: 0;
+    margin: 0 auto;
+  }
+
+  #screen-poker.active .poker-act {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 36px;
+    padding: 5px 3px;
+    font-size: 8px;
+  }
+
+  #screen-poker.active .poker-bet-input {
+    width: 100%;
+    max-width: 423px;
+    gap: 4px;
+  }
+
+  #screen-poker.active .poker-bet-input input {
+    width: 100px;
+    min-height: 34px;
+  }
+
+  #screen-poker.active .poker-table-msg {
+    min-height: 12px;
+    font-size: 7px;
+    padding: 0 3px;
+  }
+
+  #screen-poker.active .poker-buyin-bar {
+    width: 100%;
+    max-width: 423px;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  #screen-poker.active .poker-buyin-bar input {
+    width: 100px;
+    min-height: 34px;
+  }
+
+  #screen-poker.active .poker-table-footer {
+    width: 100%;
+    max-width: 423px;
+    gap: 5px;
+    margin: 0 auto;
+  }
+
+  #screen-poker.active .poker-table-footer .btn {
+    min-height: 34px;
+    padding: 5px 8px;
+    font-size: 7.5px;
+  }
+
+  #screen-poker.active #poker-spectator-panel .spec-title {
+    flex: 0 0 auto;
+    margin: 0;
+    font-size: 7px;
+  }
+
+  #screen-poker.active #poker-spectator-panel .spec-list {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    flex: 1 1 auto;
+  }
+
+  #screen-poker.active #poker-spectator-panel .spec-row {
+    margin: 0;
+    white-space: nowrap;
+    font-size: 7px;
+  }
+
+  #screen-poker.active #poker-spectator-panel .spec-row .seat-avatar {
+    width: 18px;
+    height: 18px;
+  }
+
+  #screen-poker.active #poker-spectator-panel .spec-empty {
+    white-space: nowrap;
+    font-size: 7px;
+  }
+
+  #screen-poker.active #poker-spectator-panel .spec-sit {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 26px;
+    margin: 0;
+    padding: 4px 7px;
+    font-size: 7px;
+  }
+}
+
+/* Explicit Mobile Mode: the same dedicated phone composition is used even on a desktop browser. */
+html[data-mobile="1"] #screen-poker.active {
+  height: 100dvh;
+  min-height: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+html[data-mobile="1"] #screen-poker.active .top-bar {
+  flex: 0 0 auto;
+}
+
+html[data-mobile="1"] #screen-poker.active #poker-spectator-panel {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: calc(100% - 12px) !important;
+  max-width: 430px !important;
+  margin: 0 auto 2px !important;
+}
+
+html[data-mobile="1"] #screen-poker.active .poker-table-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 4px 6px max(8px, env(safe-area-inset-bottom, 0px));
+  gap: 7px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+html[data-mobile="1"] #screen-poker.active .poker-felt {
+  flex: 0 0 auto;
+  width: calc(100% - 12px);
+  max-width: 423px;
+  aspect-ratio: 1.43 / 1;
+  min-height: 0;
+  height: auto;
+  margin: 0 auto;
+  border-width: 4px;
+  border-radius: 50% / 43%;
+}
+
+html[data-mobile="1"] #screen-poker.active .poker-seat-slot {
+  width: clamp(62px, 17vw, 72px);
+  min-width: clamp(62px, 17vw, 72px);
+  max-width: clamp(62px, 17vw, 72px);
+  min-height: 50px;
+  padding: 4px 3px;
+}
+
+html[data-mobile="1"] #screen-poker.active .poker-community .playing-card {
+  width: 29px;
+  height: 41px;
+}
+
+html[data-mobile="1"] #screen-poker.active .poker-actions {
+  width: 100%;
+  max-width: 423px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+html[data-mobile="1"] #screen-poker.active .poker-act {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 36px;
+  padding: 5px 3px;
+  font-size: 8px;
+}
+
+html[data-mobile="1"] #screen-poker.active .poker-table-footer,
+html[data-mobile="1"] #screen-poker.active .poker-bet-input,
+html[data-mobile="1"] #screen-poker.active .poker-buyin-bar {
+  width: 100%;
+  max-width: 423px;
+}
+
+@media (max-width: 340px) {
+  #screen-poker.active .poker-felt,
+  html[data-mobile="1"] #screen-poker.active .poker-felt {
+    width: calc(100% - 8px);
+    max-width: none;
+    aspect-ratio: 1.40 / 1;
+  }
+
+  #screen-poker.active .poker-seat-slot,
+  html[data-mobile="1"] #screen-poker.active .poker-seat-slot {
+    width: 58px;
+    min-width: 58px;
+    max-width: 58px;
+    min-height: 47px;
+  }
+
+  #screen-poker.active .poker-community .playing-card,
+  html[data-mobile="1"] #screen-poker.active .poker-community .playing-card {
+    width: 25px;
+    height: 36px;
+  }
+}
+
+@media (min-width: 701px) {
+  #screen-poker.active #poker-spectator-panel.hidden { display: none !important; }
+}
