@@ -563,6 +563,13 @@ function drawFloatingMoney(o, x, y, dark) {
 }
 
 function drawBackground(t) {
+  // Mobile mode: skip animated backdrop for performance
+  if (document.documentElement.getAttribute("data-mobile") === "1") {
+    if (bgCanvas) {
+      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+    }
+    return;
+  }
   const w = innerWidth, h = innerHeight;
   const seasonal = document.documentElement.classList.contains("season-crimson") || document.documentElement.classList.contains("season-1927");
   const dark = seasonal || document.documentElement.getAttribute("data-theme") === "dark";
@@ -677,6 +684,15 @@ function burstConfetti() {
   }
 }
 function stepParticles() {
+  if (document.documentElement.getAttribute("data-mobile") === "1") {
+    particles = [];
+    if (fxCanvas && fxCanvas.getContext) {
+      const c = fxCanvas.getContext("2d");
+      if (c) c.clearRect(0, 0, fxCanvas.width || 0, fxCanvas.height || 0);
+    }
+    requestAnimationFrame(stepParticles);
+    return;
+  }
   fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
   particles = particles.filter((p) => p.life > 0);
   for (const p of particles) {
@@ -696,6 +712,7 @@ function stepParticles() {
 requestAnimationFrame(stepParticles);
 
 function flash(kind) {
+  if (document.documentElement.getAttribute("data-mobile") === "1") return;
   const f = $("#flash");
   if (!f) return;
   f.className = "";
@@ -703,12 +720,23 @@ function flash(kind) {
   f.classList.add(kind, "flash-" + kind);
 }
 function shakeTable() {
+  if (document.documentElement.getAttribute("data-mobile") === "1") return;
   const tw = $("#table-wrap");
   tw.classList.remove("shake");
   void tw.offsetWidth;
   tw.classList.add("shake");
 }
 function centerBanner(text, kind) {
+  if (document.documentElement.getAttribute("data-mobile") === "1") {
+    const slot = $("#turn-banner-slot") || $("#flash");
+    if (slot) {
+      slot.textContent = text || "";
+      slot.className = "mobile-turn-banner " + (kind || "");
+      clearTimeout(window._mobileBannerT);
+      window._mobileBannerT = setTimeout(() => { slot.textContent = ""; }, 1600);
+    }
+    return;
+  }
   const slot = $("#turn-banner-slot");
   slot.innerHTML = "";
   const b = el("div", "center-banner " + (kind || ""), text);
@@ -1068,8 +1096,12 @@ function setAuthMode(mode) {
 function onState(state) {
   // Ignore table updates if we've already left (prevents "ghost still seated" UI)
   if (!myId && !myRoom) return;
-  if (!$("#screen-table")?.classList.contains("active") && !$("#screen-poker")?.classList.contains("active")) {
-    return;
+  const onBj = $("#screen-table")?.classList.contains("active");
+  const onPk = $("#screen-poker")?.classList.contains("active");
+  if (!onBj && !onPk) {
+    // Race: state arrived before screen switch — force BJ table if we joined BJ
+    if (currentGame === "poker") showScreen("#screen-poker");
+    else showScreen("#screen-table");
   }
   const prev = lastState;
   lastState = state;
@@ -1113,37 +1145,59 @@ function onState(state) {
   const bettingDock = $("#betting-dock");
   const actionDock = $("#action-dock");
   const waitingDock = $("#waiting-dock");
-  bettingDock.classList.add("hidden");
-  actionDock.classList.add("hidden");
-  waitingDock.classList.add("hidden");
+  if (bettingDock) bettingDock.classList.add("hidden");
+  if (actionDock) actionDock.classList.add("hidden");
+  if (waitingDock) waitingDock.classList.add("hidden");
+
+  const myTurn = !!(me && !me.spectator && state.phase === "PLAYING" && (
+    state.activePlayerId === me.id || me.status === "playing"
+  ));
+  const handLen = Array.isArray(me?.hand) ? me.hand.length : (Array.isArray(me?.hands?.[me?.activeHand || 0]) ? me.hands[me.activeHand || 0].length : 0);
+  const handBet = me?.handBets ? Number(me.handBets[me.activeHand || 0] || me.bet || 0) : Number(me?.bet || 0);
 
   if (state.phase === "BETTING" && me && !me.spectator) {
-    bettingDock.classList.remove("hidden");
-    $("#bet-amount").textContent = "$" + me.bet;
-    $("#bet-hint").style.visibility = me.bet === 0 ? "visible" : "hidden";
-    $("#btn-ready").disabled = me.bet <= 0 || me.status === "ready";
-    $("#btn-ready").textContent = me.status === "ready" ? "WAITING…" : "READY";
-    $("#btn-clear").disabled = me.bet === 0;
-    $("#btn-allin").disabled = me.money <= 0 || me.bet === me.money;
+    if (bettingDock) bettingDock.classList.remove("hidden");
+    if ($("#bet-amount")) $("#bet-amount").textContent = "$" + (me.bet || 0);
+    if ($("#bet-hint")) $("#bet-hint").style.visibility = !me.bet ? "visible" : "hidden";
+    if ($("#btn-ready")) {
+      $("#btn-ready").disabled = !me.bet || me.status === "ready";
+      $("#btn-ready").textContent = me.status === "ready" ? "WAITING…" : "READY";
+    }
+    if ($("#btn-clear")) $("#btn-clear").disabled = !me.bet;
+    if ($("#btn-allin")) $("#btn-allin").disabled = me.money <= 0 || me.bet === me.money;
     document.querySelectorAll("#chip-row .chip").forEach((c) => (c.disabled = me.bet >= me.money));
-  } else if (state.phase === "PLAYING" && me && state.activePlayerId === me.id) {
+  } else if (myTurn && actionDock) {
     actionDock.classList.remove("hidden");
-    const canDouble = me.hand.length === 2 && me.money >= me.bet;
-    $("#btn-double").disabled = !canDouble;
-  } else {
+    actionDock.style.display = "";
+    const canDouble = handLen === 2 && Number(me.money || 0) >= handBet && handBet > 0;
+    if ($("#btn-double")) $("#btn-double").disabled = !canDouble;
+    if ($("#btn-hit")) $("#btn-hit").disabled = false;
+    if ($("#btn-stand")) $("#btn-stand").disabled = false;
+    const canSplit = !!(me.canSplit || (
+      handLen === 2 && Array.isArray(me.hand) &&
+      String(me.hand[0]?.rank || "").toUpperCase() === String(me.hand[1]?.rank || "").toUpperCase() &&
+      Number(me.money || 0) >= Number(me.bet || 0) && Number(me.bet || 0) > 0 && !me.splitUsed
+    ));
+    if ($("#btn-split")) {
+      $("#btn-split").disabled = !canSplit;
+      $("#btn-split").classList.toggle("hidden", false);
+    }
+  } else if (waitingDock) {
     waitingDock.classList.remove("hidden");
     const note = $("#waiting-note");
-    if (me && me.spectator) {
-      note.textContent = "Spectating — watching this table";
-    } else if (state.phase === "PLAYING") {
-      const active = state.players.find((p) => p.id === state.activePlayerId);
-      note.textContent = active ? `Waiting for ${active.name}…` : "Dealer is playing…";
-    } else if (state.phase === "ROUND_OVER") {
-      note.textContent = "Round over — next hand starting soon";
-    } else if (me && me.status === "spectating") {
-      note.textContent = "Spectating — you're in next round";
-    } else {
-      note.textContent = "Waiting for the table…";
+    if (note) {
+      if (me && me.spectator) {
+        note.textContent = "Spectating — watching this table";
+      } else if (state.phase === "PLAYING") {
+        const active = state.players.find((p) => p.id === state.activePlayerId);
+        note.textContent = active ? ("Waiting for " + (active.username || active.name) + "…") : "Dealer is playing…";
+      } else if (state.phase === "ROUND_OVER") {
+        note.textContent = "Round over — next hand starting soon";
+      } else if (me && me.status === "spectating") {
+        note.textContent = "Spectating — you're in next round";
+      } else {
+        note.textContent = "Waiting for the table…";
+      }
     }
   }
 

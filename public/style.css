@@ -7699,3 +7699,81 @@ html[data-orient="landscape"][data-mobile="1"] .poker-felt {
   border-radius: 8px;
 }
 #btn-split:disabled { opacity: 0.4; }
+
+
+/* ==========================================================================
+   MOBILE PERF + ACTION DOCK FIX
+   ========================================================================== */
+html[data-mobile="1"] *,
+html[data-mobile="1"] *::before,
+html[data-mobile="1"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-mobile="1"] #bg-canvas {
+  display: none !important;
+}
+html[data-mobile="1"] #fx-canvas {
+  display: none !important;
+}
+html[data-mobile="1"] body::after {
+  display: none !important;
+}
+
+/* Blackjack action dock always reachable on phones */
+html[data-mobile="1"] #screen-table.active {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+html[data-mobile="1"] #screen-table.active .table-wrap {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+html[data-mobile="1"] #screen-table.active #betting-dock,
+html[data-mobile="1"] #screen-table.active #action-dock,
+html[data-mobile="1"] #screen-table.active #waiting-dock {
+  position: relative !important;
+  flex: 0 0 auto !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  padding: 10px 12px max(14px, env(safe-area-inset-bottom)) !important;
+  background: rgba(0, 0, 0, 0.92) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+  z-index: 40 !important;
+  min-height: 64px !important;
+}
+/* When .hidden, stay hidden */
+html[data-mobile="1"] #screen-table.active #betting-dock.hidden,
+html[data-mobile="1"] #screen-table.active #action-dock.hidden,
+html[data-mobile="1"] #screen-table.active #waiting-dock.hidden {
+  display: none !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+html[data-mobile="1"] #action-dock .btn,
+html[data-mobile="1"] #betting-dock .btn {
+  min-height: 48px !important;
+  min-width: 72px !important;
+  font-size: 14px !important;
+  flex: 1 1 30% !important;
+  max-width: 140px !important;
+}
+html[data-mobile="1"] .mobile-turn-banner {
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 6px;
+  color: #f4eee6;
+}

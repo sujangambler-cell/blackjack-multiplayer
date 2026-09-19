@@ -20,13 +20,13 @@
       "play10": 0,
       "win3": 0,
       "blackjack1": 0,
-      "poker1": 0
+      "roulette1": 0
     },
-    "daily_challenge_date": "2026-09-19",
+    "daily_challenge_date": "2026-09-04",
     "daily_challenge_claimed": [],
     "friends": [],
     "avatar": null,
-    "avatar_color": "#0ea5e9",
+    "avatar_color": null,
     "owned_themes": [
       "classic"
     ],
@@ -61,17 +61,9 @@
       "roulette": {
         "games": 0,
         "wins": 0
-      },
-      "poker": {
-        "games": 0,
-        "wins": 0
       }
     },
-    "session_token": "8ec9febdc015636a4a2d4d9adfda288243af714deb35b9c2",
-    "friend_requests": [],
-    "friend_outgoing": [],
-    "play_seconds": 20,
-    "season_id": 2
+    "session_token": "8ec9febdc015636a4a2d4d9adfda288243af714deb35b9c2"
   },
   "pokertest1": {
     "username": "pokertest1",
