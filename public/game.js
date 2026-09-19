@@ -24,23 +24,67 @@ let myProfile = null;
 let leaderboardData = null;
 let activeRank = "balance";
 let publicTables = [];
-let rouletteTables = [];
-let rouletteState = null;
-let rouletteBetAmount = 100;
+let pokerTables = [];
+let pokerState = null;
+let pokerBetAmount = 100;
 let currentGame = "blackjack";
 let friendsData = [];
+let friendRequests = [];
+let friendOutgoing = [];
 let chatMuted = localStorage.getItem("bj_chat_muted") === "1";
 let storeData = null;
 let seasonData = null;
 let appearanceData = null;
-let rouletteAnimationTimer = null;
-const ROULETTE_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+let pokerAnimationTimer = null;
+const POKER_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 
 // ---------------------------------------------------------------------------
 // Update Log — versioned changelog shown once per account after update
 // ---------------------------------------------------------------------------
-const UPDATE_LOG_VERSION = 1;
+const UPDATE_LOG_VERSION = 3;
 const UPDATE_LOG_ENTRIES = [
+  {
+    icon: "♠",
+    title: "Larger poker table",
+    body: "The poker felt is bigger with roomier seats and clearer community cards."
+  },
+  {
+    icon: "🎨",
+    title: "Seasonal menu styling",
+    body: "Profile, Store, Season, Friends, and other home buttons pick up the Crimson Royale look."
+  },
+  {
+    icon: "☀️",
+    title: "Light mode + season fix",
+    body: "Seasonal UI no longer turns the lobby beige in light mode — Crimson Royale stays deep and readable."
+  },
+
+  {
+    icon: "👑",
+    title: "Crimson Royale season polish",
+    body: "Season 2 theme now covers the full backdrop, panels, and table felt with a deeper royal crimson glow."
+  },
+  {
+    icon: "♠",
+    title: "Poker table layout",
+    body: "Poker seats sit along the bottom like Blackjack, with + open seats to invite friends."
+  },
+  {
+    icon: "⚙",
+    title: "Settings text fix",
+    body: "Seasonal UI no longer washes out settings labels and help text."
+  },
+  {
+    icon: "📱",
+    title: "Mobile mode overhaul",
+    body: "Larger touch targets, better card sizing, less squashed docks, and cleaner side notifications on phones."
+  },
+  {
+    icon: "🤝",
+    title: "Friend requests",
+    body: "Adding a friend now sends a request they must accept. Online/offline status is accurate, including lobby."
+  },
+
   {
     icon: "♠",
     title: "Blackjack tables refined",
@@ -88,7 +132,7 @@ function renderUpdateLogBody() {
   if (!body) return;
   body.innerHTML = UPDATE_LOG_ENTRIES.map(e => `
     <div class="ul-entry">
-      <div class="ul-illust" aria-hidden="true">${e.icon}</div>
+      <div class="ul-illust" aria-hidden="true">${e.icon || "✦"}</div>
       <div>
         <strong>${escapeHtml(e.title)}</strong>
         <p>${escapeHtml(e.body)}</p>
@@ -164,7 +208,7 @@ function showSeasonLevelToast(level) {
     icon: "🎩",
     kind: "season",
     title: `You reached level ${level}`,
-    body: "Claim it in the main menu — open Season 1 for your pass rewards.",
+    body: "Claim it in the main menu — open Season 2 for your pass rewards.",
     actions: [
       {
         label: "CLAIM",
@@ -265,7 +309,7 @@ function play(name) {
 // Hover + click SFX for interactive UI (delegated, low cost)
 let _lastHover = 0;
 document.addEventListener("pointerover", (e) => {
-  const t = e.target.closest?.(".btn, .icon-btn, .chip, .game-card, .toggle, .auth-tab, .seat-plus, .roulette-number, .roulette-bet");
+  const t = e.target.closest?.(".btn, .icon-btn, .chip, .game-card, .toggle, .auth-tab, .seat-plus, .poker-number, .poker-bet");
   if (!t) return;
   const now = performance.now();
   if (now - _lastHover < 40) return;
@@ -292,7 +336,7 @@ function clearTableClientState() {
   myId = null;
   myRoom = null;
   lastState = null;
-  rouletteState = null;
+  pokerState = null;
   isAdmin = false;
   $("#settings-overlay")?.classList.remove("open");
   $("#host-overlay")?.classList.remove("open");
@@ -301,10 +345,10 @@ function clearTableClientState() {
   $("#invite-toast")?.classList.add("hidden");
   $("#friend-boost-hud")?.classList.add("hidden");
   $("#double-cash-banner")?.remove();
-  $("#roulette-admin")?.classList.add("hidden");
+  $("#poker-admin")?.classList.add("hidden");
   $("#btn-admin-table")?.classList.add("hidden");
   $("#btn-host")?.classList.add("hidden");
-  $("#roulette-host")?.classList.add("hidden");
+  $("#poker-host")?.classList.add("hidden");
   // Clear any leftover seat DOM so re-entering doesn't flash old seats
   const seats = $("#seats-row");
   if (seats) seats.innerHTML = "";
@@ -480,7 +524,8 @@ function drawFloatingMoney(o, x, y, dark) {
 
 function drawBackground(t) {
   const w = innerWidth, h = innerHeight;
-  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  const seasonal = document.documentElement.classList.contains("season-crimson") || document.documentElement.classList.contains("season-1927");
+  const dark = seasonal || document.documentElement.getAttribute("data-theme") === "dark";
   bgCtx.clearRect(0, 0, w, h);
   const grad = bgCtx.createRadialGradient(w*.5, h*.45, 0, w*.5, h*.5, Math.max(w,h)*.78);
   grad.addColorStop(0, dark ? "rgba(22,22,28,.98)" : "rgba(255,238,220,.98)");
@@ -656,7 +701,17 @@ function buildChipRow() {
 // WebSocket
 // ---------------------------------------------------------------------------
 function send(obj) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+    return true;
+  }
+  console.warn("WS not open; message dropped", obj && obj.type);
+  if (obj && (obj.type === "create_public" || obj.type === "join" || obj.type === "public_tables")) {
+    const err = currentGame === "poker" ? $("#poker-room-error") : $("#room-error");
+    if (err) err.textContent = "Not connected to server. Reconnecting…";
+    connect();
+  }
+  return false;
 }
 
 function connect() {
@@ -697,19 +752,42 @@ function connect() {
       return;
     }
     if (msg.type === "public_tables") {
-      if (msg.game === "roulette") { rouletteTables = msg.tables || []; renderRouletteTables(); }
+      if (msg.game === "poker") { pokerTables = msg.tables || []; renderPokerTables(); }
       else { publicTables = msg.tables || []; renderPublicTables(); }
       return;
     }
     if (msg.type === "public_created") {
-      if (msg.game === "roulette") { $("#roulette-room").value = msg.code; send({type:"join", token:authToken, room:msg.code, game:"roulette"}); }
-      else { $("#input-room").value = msg.code; send({type:"join", token:authToken, room:msg.code, game:"blackjack"}); }
+      if (msg.game === "poker") {
+        const inp = $("#poker-room");
+        if (inp) { inp.value = msg.code; inp.dataset.keep = "1"; }
+        const err = $("#poker-room-error");
+        if (err) err.textContent = "";
+        send({type:"join", token:authToken, room:msg.code, game:"poker"});
+      } else {
+        $("#input-room").value = msg.code;
+        send({type:"join", token:authToken, room:msg.code, game:"blackjack"});
+      }
       return;
     }
     if (msg.type === "friends") {
       friendsData = msg.friends || [];
+      friendRequests = msg.requests || [];
+      friendOutgoing = msg.outgoing || [];
       renderFriends();
       renderProfileFriends();
+      return;
+    }
+    if (msg.type === "friend_event") {
+      const u = msg.username || "Someone";
+      if (msg.event === "request") {
+        pushSideNotif({ icon: "👤", kind: "friend", title: "Friend request", body: `${u} wants to be friends.`, actions: [
+          { label: "ACCEPT", primary: true, onClick: () => send({ type: "accept_friend", token: authToken, username: u }) },
+          { label: "DECLINE", onClick: () => send({ type: "decline_friend", token: authToken, username: u }) },
+        ], ttl: 20000 });
+      } else if (msg.event === "accepted") {
+        pushSideNotif({ icon: "✅", kind: "friend", title: "Friend added", body: `${u} is now your friend.`, ttl: 8000 });
+      }
+      send({ type: "friends", token: authToken });
       return;
     }
     if (msg.type === "chat") {
@@ -721,6 +799,16 @@ function connect() {
       return;
     }
     if (msg.type === "joined") {
+      if (msg.spectator) {
+        pushSideNotif({
+          icon: "👁",
+          kind: "info",
+          title: msg.tableFull ? "Table full — spectating" : "Spectating",
+          body: "You are watching this table. Take a seat when one opens.",
+          ttl: 8000
+        });
+      }
+
       myId = msg.id;
       myRoom = msg.room;
       currentGame = msg.game || "blackjack";
@@ -730,14 +818,16 @@ function connect() {
       $("#btn-admin-float").classList.add("hidden"); $("#btn-admin-table").classList.remove("hidden");
       $("#chat-messages").innerHTML = "";
       toggleChat(false);
-      if (currentGame === "roulette") {
-        $("#roulette-profile-name").textContent = msg.username || loggedUsername || "PLAYER";
-        $("#roulette-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
-        $("#roulette-room-chip").textContent = "ROULETTE " + myRoom;
-        $("#roulette-admin").classList.remove("hidden");
-        showScreen("#screen-roulette");
-        send({type:"roulette_state"});
+      if (currentGame === "poker") {
+        $("#poker-profile-name").textContent = msg.username || loggedUsername || "PLAYER";
+        $("#poker-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
+        $("#poker-room-chip").textContent = "POKER " + myRoom;
+        $("#poker-admin").classList.remove("hidden");
+        setChipAvatar($("#poker-profile-avatar"), {username: msg.username || loggedUsername, avatar: myProfile?.avatar, avatarColor: myProfile?.avatarColor});
+        showScreen("#screen-poker");
+        send({type:"poker_state"});
       } else {
+        setChipAvatar($("#table-profile-avatar"), {username: msg.username || loggedUsername, avatar: myProfile?.avatar, avatarColor: myProfile?.avatarColor});
         showScreen("#screen-table");
       }
       play("join");
@@ -761,7 +851,7 @@ function connect() {
     if (msg.type === "balance") {
       $("#balance-chip").textContent = "$" + msg.balance;
       $("#menu-balance").textContent = "$" + msg.balance;
-      $("#roulette-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
+      $("#poker-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
       return;
     }
     if (msg.type === "info") {
@@ -833,32 +923,52 @@ function connect() {
       isAdmin = true;
       $("#admin-login-box").classList.add("hidden");
       $("#admin-dashboard").classList.remove("hidden");
-      $("#btn-admin-float").classList.remove("hidden"); $("#btn-admin-table").classList.remove("hidden"); $("#roulette-admin").classList.remove("hidden");
+      $("#btn-admin-float").classList.remove("hidden"); $("#btn-admin-table").classList.remove("hidden"); $("#poker-admin").classList.remove("hidden");
       return;
     }
     if (msg.type === "admin_data") {
       renderAdminUsers(msg.users || [], msg.tablePlayers || [], msg.dealerPreviewActive, msg.dealerPreview, msg.tableLuck);
       return;
     }
-    if (msg.type === "roulette_state") { renderRouletteState(msg.state); return; }
+    if (msg.type === "poker_state") { renderPokerState(msg.state); return; }
     if (msg.type === "error") {
-      const target = msg.scope === "auth" ? $("#join-error") :
-        msg.scope === "admin" ? $("#admin-error") :
-        msg.scope === "daily" ? $("#daily-reward-box") :
-        msg.scope === "friends" ? $("#friends-error") :
-        msg.scope === "roulette" ? $("#roulette-room-error") :
-        msg.scope === "store" ? $("#store-empty") : $("#room-error");
-      if (msg.scope === "daily") target.innerHTML = `<strong>NOT AVAILABLE</strong><span>${msg.message}</span>`;
-      else if (msg.scope === "store") { target.classList.remove("hidden"); target.innerHTML = `<strong>${escapeHtml(msg.message || "Store action unavailable")}</strong><span>Please try again.</span>`; setTimeout(()=>{ if(storeData) renderStore(); }, 1200); }
-      else target.textContent = msg.message;
+      let target = null;
+      if (msg.scope === "auth") target = $("#join-error");
+      else if (msg.scope === "admin") target = $("#admin-error");
+      else if (msg.scope === "daily") target = $("#daily-reward-box");
+      else if (msg.scope === "friends") target = $("#friends-error");
+      else if (msg.scope === "poker" || msg.scope === "table") target = currentGame === "poker" ? $("#poker-room-error") : $("#room-error");
+      else if (msg.scope === "store") target = $("#store-empty");
+      else target = currentGame === "poker" ? $("#poker-room-error") : $("#room-error");
+      if (msg.scope === "daily") {
+        if (target) target.innerHTML = `<strong>NOT AVAILABLE</strong><span>${msg.message}</span>`;
+        return;
+      }
+      if (msg.scope === "store") {
+        if (target) { target.classList.remove("hidden"); target.innerHTML = `<strong>${escapeHtml(msg.message || "Store action unavailable")}</strong><span>Please try again.</span>`; setTimeout(()=>{ if(storeData) renderStore(); }, 1200); }
+        return;
+      }
+      // Poker table errors should show on the table, not only lobby
+      if ((msg.scope === "poker" || currentGame === "poker") && $("#screen-poker")?.classList.contains("active")) {
+        const tm = $("#poker-table-msg");
+        if (tm) { tm.className = "poker-table-msg error"; tm.textContent = msg.message || "Something went wrong."; }
+      }
+      if (target) target.textContent = msg.message || "Something went wrong.";
+      else console.warn("error:", msg.message);
       return;
     }
     if (msg.type === "state") onState(msg.state);
   });
   ws.addEventListener("close", () => {
-    // Only return to account screen when we weren't intentionally leaving.
-    if (!$("#screen-table").classList.contains("active")) return;
-    $("#room-error").textContent = "Disconnected from server.";
+    const onTable = $("#screen-table")?.classList.contains("active");
+    const onPoker = $("#screen-poker")?.classList.contains("active");
+    if (!onTable && !onPoker) return;
+    if (onPoker) {
+      const err = $("#poker-room-error");
+      if (err) err.textContent = "Disconnected from server.";
+    } else {
+      $("#room-error").textContent = "Disconnected from server.";
+    }
     if (authToken) showMainMenu();
     else showScreen("#screen-join");
   });
@@ -900,7 +1010,7 @@ function setAuthMode(mode) {
 function onState(state) {
   // Ignore table updates if we've already left (prevents "ghost still seated" UI)
   if (!myId && !myRoom) return;
-  if (!$("#screen-table")?.classList.contains("active") && !$("#screen-roulette")?.classList.contains("active")) {
+  if (!$("#screen-table")?.classList.contains("active") && !$("#screen-poker")?.classList.contains("active")) {
     return;
   }
   const prev = lastState;
@@ -911,6 +1021,7 @@ function onState(state) {
     $("#balance-chip").textContent = "$" + me.money;
     $("#menu-balance").textContent = "$" + me.money;
     $("#profile-name").textContent = me.username || loggedUsername || me.name;
+    setChipAvatar($("#table-profile-avatar"), me);
     applyGameCosmetics(me.cosmetics || myProfile?.cosmetics || {});
     $("#btn-admin-float").classList.add("hidden"); $("#btn-admin-table").classList.remove("hidden");
     $("#btn-host").classList.toggle("hidden", !me.isHost);
@@ -1028,6 +1139,27 @@ function handleResult(result) {
   if (table) setTimeout(() => table.classList.remove("result-kick-win","result-pain-loss","result-push"), 1200);
 }
 
+
+function setChipAvatar(el, profile) {
+  if (!el) return;
+  const p = profile || myProfile || {};
+  const name = p.username || loggedUsername || "?";
+  const letter = String(name).charAt(0).toUpperCase() || "?";
+  const color = p.avatarColor || p.avatar_color || "#6366f1";
+  const av = p.avatar;
+  el.textContent = letter;
+  el.style.background = color;
+  el.style.backgroundImage = "";
+  if (av && String(av).startsWith("data:")) {
+    el.textContent = "";
+    el.style.backgroundImage = `url('${av}')`;
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+  } else if (av && String(av).startsWith("preset:")) {
+    el.textContent = letter;
+  }
+}
+
 function avatarHTML(p) {
   const letter = (p.username || p.name || "?").charAt(0).toUpperCase();
   const color = p.avatarColor || p.avatar_color || "#6366f1";
@@ -1087,18 +1219,19 @@ function renderSeats(state, prev) {
 
   // Friend boost HUD
   updateFriendBoostHUD(state);
+  renderSpectatorPanel(state, "#spectator-list", "#btn-sit-down");
 }
 
 function openSeatInvite() {
   // Prefer friends overlay for invite; if at table, prompt username of friend
-  const friends = myProfile?.friends || friendsData || [];
+  const friends = (friendsData && friendsData.length) ? friendsData : (myProfile?.friends || []);
   if (!friends.length) {
     centerBanner("ADD FRIENDS FIRST", "lose");
     openProgress("#friends-overlay");
     send({ type: "friends", token: authToken });
     return;
   }
-  const names = friends.map(f => f.username).join(", ");
+  const names = friends.map(f => f.username || f).join(", ");
   const pick = prompt("Invite which friend?\n\nYour friends: " + names);
   if (!pick) return;
   send({ type: "invite_friend", token: authToken, username: pick.trim() });
@@ -1186,7 +1319,7 @@ function renderAdminUsers(users, tablePlayers = [], previewActive = false, previ
     const luckBtn = el("button", "btn secondary", "SET LUCK");
     luckBtn.addEventListener("click", () => {
       const n=Number(luck.value);
-      if (Number.isInteger(n) && n>=0 && n<=100) send({type:"admin_set_roulette_luck",targetId:u.id,strength:n});
+      if (Number.isInteger(n) && n>=0 && n<=100) send({type:"admin_set_poker_luck",targetId:u.id,strength:n});
     });
     actions.append(input, add, luck, luckBtn);
     row.append(info, actions); box.appendChild(row);
@@ -1255,7 +1388,7 @@ function renderStats() {
   $("#stats-hero").innerHTML = `<strong>LEVEL ${myProfile.level || 1}</strong><span>${myProfile.levelTitle || "Rookie"} • ${Number(myProfile.xp || 0).toLocaleString()} XP</span>`;
   const items = [
     ["CASINO GAMES", s.gamesPlayed || 0], ["CASINO WINS", s.wins || 0], ["LOSSES", s.losses || 0],
-    ["BLACKJACKS", s.blackjacks || 0], ["ROULETTE GAMES", s.rouletteGames || 0], ["ROULETTE WINS", s.rouletteWins || 0],
+    ["BLACKJACKS", s.blackjacks || 0], ["POKER GAMES", s.pokerGames || 0], ["POKER WINS", s.pokerWins || 0],
     ["WIN RATE", `${s.winRate || 0}%`], ["BIGGEST WIN", "$" + Number(s.biggestWin || 0).toLocaleString()]
   ];
   $("#stats-grid").innerHTML = items.map(([a,b]) => `<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
@@ -1344,12 +1477,12 @@ function applyGameCosmetics(c = {}) {
   root.setAttribute("data-casino-chip", chip);
   root.setAttribute("data-blackjack-deck", deck);
   root.setAttribute("data-table-skin", table);
-  root.setAttribute("data-roulette-ball", ball);
+  root.setAttribute("data-poker-ball", ball);
   // Also mirror onto body for any descendant-only selectors
   document.body.setAttribute("data-casino-chip", chip);
   document.body.setAttribute("data-blackjack-deck", deck);
   document.body.setAttribute("data-table-skin", table);
-  document.body.setAttribute("data-roulette-ball", ball);
+  document.body.setAttribute("data-poker-ball", ball);
   if (myProfile) {
     myProfile.cosmetics = { ...(myProfile.cosmetics || {}), ...c, chip, deck, table, ball };
   }
@@ -1359,17 +1492,56 @@ function applyGameCosmetics(c = {}) {
 }
 function applySeasonTheme(){
   const enabled = localStorage.getItem("bj_seasonal_ui") !== "0";
-  const active = !!(seasonData?.season?.active===true && seasonData?.season?.theme==="casino1927");
-  document.documentElement.classList.toggle("season-1927", active && enabled);
+  const theme = seasonData?.season?.theme || "";
+  const active = !!(seasonData?.season?.active===true && theme);
+  document.documentElement.classList.toggle("season-1927", active && enabled && theme==="casino1927");
+  document.documentElement.classList.toggle("season-crimson", active && enabled && theme==="crimson_royale");
   document.documentElement.setAttribute("data-seasonal-ui", active && enabled ? "1" : "0");
+  document.documentElement.setAttribute("data-season-theme", active && enabled ? theme : "");
   $("#toggle-seasonal-ui")?.classList.toggle("on", active && enabled);
+  const btn = $("#btn-season");
+  if (btn && seasonData?.season?.name) {
+    const id = seasonData.season.id || 2;
+    btn.textContent = "SEASON " + id;
+  }
 }
 function applySeasonalUI(enabled){
   localStorage.setItem("bj_seasonal_ui", enabled ? "1" : "0");
   applySeasonTheme();
 }
-function previewCosmetic(cat,id){const maps={theme:{classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",royal:"#6a326c,#160916",neon:"#16877f,#060f12",casino1927:"#d7b56d,#183b2a"},chip:{classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",gold:"#e5c56d,#6c4c13",casino1927:"#d7b56d,#3c2413"},deck:{classic:"#f7f0df,#2b2a29",midnight:"#252a35,#050609",casino1927:"#d7b56d,#173d2a"},table:{classic:"#2f6d4b,#0c281b",royal:"#496c35,#1c2b16",casino1927:"#6d5130,#123a28"},ball:{classic:"#f4f4f4,#777",brass1927:"#f1d28a,#8f5c1a"}};return (maps[cat]&&maps[cat][id])||maps[cat]?.classic||"#17191d,#050506";}
-function renderAppearance(){const boxes={theme:$("#appearance-themes"),chip:$("#appearance-chips"),deck:$("#appearance-decks"),table:$("#appearance-tables"),ball:$("#appearance-balls")};if(!boxes.theme)return;const cats={theme:[...(storeData?.themes||[]),...(storeData?.adminThemes||[])],chip:[...(storeData?.chips||[]),...(storeData?.adminChips||[])],deck:storeData?.decks||[],table:storeData?.tables||[],ball:storeData?.balls||[]};Object.entries(boxes).forEach(([cat,b])=>{if(!b)return;b.innerHTML=(cats[cat]||[]).map(x=>{const c=previewCosmetic(cat,x.id).split(","),a=x.equipped?'<button class="btn secondary" disabled>EQUIPPED</button>':x.owned?`<button class="btn" data-app-equip="${cat}" data-id="${escapeAttr(x.id)}">EQUIP</button>`:'<button class="btn secondary" data-app-buy>BUY AT SHOP</button>';return `<div class="appearance-item ${x.equipped?'equipped':''} ${!x.owned?'locked':''}"><div class="appearance-preview" style="--preview-a:${c[0]};--preview-b:${c[1]}">${escapeHtml(x.name)}</div><div><strong>${escapeHtml(x.name)}</strong><small>${x.owned?(x.equipped?"CURRENTLY EQUIPPED":"OWNED"):"UNOWNED"}${x.limited?" • SEASONAL":""}</small></div>${a}</div>`}).join("");b.querySelectorAll("[data-app-equip],[data-app-buy]").forEach(x=>wireButton(x,()=>{if(x.hasAttribute("data-app-buy")){$("#appearance-overlay").classList.remove("open");openProgress("#store-overlay");send({type:"store",token:authToken});}else send({type:"equip_cosmetic",token:authToken,category:x.dataset.appEquip,id:x.dataset.id});}));});}
+function previewCosmetic(cat,id){const maps={theme:{classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",emerald:"#0d3d28,#06140e",royal:"#6a326c,#160916",neon:"#16877f,#060f12",crimson:"#8b1e2d,#1a0508",golden:"#d7b56d,#3c2413",celestial:"#66cfff,#030711",casino1927:"#d7b56d,#183b2a",crimson_royale:"#8b1e2d,#12060a",admin_star:"#f472b6,#1a0510",admin_blackout:"#222,#000",founder:"#d4af37,#1a1005"},chip:{classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",emerald_chip:"#2f6d4b,#0c281b",gold:"#e5c56d,#6c4c13",diamond:"#1a1a1a,#444",royal_vault:"#d4af37,#1a1008",casino1927:"#d7b56d,#3c2413",crimson_velvet:"#8b1e2d,#f3ede2",admin_chip:"#f472b6,#1a0510"},deck:{classic:"#f7f0df,#2b2a29",midnight:"#252a35,#050609",emerald_deck:"#0d3d28,#c8e6c9",crimson_deck:"#8b1e2d,#f3ede2",celestial_deck:"#0a1628,#66cfff",casino1927:"#d7b56d,#173d2a",crimson_royale_deck:"#8b1e2d,#f3ede2"},table:{classic:"#2f6d4b,#0c281b",royal:"#496c35,#1c2b16",casino1927:"#6d5130,#123a28",crimson_table:"#8b1e2d,#f3ede2"},ball:{classic:"#f4f4f4,#777",brass1927:"#f1d28a,#8f5c1a",crimson_back:"#8b1e2d,#d4b87a"}};return (maps[cat]&&maps[cat][id])||maps[cat]?.classic||"#17191d,#050506";}
+function renderAppearance(){
+  const cats={
+    theme:[...(storeData?.themes||[]),...(storeData?.adminThemes||[])],
+    chip:[...(storeData?.chips||[]),...(storeData?.adminChips||[])],
+    deck:storeData?.decks||[],
+    table:storeData?.tables||[],
+    ball:storeData?.balls||[]
+  };
+  const boxSets = [
+    {theme:$("#appearance-themes"),chip:$("#appearance-chips"),deck:$("#appearance-decks"),table:$("#appearance-tables"),ball:$("#appearance-balls")},
+    {theme:$("#settings-inv-themes"),chip:$("#settings-inv-chips"),deck:$("#settings-inv-decks"),table:$("#settings-inv-tables"),ball:$("#settings-inv-balls")}
+  ];
+  boxSets.forEach(boxes => {
+    Object.entries(boxes).forEach(([cat,b])=>{
+      if(!b) return;
+      // Settings inventory: only owned items
+      const list = (cats[cat]||[]).filter(x => b.id && b.id.startsWith("settings-") ? x.owned : true);
+      b.innerHTML = list.length ? list.map(x=>{
+        const c=previewCosmetic(cat,x.id).split(",");
+        let a;
+        if (!x.owned) a = `<button class="btn secondary" data-app-buy>BUY</button>`;
+        else if (x.equipped && x.id !== "classic") a = `<button class="btn secondary" data-app-unequip="${cat}">UNEQUIP</button>`;
+        else if (x.equipped) a = `<button class="btn secondary" disabled>EQUIPPED</button>`;
+        else a = `<button class="btn" data-app-equip="${cat}" data-id="${escapeAttr(x.id)}">EQUIP</button>`;
+        return `<div class="appearance-item ${x.equipped?'equipped':''} ${!x.owned?'locked':''}"><div class="appearance-preview" style="--preview-a:${c[0]};--preview-b:${c[1]}"></div><div><strong>${escapeHtml(x.name)}</strong><small>${x.owned?(x.equipped?"EQUIPPED":"OWNED"):"UNOWNED"}${x.limited?" • SEASONAL":""}</small></div>${a}</div>`;
+      }).join("") : '<div class="admin-empty">No owned items yet.</div>';
+      b.querySelectorAll("[data-app-equip]").forEach(x=>wireButton(x,()=>send({type:"equip_cosmetic",token:authToken,category:x.dataset.appEquip,id:x.dataset.id})));
+      b.querySelectorAll("[data-app-unequip]").forEach(x=>wireButton(x,()=>send({type:"equip_cosmetic",token:authToken,category:x.dataset.appUnequip,id:"classic"})));
+      b.querySelectorAll("[data-app-buy]").forEach(x=>wireButton(x,()=>{$("#appearance-overlay")?.classList.remove("open");$("#settings-overlay")?.classList.remove("open");openProgress("#store-overlay");send({type:"store",token:authToken});}));
+    });
+  });
+}
 function renderStore(){
   if(!storeData) return;
   const catalog = [
@@ -1377,14 +1549,14 @@ function renderStore(){
     ...(storeData.chips||[]).map(x=>({...x,category:"chip",categoryLabel:"CHIPS"})),
     ...(storeData.decks||[]).map(x=>({...x,category:"deck",categoryLabel:"BLACKJACK"})),
     ...(storeData.tables||[]).map(x=>({...x,category:"table",categoryLabel:"TABLE"})),
-    ...(storeData.balls||[]).map(x=>({...x,category:"ball",categoryLabel:"ROULETTE"}))
+    ...(storeData.balls||[]).map(x=>({...x,category:"ball",categoryLabel:"CARD BACKS"}))
   ];
   $("#store-balance").textContent="$"+Number(storeData.balance||0).toLocaleString();
   const activeTab = window.storeTab || "all";
   const ownedOnly = !!window.storeOwnedOnly;
   document.querySelectorAll(".store-tab").forEach(b=>b.classList.toggle("active",b.dataset.storeTab===activeTab));
-  const visible = catalog.filter(x=>(activeTab==="all"||x.category===activeTab) && (!ownedOnly||x.owned));
-  $("#store-results-title").textContent = activeTab==="all" ? "HOUSE COLLECTION" : ({theme:"THEMES",chip:"CASINO CHIPS",deck:"BLACKJACK DECKS",table:"TABLE SKINS",ball:"ROULETTE BALLS"}[activeTab]||"COLLECTION");
+  const forceOwned = activeTab==="inventory" || ownedOnly; const visible = catalog.filter(x=>(activeTab==="all"||activeTab==="inventory"||x.category===activeTab) && (!forceOwned||x.owned));
+  $("#store-results-title").textContent = activeTab==="all" ? "HOUSE COLLECTION" : ({theme:"THEMES",chip:"CASINO CHIPS",deck:"BLACKJACK DECKS",table:"TABLE SKINS",ball:"CARD BACKS"}[activeTab]||"COLLECTION");
   $("#store-results-count").textContent = visible.length+" ITEM"+(visible.length===1?"":"S");
   $("#store-owned-toggle").classList.toggle("active",ownedOnly);
   $("#store-owned-toggle").setAttribute("aria-pressed",String(ownedOnly));
@@ -1398,11 +1570,11 @@ function renderStore(){
     else if(x.owned) action=`<button class="store-action" data-store-equip="${escapeAttr(x.category)}" data-id="${escapeAttr(x.id)}">EQUIP</button>`;
     else if(x.limited) action='<button class="store-action seasonal" disabled>CLAIM IN SEASON</button>';
     else action=`<button class="store-action" data-store-buy="${escapeAttr(x.category)}" data-id="${escapeAttr(x.id)}">BUY <span>$${Number(x.price||0).toLocaleString()}</span></button>`;
-    return `<article class="store-product ${x.equipped?"is-equipped":""} ${x.owned?"is-owned":""} ${x.limited?"is-seasonal":""}">
+    const rarity=x.rarity||"COMMON"; return `<article class="store-product rarity-border-${rarity} ${x.equipped?"is-equipped":""} ${x.owned?"is-owned":""} ${x.limited?"is-seasonal":""}">
       <div class="store-product-art" style="--preview-a:${colors[0]};--preview-b:${colors[1]}">
-        <span class="store-product-category">${escapeHtml(x.categoryLabel)}</span>
+        <span class="store-item-rarity rarity-${rarity}">${rarity}</span><span class="store-product-category">${escapeHtml(x.categoryLabel)}</span>
         <div class="store-product-mark">${escapeHtml(x.category==="chip"?"✦":x.category==="ball"?"●":x.category==="deck"?"♠":x.category==="table"?"▰":"✥")}</div>
-        ${x.limited?'<span class="store-season-ribbon">SEASON 1</span>':""}
+        ${x.limited?`<span class="store-season-ribbon">SEASON ${x.season||2}</span>`:""}
       </div>
       <div class="store-product-copy">
         <div class="store-product-top"><span>${escapeHtml(state)}</span><span>${x.price?("$"+Number(x.price).toLocaleString()):"FREE"}</span></div>
@@ -1425,7 +1597,7 @@ function renderStore(){
   renderAppearance();
 }
 function formatCountdown(sec){let s=Math.max(0,Math.floor(Number(sec||0))),d=Math.floor(s/86400);s%=86400;let h=Math.floor(s/3600);s%=3600;let m=Math.floor(s/60);return `${d}D ${String(h).padStart(2,"0")}H ${String(m).padStart(2,"0")}M`;}
-function renderSeason(){if(!seasonData)return;const xp=Number(seasonData.xp||0),tiers=seasonData.tiers||[],meta=seasonData.season||{};$("#season-xp").textContent=xp.toLocaleString()+" XP";$("#season-countdown").textContent=meta.active===false?"SEASON ENDED":formatCountdown(meta.remainingSeconds);$("#season-season-status").textContent=meta.active===false?"ACQUISITION CLOSED":"ACTIVE";applySeasonTheme();const max=Number(tiers.at(-1)?.xp||1);$("#season-progress-fill").style.width=Math.min(100,Math.round(xp/max*100))+"%";$("#season-tier-list").innerHTML=tiers.map(t=>{const r=t.reward||{},type=(r.type||"reward").toUpperCase(),state=t.claimed?"CLAIMED":t.unlocked?"AVAILABLE":"LOCKED",button=t.claimed?'<button class="btn secondary" disabled>CLAIMED</button>':t.unlocked?`<button class="btn" data-season-claim="${t.tier}">CLAIM</button>`:'<button class="btn secondary" disabled>LOCKED</button>',limited=(r.id&&String(r.id).includes("1927"))||["deck","table","ball"].includes(r.type)?'<span class="limited-badge">SEASONAL • PERMANENT ON CLAIM</span>':"";return `<div class="season-tier ${t.unlocked?"unlocked":""} ${t.claimed?"claimed":""}"><div class="season-tier-num">${t.tier}</div><div class="season-reward-copy"><strong>${escapeHtml(r.name||"REWARD")}</strong><small>${type} • ${Number(t.xp).toLocaleString()} XP</small>${limited}</div><div class="season-state">${state}</div>${button}</div>`}).join("");document.querySelectorAll("[data-season-claim]").forEach(b=>wireButton(b,()=>send({type:"claim_season",token:authToken,tier:Number(b.dataset.seasonClaim)})));}
+function renderSeason(){if(!seasonData)return;const xp=Number(seasonData.xp||0),tiers=seasonData.tiers||[],meta=seasonData.season||{};$("#season-xp").textContent=xp.toLocaleString()+" XP";$("#season-countdown").textContent=meta.active===false?"SEASON ENDED":formatCountdown(meta.remainingSeconds);$("#season-season-status").textContent=meta.active===false?"ACQUISITION CLOSED":"ACTIVE";applySeasonTheme();const max=Number(tiers.at(-1)?.xp||1);$("#season-progress-fill").style.width=Math.min(100,Math.round(xp/max*100))+"%";$("#season-tier-list").innerHTML=tiers.map(t=>{const r=t.reward||{},type=(r.type||"reward").toUpperCase(),state=t.claimed?"CLAIMED":t.unlocked?"AVAILABLE":"LOCKED",button=t.claimed?'<button class="btn secondary" disabled>CLAIMED</button>':t.unlocked?`<button class="btn" data-season-claim="${t.tier}">CLAIM</button>`:'<button class="btn secondary" disabled>LOCKED</button>',limited=(r.id&&(String(r.id).includes("1927")||String(r.id).includes("crimson")))||["deck","table","ball","theme","chip","title"].includes(r.type)?'<span class="limited-badge">SEASONAL • PERMANENT ON CLAIM</span>':"";return `<div class="season-tier ${t.unlocked?"unlocked":""} ${t.claimed?"claimed":""}"><div class="season-tier-num">${t.tier}</div><div class="season-reward-copy"><strong>${escapeHtml(r.name||"REWARD")}</strong><small>${type} • ${Number(t.xp).toLocaleString()} XP</small>${limited}</div><div class="season-state">${state}</div>${button}</div>`}).join("");document.querySelectorAll("[data-season-claim]").forEach(b=>wireButton(b,()=>send({type:"claim_season",token:authToken,tier:Number(b.dataset.seasonClaim)})));}
 function openProgress(id) { $(id).classList.add("open"); }
 function closeProgress(id) { $(id).classList.remove("open"); }
 
@@ -1439,7 +1611,7 @@ function renderProfile() {
   if (!p) return;
   $("#profile-hero").innerHTML = `<div><strong>${escapeHtml(p.username)}</strong><span>LEVEL ${p.level} • ${escapeHtml(p.levelTitle)}</span></div><b>$${Number(p.balance||0).toLocaleString()}</b>`;
   const st = p.stats || {};
-  const vals = [["CASINO GAMES",st.gamesPlayed],["CASINO WINS",st.wins],["LOSSES",st.losses],["BLACKJACKS",st.blackjacks],["ROULETTE GAMES",st.rouletteGames||0],["ROULETTE WINS",st.rouletteWins||0],["WIN RATE",(st.winRate||0)+"%"],["BIGGEST WIN","$"+Number(st.biggestWin||0).toLocaleString()]];
+  const vals = [["CASINO GAMES",st.gamesPlayed],["CASINO WINS",st.wins],["LOSSES",st.losses],["BLACKJACKS",st.blackjacks],["POKER GAMES",st.pokerGames||0],["POKER WINS",st.pokerWins||0],["WIN RATE",(st.winRate||0)+"%"],["BIGGEST WIN","$"+Number(st.biggestWin||0).toLocaleString()]];
   $("#profile-stats-grid").innerHTML = vals.map(([a,b])=>`<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
   renderProfileFriends();
 }
@@ -1448,11 +1620,28 @@ function renderProfileFriends(){
   box.innerHTML = friendsData.length ? friendsData.slice(0,8).map(f=>`<div class="friend-row"><span class="online-dot ${f.online?'online':''}"></span><strong>${escapeHtml(f.username)}</strong><small>Lv ${f.level}</small></div>`).join("") : '<div class="admin-empty">No friends yet.</div>';
 }
 function renderFriends(){
+  const reqBox = $("#friends-requests");
+  if (reqBox) {
+    const incoming = friendRequests || [];
+    const outgoing = friendOutgoing || [];
+    let html = "";
+    if (incoming.length) {
+      html += incoming.map(f => `<div class="friend-row request"><span class="online-dot ${f.online?'online':''}"></span><div class="friend-meta"><strong>${escapeHtml(f.username)}</strong><small>Wants to be friends ${f.online?'• ONLINE':'• OFFLINE'}</small></div><button class="btn friend-accept" data-user="${escapeAttr(f.username)}">ACCEPT</button><button class="btn secondary friend-decline" data-user="${escapeAttr(f.username)}">DECLINE</button></div>`).join("");
+    }
+    if (outgoing.length) {
+      html += outgoing.map(f => `<div class="friend-row outgoing"><span class="online-dot ${f.online?'online':''}"></span><div class="friend-meta"><strong>${escapeHtml(f.username)}</strong><small>Request pending</small></div><span class="friend-pending">SENT</span></div>`).join("");
+    }
+    if (!html) html = '<div class="admin-empty">No pending requests.</div>';
+    reqBox.innerHTML = html;
+    reqBox.querySelectorAll('.friend-accept').forEach(b => wireButton(b, () => send({ type: 'accept_friend', token: authToken, username: b.dataset.user })));
+    reqBox.querySelectorAll('.friend-decline').forEach(b => wireButton(b, () => send({ type: 'decline_friend', token: authToken, username: b.dataset.user })));
+  }
   const box=$("#friends-list"); if(!box) return;
   box.innerHTML = friendsData.length ? friendsData.map(f=>{
     const loc = f.location ? `${(f.location.game||'').toUpperCase()} ${f.location.room}` : (f.online ? "ONLINE" : "OFFLINE");
-    return `<div class="friend-row"><span class="online-dot ${f.online?'online':''}"></span><div class="friend-meta"><strong>${escapeHtml(f.username)}</strong><small>Lv ${f.level} • ${escapeHtml(loc)}</small></div><button class="btn secondary friend-invite" data-user="${escapeAttr(f.username)}">INVITE</button><button class="btn secondary friend-remove" data-user="${escapeAttr(f.username)}">REMOVE</button></div>`;
-  }).join("") : '<div class="admin-empty">No friends yet. Add someone by username.</div>';
+    const statusCls = f.online ? "online" : "offline";
+    return `<div class="friend-row"><span class="online-dot ${statusCls}"></span><div class="friend-meta"><strong>${escapeHtml(f.username)}</strong><small>Lv ${f.level} • <span class="friend-status ${statusCls}">${escapeHtml(loc)}</span></small></div>${f.online?`<button class="btn secondary friend-invite" data-user="${escapeAttr(f.username)}">INVITE</button>`:''}<button class="btn secondary friend-remove" data-user="${escapeAttr(f.username)}">REMOVE</button></div>`;
+  }).join("") : '<div class="admin-empty">No friends yet. Add someone by username — they must accept.</div>';
   box.querySelectorAll('.friend-remove').forEach(b=>wireButton(b,()=>send({type:'remove_friend',token:authToken,username:b.dataset.user})));
   box.querySelectorAll('.friend-invite').forEach(b=>wireButton(b,()=>send({type:'invite_friend',token:authToken,username:b.dataset.user})));
 }
@@ -1465,156 +1654,188 @@ function renderPublicTables(){
   box.querySelectorAll('[data-spec]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.spec,spectate:true})));
 }
 
-function renderRouletteTables(){
-  const box=$("#roulette-table-list"); if(!box) return;
-  const tables=rouletteTables.filter(t=>t.game==="roulette");
-  box.innerHTML=tables.length ? tables.map(t=>`<div class="public-table-row"><div><strong>ROULETTE • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host)} • ${t.players}/${t.maxPlayers} Players • ${t.phase==='SPINNING'?'SPINNING':'BETTING'}</small></div><div class="public-table-actions">${t.canJoin?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}</div></div>`).join("") : '<div class="admin-empty">No Roulette tables yet. Create one! </div>';
-  box.querySelectorAll('[data-rjoin]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.rjoin,game:'roulette'})));
+function renderPokerTables(){
+  const box=$("#poker-table-list"); if(!box) return;
+  const tables=pokerTables.filter(t=>t.game==="poker");
+  box.innerHTML=tables.length ? tables.map(t=>`<div class="public-table-row"><div><strong>POKER • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host||"—")} • ${t.players}/${t.maxPlayers} • Buy-in $${Number(t.buyIn||1000).toLocaleString()} • ${escapeHtml(t.phase||"WAITING")}</small></div><div class="public-table-actions">${t.canJoin!==false?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}</div></div>`).join("") : '<div class="admin-empty">No Poker tables yet. Create one!</div>';
+  box.querySelectorAll("[data-rjoin]").forEach(b=>wireButton(b,()=>send({type:"join",token:authToken,room:b.dataset.rjoin,game:"poker"})));
 }
-function buildRouletteNumbers(){
-  const box=$("#roulette-number-strip"), zero=$("#roulette-zero-bet");
-  if(!box || !zero) return;
-  box.innerHTML="";
-  for(let n=1;n<=36;n++){
-    const b=el("button","roulette-number",String(n));
-    b.dataset.n = String(n);
-    b.classList.add(ROULETTE_RED_SET.has(n)?"red":"black");
-    wireButton(b,()=>placeRouletteBet("straight",n));
-    box.appendChild(b);
+
+function pokerCardHTML(c, small){
+  if(!c || c.faceUp===false) return `<div class="playing-card card-back ${small?"small":""}"></div>`;
+  const red = c.suit==="H"||c.suit==="D";
+  const suitSym = {S:"♠",H:"♥",D:"♦",C:"♣"}[c.suit]||c.suit;
+  return `<div class="playing-card ${red?"red":"black"} ${small?"small":""}"><span class="card-rank">${c.rank}</span><span class="card-suit">${suitSym}</span></div>`;
+}
+
+
+function renderSpectatorPanel(state, listId, btnId) {
+  const list = $(listId);
+  const btn = $(btnId);
+  const panel = list ? list.closest(".spectator-panel") : null;
+  if (panel) panel.classList.remove("hidden");
+  if (!list) return;
+  const specs = state.spectators || [];
+  const seated = (state.players || []).filter(p => !p.spectator);
+  const imSeated = seated.some(p => p.id === myId);
+  const imSpec = specs.some(s => s.id === myId);
+  list.innerHTML = specs.length
+    ? specs.map(s => {
+        const av = avatarHTML({ username: s.username || s.name, avatar: s.avatar, avatarColor: s.avatarColor || s.avatar_color });
+        return `<div class="spec-row">${av}<span>${escapeHtml(s.username || s.name || "?")}</span></div>`;
+      }).join("")
+    : '<div class="spec-empty">No spectators</div>';
+  if (btn) {
+    const openSeat = seated.length < (state.maxPlayers || 7);
+    btn.classList.toggle("hidden", !(imSpec && openSeat));
+    btn.disabled = !openSeat;
+    btn.textContent = openSeat ? "TAKE SEAT" : "TABLE FULL";
   }
-  wireButton(zero,()=>placeRouletteBet("straight",0));
-  const pockets=$("#roulette-pockets");
-  if(pockets) pockets.innerHTML=ROULETTE_ORDER.map((n,i)=>`<span class="wheel-pocket ${n===0?"green":ROULETTE_RED_SET.has(n)?"red":"black"}" style="--i:${i}">${n}</span>`).join("");
 }
-const ROULETTE_RED_SET=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
-function placeRouletteBet(type,value=null){
-  if(!rouletteState || rouletteState.phase!=="BETTING") return;
-  send({type:"roulette_bet",token:authToken,betType:type,value,amount:rouletteBetAmount});
-}
-function animateRouletteResult(number) {
-  const wheel = $("#roulette-wheel");
-  const ball = $("#roulette-ball");
-  const panel = document.querySelector(".roulette-wheel-wrap");
-  if (!wheel) return;
-  if (rouletteAnimationTimer) clearTimeout(rouletteAnimationTimer);
 
-  const n = Number(number);
-  const idx = Math.max(0, ROULETTE_ORDER.indexOf(n));
-  const slotAngle = 360 / 37;
-  // Ball ends at the winning pocket under the top pointer
-  const endDeg = 5 * 360 + (360 - idx * slotAngle);
-  // Wheel spins opposite direction a bit for depth
-  const wheelEnd = -(3 * 360 + idx * slotAngle * 0.3);
+function renderPokerState(state){
+  if(!state) return;
+  pokerState = state;
+  myRoom = state.code || myRoom;
+  const me = (state.players||[]).find(p=>p.id===myId);
+  $("#poker-profile-name") && ($("#poker-profile-name").textContent = me?.username || loggedUsername || "PLAYER");
+  $("#poker-balance") && ($("#poker-balance").textContent = "$" + Number(me?.money ?? myBalance ?? 0).toLocaleString());
+  setChipAvatar($("#poker-profile-avatar"), me ? {username: me.username, avatar: me.avatar || myProfile?.avatar, avatarColor: me.avatarColor || me.avatar_color || myProfile?.avatarColor} : myProfile);
+  $("#poker-room-chip") && ($("#poker-room-chip").textContent = "POKER " + (state.code||""));
+  $("#poker-player-count") && ($("#poker-player-count").textContent = `${(state.seatedCount!=null?state.seatedCount:(state.players||[]).length)}/${state.maxPlayers||6}`);
+  const specN = (state.spectators||[]).length;
+  if ($("#poker-status") && specN) { /* keep phase text */ }
 
-  wheel.classList.remove("spinning");
-  ball?.classList.remove("ball-spinning");
-  void wheel.offsetWidth;
+  $("#poker-status") && ($("#poker-status").textContent = state.phase || "WAITING");
+  $("#poker-street") && ($("#poker-street").textContent = state.street || "—");
+  $("#poker-pot") && ($("#poker-pot").textContent = "POT $" + Number(state.pot||0).toLocaleString());
 
-  wheel.style.transform = `rotate(${wheelEnd}deg)`;
-  wheel.classList.add("spinning");
-  if (ball) {
-    ball.style.setProperty("--ball-end", endDeg + "deg");
-    void ball.offsetWidth;
-    ball.classList.add("ball-spinning");
+  // Community cards
+  const comm = $("#poker-community");
+  if(comm){
+    const cards = state.community||[];
+    if(!cards.length) comm.innerHTML = '<div class="poker-comm-placeholder">COMMUNITY</div>';
+    else comm.innerHTML = cards.map(c=>pokerCardHTML(c)).join("");
   }
-  play("deal");
 
-  rouletteAnimationTimer = setTimeout(() => {
-    ball?.classList.remove("ball-spinning");
-    wheel.classList.remove("spinning");
-    // Snap ball to final position
-    if (ball) ball.style.transform = `rotate(${endDeg}deg) translateY(-92px)`;
-    // Result banner on wheel
-    if (panel) {
-      const color = n === 0 ? "green" : ROULETTE_RED_SET.has(n) ? "red" : "black";
-      const old = panel.querySelector(".roulette-result-flash");
-      if (old) old.remove();
-      const flash = el("div", "roulette-result-flash " + color, String(n));
-      panel.appendChild(flash);
-      if (color === "green" || color === "red") play("win");
-      else play("chip");
-      setTimeout(() => flash.remove(), 2200);
-    }
-  }, 5600);
-}
-function renderRouletteState(state){
-  rouletteState=state; if(!state) return;
-  $("#roulette-room-chip").textContent="ROULETTE " + state.code;
-  const me=(state.players||[]).find(x=>x.id===myId);
-  if(me?.cosmetics) applyGameCosmetics(me.cosmetics);
-  const total=Number(me?.total||0);
-  $("#roulette-seat-info").textContent=me ? `YOUR BETS: $${total.toLocaleString()}` : "PLACE A BET TO JOIN THE ROUND";
-  $("#roulette-total-bets").textContent="$"+total.toLocaleString();
-  $("#roulette-balance-meta").textContent=$("#roulette-balance").textContent;
-  const maxP = state.maxPlayers || 5;
-  $("#roulette-player-count").textContent=`${state.players?.length||0}/${maxP}` + (state.doubleCash ? " • 2×" : "");
-  $("#roulette-status").textContent=state.phase;
-  $("#roulette-round-state").textContent=state.phase;
-  const r=state.lastResult;
-  $("#roulette-result").textContent = state.phase==='SPINNING' ? "THE WHEEL IS SPINNING…" : r ? `RESULT • ${r.number} ${String(r.color).toUpperCase()}` : "PLACE YOUR BETS";
-  $("#roulette-spin").disabled = state.phase!=="BETTING" || !(me && me.total>0);
-  $("#roulette-clear").disabled = state.phase!=="BETTING" || !(me && me.total>0);
-  document.querySelectorAll(".roulette-bet,.roulette-number,.roulette-zero-bet").forEach(b=>b.disabled=state.phase!=="BETTING");
-  const host=(state.players||[]).find(x=>x.id===myId)?.isHost;
-  $("#roulette-host").classList.toggle("hidden",!host);
-  $("#roulette-admin").classList.toggle("hidden",!isAdmin);
-
-  // Show player bet markers on board spots
-  document.querySelectorAll(".bet-stack").forEach(s => s.remove());
-  const board = state.boardBets || [];
-  board.forEach(b => {
-    let target = null;
-    if (b.type === "straight") {
-      if (Number(b.value) === 0) target = $("#roulette-zero-bet");
-      else target = document.querySelector(`.roulette-number[data-n="${b.value}"]`) ||
-        [...document.querySelectorAll(".roulette-number")].find(el => el.textContent.trim() === String(b.value));
+  // Winners banner
+  const winBox = $("#poker-winners");
+  if(winBox){
+    if((state.phase==="HAND_OVER"||state.phase==="SHOWDOWN") && (state.winners||[]).length){
+      winBox.innerHTML = state.winners.map(w=>`<div class="poker-winner-chip"><strong>${escapeHtml(w.username)}</strong> wins $${Number(w.amount||0).toLocaleString()} — ${escapeHtml(w.handName||"")}</div>`).join("");
+      winBox.classList.remove("hidden");
     } else {
-      target = document.querySelector(`.roulette-bet[data-bet="${b.type}"]`) ||
-        document.querySelector(`[data-bet="${b.type}"]`);
+      winBox.innerHTML = "";
+      winBox.classList.add("hidden");
     }
-    if (!target) return;
-    let stack = target.querySelector(".bet-stack");
-    if (!stack) {
-      stack = el("div", "bet-stack");
-      target.appendChild(stack);
-    }
-    const av = el("div", "bet-avatar", b.letter || "?");
-    av.style.background = b.color || "#6366f1";
-    av.title = `${b.username}: $${b.amount}`;
-    stack.appendChild(av);
-  });
+  }
 
-  if (state.phase === "SPINNING" || (r && state.phase === "RESULT")) {
-    if (r && state.phase === "RESULT") {
-      if (!window._lastRouletteAnimTs || window._lastRouletteAnimTs !== r.ts) {
-        window._lastRouletteAnimTs = r.ts;
-        animateRouletteResult(r.number);
-        // Win/loss feedback for me
-        if (me && me.total > 0) {
-          // rough: if we had bets, celebrate on result screen
-          setTimeout(() => {
-            centerBanner(`RESULT ${r.number} ${String(r.color).toUpperCase()}`, r.number === 0 ? "win" : (r.color === "red" ? "win" : "push"));
-          }, 5600);
-        }
-      }
-      const history = $("#roulette-history");
-      if (history && history.dataset.lastTs !== String(r.ts)) {
-        history.dataset.lastTs = String(r.ts);
-        const chip = el("span", "history-number", String(r.number));
-        chip.classList.add(r.number === 0 ? "green" : r.color);
-        history.prepend(chip);
-        while (history.children.length > 12) history.lastElementChild.remove();
+  // Seats along bottom (blackjack-style) with empty invite slots
+  const seats = $("#poker-seats");
+  if(seats){
+    seats.innerHTML = "";
+    seats.className = "poker-seats-row";
+    const players = state.players||[];
+    const maxP = Math.min(Number(state.maxPlayers||6), 6);
+    const byId = {};
+    players.forEach(p => { byId[p.id] = p; });
+    // Put me first if present, then others
+    const ordered = [];
+    const meP = players.find(p => p.id === myId);
+    if (meP) ordered.push(meP);
+    players.forEach(p => { if (p.id !== myId) ordered.push(p); });
+    for (let i = 0; i < maxP; i++) {
+      const p = ordered[i];
+      if (p) {
+        const seat = el("div", "poker-seat-slot" + (p.isTurn?" turn":"") + (p.id===myId?" me":"") + (p.status==="folded"?" folded":""));
+        const badges = [];
+        if(p.isDealer) badges.push('<span class="poker-badge dealer">D</span>');
+        if(p.isSB) badges.push('<span class="poker-badge sb">SB</span>');
+        if(p.isBB) badges.push('<span class="poker-badge bb">BB</span>');
+        const holeHtml = (p.hole||[]).map(c=>pokerCardHTML(c,true)).join("");
+        seat.innerHTML = `${avatarHTML(p)}
+          <div class="poker-seat-cards">${holeHtml}</div>
+          <div class="poker-seat-name">${escapeHtml(p.username||"?")}${badges.join("")}</div>
+          <div class="poker-seat-chips">$${Number(p.chips||0).toLocaleString()}</div>
+          <div class="poker-seat-bet">${p.bet?("Bet $"+Number(p.bet).toLocaleString()):""}</div>
+          <div class="poker-seat-status">${escapeHtml(p.status||"")}${p.handName?" • "+escapeHtml(p.handName):""}</div>`;
+        seats.appendChild(seat);
+      } else {
+        const empty = el("div", "poker-seat-slot empty");
+        const plus = el("button", "seat-plus", "+");
+        plus.type = "button";
+        plus.title = "Invite a friend";
+        wireButton(plus, () => openSeatInvite());
+        empty.appendChild(plus);
+        empty.appendChild(el("div", "seat-open-label", "OPEN"));
+        seats.appendChild(empty);
       }
     }
   }
+
+  // My hole cards (large)
+  const hole = $("#poker-hole");
+  if(hole && me){
+    hole.innerHTML = (me.hole||[]).map(c=>pokerCardHTML(c)).join("") || "";
+  }
+
+  // Action buttons
+  const isMyTurn = state.activePlayerId === myId && ["PREFLOP","FLOP","TURN","RIVER"].includes(state.phase);
+  const toCall = Math.max(0, Number(state.currentBet||0) - Number(me?.bet||0));
+  const chips = Number(me?.chips||0);
+  const setBtn = (id, enabled, label) => {
+    const b = $(id); if(!b) return;
+    b.disabled = !enabled;
+    if(label) b.textContent = label;
+  };
+  setBtn("#poker-fold", isMyTurn && me && me.status!=="folded" && me.status!=="allin", "FOLD");
+  setBtn("#poker-check", isMyTurn && toCall===0 && me?.status!=="allin", "CHECK");
+  setBtn("#poker-call", isMyTurn && toCall>0 && chips>0, toCall>0 ? `CALL $${toCall.toLocaleString()}` : "CALL");
+  setBtn("#poker-bet", isMyTurn && toCall===0 && chips>0, "BET");
+  setBtn("#poker-raise", isMyTurn && toCall>0 && chips>toCall, "RAISE");
+  setBtn("#poker-allin", isMyTurn && chips>0, "ALL-IN");
+
+  // Host start button
+  const startBtn = $("#btn-poker-start-hand");
+  const msgEl = $("#poker-table-msg");
+  const isHost = !!(me?.isHost || state.hostId===myId);
+  const canPhase = state.phase==="WAITING" || state.phase==="HAND_OVER" || !state.phase;
+  const seatedCount = (state.players||[]).filter(p => Number(p.chips||0) > 0).length;
+  if(startBtn){
+    startBtn.classList.toggle("hidden", !isHost);
+    startBtn.disabled = !(isHost && canPhase);
+    if(isHost && canPhase && seatedCount < 2){
+      startBtn.textContent = `START HAND (${seatedCount}/2)`;
+    } else if(isHost && canPhase){
+      startBtn.textContent = "START HAND";
+    } else if(!canPhase){
+      startBtn.textContent = "HAND IN PROGRESS";
+    } else {
+      startBtn.textContent = "START HAND";
+    }
+  }
+  if(msgEl && canPhase){
+    if(seatedCount < 2){
+      msgEl.className = "poker-table-msg";
+      msgEl.textContent = `Waiting for players… ${seatedCount}/2 seated with chips`;
+    } else if(isHost){
+      msgEl.className = "poker-table-msg ok";
+      msgEl.textContent = "Ready — press START HAND";
+    } else {
+      msgEl.className = "poker-table-msg";
+      msgEl.textContent = "Waiting for host to start…";
+    }
+  } else if(msgEl && !canPhase){
+    msgEl.className = "poker-table-msg";
+    msgEl.textContent = "";
+  }
+  $("#poker-host")?.classList.toggle("hidden", !isHost);
 }
 
-function renderRouletteHostList(){
-  const box=$("#host-list"); if(!box || !rouletteState) return;
+function renderPokerHostList(){
+  const box=$("#host-list"); if(!box || !pokerState) return;
   box.innerHTML="";
-  const dc = $("#toggle-double-cash");
-  if (dc) dc.classList.toggle("on", !!rouletteState.doubleCash);
-  (rouletteState.players||[]).forEach(p=>{
+  (pokerState.players||[]).forEach(p=>{
     const row=el("div","host-player");
     row.appendChild(el("span",null,p.username+(p.id===myId?" (you)":"")));
     if(p.id===myId || p.isHost) row.appendChild(el("span","host-badge","HOST"));
@@ -1631,15 +1852,22 @@ function renderRouletteHostList(){
   });
 }
 
-function openRouletteLobby(){
-  // If still seated, leave first so server doesn't keep a ghost seat
+function openPokerLobby(){
   if (myId || myRoom) send({ type: "leave_table" });
   clearTableClientState();
-  currentGame = "roulette";
-  $("#roulette-room-error") && ($("#roulette-room-error").textContent = "");
-  showScreen("#screen-roulette-lobby");
-  send({ type: "public_tables", game: "roulette" });
+  currentGame = "poker";
+  const err = $("#poker-room-error");
+  if (err) err.textContent = "";
+  const roomInput = $("#poker-room");
+  if (roomInput && !roomInput.dataset.keep) roomInput.value = "";
+  showScreen("#screen-poker-lobby");
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    if (err) err.textContent = "Connecting… try again in a moment.";
+    connect();
+  }
+  send({ type: "public_tables", game: "poker" });
 }
+
 function openBlackjackLobby(){
   if (myId || myRoom) send({ type: "leave_table" });
   clearTableClientState();
@@ -1930,6 +2158,19 @@ function initSettings() {
 
   wireButton($("#btn-settings"), () => { $("#btn-leave-table").classList.remove("hidden"); $("#settings-overlay").classList.add("open"); });
   wireButton($("#btn-settings-menu"), () => { $("#btn-leave-table").classList.add("hidden"); $("#settings-overlay").classList.add("open"); });
+  wireButton($("#btn-settings-shop"), () => {
+    $("#settings-overlay")?.classList.remove("open");
+    openProgress("#store-overlay");
+    send({ type: "store", token: authToken });
+  });
+  // Refresh inventory whenever settings opens
+  const _openSettingsInv = () => { send({ type: "store", token: authToken }); setTimeout(() => { try { renderAppearance(); } catch(e){} }, 120); };
+  document.querySelectorAll("#btn-settings, #poker-settings, #btn-settings-menu").forEach(btn => {
+    if (btn && !btn.dataset.invHook) {
+      btn.dataset.invHook = "1";
+      btn.addEventListener("click", () => setTimeout(_openSettingsInv, 50));
+    }
+  });
   wireButton($("#btn-settings-close"), () => $("#settings-overlay").classList.remove("open"));
 
   // Update Log
@@ -1968,7 +2209,7 @@ function initSettings() {
 
   // Host panel
   wireButton($("#btn-host"), () => openHostPanel());
-  wireButton($("#roulette-host"), () => openHostPanel());
+  wireButton($("#poker-host"), () => openHostPanel());
   wireButton($("#btn-host-close"), () => $("#host-overlay").classList.remove("open"));
   $("#toggle-double-cash")?.addEventListener("click", () => {
     play("click");
@@ -1985,7 +2226,7 @@ function initSettings() {
     clearTableClientState();
     showMainMenu();
     setTimeout(() => {
-      if ($("#screen-table")?.classList.contains("active") || $("#screen-roulette")?.classList.contains("active")) {
+      if ($("#screen-table")?.classList.contains("active") || $("#screen-poker")?.classList.contains("active")) {
         clearTableClientState();
         showMainMenu();
       }
@@ -2013,7 +2254,7 @@ function initJoin() {
   wireButton($("#btn-auth"), loginOrSignup);
   wireButton($("#btn-play"), openBlackjackLobby);
   wireButton($("#game-blackjack"), openBlackjackLobby);
-  wireButton($("#game-roulette"), openRouletteLobby);
+  wireButton($("#game-poker"), openPokerLobby);
   wireButton($("#btn-join-table"),()=>{const room=$("#input-room").value.trim();$("#room-error").textContent="";if(!room){$("#room-error").textContent="Enter a private table code, or use CREATE PUBLIC TABLE.";return;}send({type:"join",token:authToken,room,game:"blackjack"});});
   wireButton($("#btn-back-menu"), () => {
     $("#room-error").textContent = "";
@@ -2052,8 +2293,8 @@ function initJoin() {
   };
   wireButton($("#btn-admin-float"), openAdmin);
   wireButton($("#btn-admin-table"), openAdmin);
-  wireButton($("#roulette-admin"), openAdmin);
-  wireButton($("#roulette-host"), () => { renderRouletteHostList(); $("#host-overlay").classList.add("open"); });
+  wireButton($("#poker-admin"), openAdmin);
+  wireButton($("#poker-host"), () => { renderPokerHostList(); $("#host-overlay").classList.add("open"); });
   wireButton($("#admin-preview-toggle"), () => {
     if (isAdmin) send({type:"admin_toggle_preview", enabled: !$("#admin-preview-toggle").classList.contains("on")});
   });
@@ -2086,33 +2327,77 @@ function initJoin() {
     const maxPlayers = parseInt($("#bj-max-players")?.value || "5", 10) || 5;
     send({type:"create_public", token:authToken, game:"blackjack", maxPlayers});
   });
-  wireButton($("#btn-roulette-create"), () => {
-    const maxPlayers = parseInt($("#roulette-max-players")?.value || "5", 10) || 5;
-    send({type:"create_public", token:authToken, game:"roulette", maxPlayers});
+  wireButton($("#btn-poker-create"), () => {
+    const err = $("#poker-room-error");
+    if (err) err.textContent = "";
+    if (!authToken) { if (err) err.textContent = "Please log in first."; return; }
+    if (!ws || ws.readyState !== WebSocket.OPEN) { if (err) err.textContent = "Not connected. Reconnecting…"; connect(); return; }
+    const maxPlayers = parseInt($("#poker-max-players")?.value || "6", 10) || 6;
+    const buyIn = parseInt($("#poker-buyin")?.value || "1000", 10) || 1000;
+    if (err) err.textContent = "Creating table…";
+    send({type:"create_public", token:authToken, game:"poker", maxPlayers, buyIn});
   });
-  wireButton($("#btn-roulette-join"),()=>{const room=$("#roulette-room").value.trim();$("#roulette-room-error").textContent="";if(!room){$("#roulette-room-error").textContent="Enter a private table code, or use CREATE PUBLIC TABLE.";return;}send({type:"join",token:authToken,room,game:"roulette"});});
-  wireButton($("#btn-roulette-back"), showMainMenu);
-  wireButton($("#roulette-clear"), () => send({type:"roulette_clear"}));
-  wireButton($("#roulette-chip-amount"), () => { const vals=[100,500,1000,5000]; rouletteBetAmount=vals[(vals.indexOf(rouletteBetAmount)+1)%vals.length]; $("#roulette-chip-amount").textContent="$"+rouletteBetAmount.toLocaleString(); $("#roulette-chip-amount").classList.add("selected-chip"); });
-  wireButton($("#roulette-spin"), () => send({type:"roulette_spin"}));
-  wireButton($("#roulette-leave"), () => {
+  wireButton($("#btn-poker-join"),()=>{
+    const err = $("#poker-room-error");
+    if (err) err.textContent = "";
+    const room = ($("#poker-room")?.value || "").trim();
+    if (!room) { if (err) err.textContent = "Enter a private table code, or use CREATE PUBLIC TABLE."; return; }
+    if (!authToken) { if (err) err.textContent = "Please log in first."; return; }
+    if (!ws || ws.readyState !== WebSocket.OPEN) { if (err) err.textContent = "Not connected. Reconnecting…"; connect(); return; }
+    if (err) err.textContent = "Joining…";
+    send({type:"join", token:authToken, room, game:"poker"});
+  });
+  wireButton($("#btn-poker-back"), () => { const err=$("#poker-room-error"); if(err) err.textContent=""; showMainMenu(); });
+  wireButton($("#btn-sit-down"), () => send({ type: "sit_down", token: authToken }));
+  wireButton($("#btn-poker-sit-down"), () => send({ type: "sit_down", token: authToken }));
+  wireButton($("#btn-poker-leave"), () => {
     send({ type: "leave_table" });
     clearTableClientState();
     showMainMenu();
-    // Fail-safe: if still on roulette screen, force exit
     setTimeout(() => {
-      if ($("#screen-roulette")?.classList.contains("active")) {
+      if ($("#screen-poker")?.classList.contains("active")) {
         clearTableClientState();
         showMainMenu();
         $("#host-overlay")?.classList.remove("open");
         $("#settings-overlay")?.classList.remove("open");
-        showMainMenu();
       }
     }, 800);
   });
-  wireButton($("#roulette-settings"), () => { $("#btn-leave-table").classList.remove("hidden"); $("#settings-overlay").classList.add("open"); });
-  document.querySelectorAll(".roulette-bet").forEach(b => wireButton(b, () => placeRouletteBet(b.dataset.bet)));
-  buildRouletteNumbers();
+  wireButton($("#poker-settings"), () => { $("#btn-leave-table").classList.remove("hidden"); $("#settings-overlay").classList.add("open"); });
+  wireButton($("#poker-fold"), () => send({type:"poker_action", action:"fold"}));
+  wireButton($("#poker-check"), () => send({type:"poker_action", action:"check"}));
+  wireButton($("#poker-call"), () => send({type:"poker_action", action:"call"}));
+  wireButton($("#poker-allin"), () => send({type:"poker_action", action:"allin"}));
+  wireButton($("#poker-bet"), () => {
+    $("#poker-bet-row")?.classList.remove("hidden");
+    const minR = Number(pokerState?.minRaise||50);
+    const inp = $("#poker-bet-amount");
+    if(inp){ inp.value = minR; inp.min = minR; }
+    window._pokerActMode = "bet";
+  });
+  wireButton($("#poker-raise"), () => {
+    $("#poker-bet-row")?.classList.remove("hidden");
+    const cur = Number(pokerState?.currentBet||0);
+    const minR = Number(pokerState?.minRaise||50);
+    const inp = $("#poker-bet-amount");
+    if(inp){ inp.value = cur + minR; inp.min = cur + minR; }
+    window._pokerActMode = "raise";
+  });
+  wireButton($("#poker-bet-confirm"), () => {
+    const amt = parseInt($("#poker-bet-amount")?.value||"0",10)||0;
+    const mode = window._pokerActMode || "bet";
+    send({type:"poker_action", action: mode, amount: amt});
+    $("#poker-bet-row")?.classList.add("hidden");
+  });
+  wireButton($("#poker-bet-cancel"), () => $("#poker-bet-row")?.classList.add("hidden"));
+  wireButton($("#btn-poker-start-hand"), () => {
+    const msgEl = $("#poker-table-msg");
+    if (msgEl) { msgEl.className = "poker-table-msg"; msgEl.textContent = "Starting hand…"; }
+    if (!send({type:"poker_start"})) {
+      if (msgEl) { msgEl.className = "poker-table-msg error"; msgEl.textContent = "Not connected."; }
+    }
+  });
+  wireButton($("#btn-poker-cashout"), () => send({type:"poker_cashout"}));
   wireButton($("#btn-chat-open"), () => toggleChat(true));
   wireButton($("#btn-chat-toggle"), () => toggleChat(false));
   wireButton($("#btn-chat-mute"), () => { chatMuted=!chatMuted; localStorage.setItem('bj_chat_muted',chatMuted?'1':'0'); $("#btn-chat-mute").textContent=chatMuted?'🔇':'🔊'; });

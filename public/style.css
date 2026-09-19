@@ -123,6 +123,11 @@ h1, h2, h3 {
 }
 .screen.active {
   display: flex;
+  z-index: 5;
+}
+#screen-poker-lobby.active,
+#screen-lobby.active {
+  z-index: 6;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1291,13 +1296,13 @@ body { background: #050505; }
 .game-card-icon{width:66px;height:66px;border-radius:50%;display:grid;place-items:center;font-size:31px;font-weight:700;border:2px solid rgba(255,255,255,.42);box-shadow:inset 0 0 0 5px rgba(255,255,255,.05),0 8px 22px rgba(0,0,0,.28);margin-bottom:6px}
 .game-card-name{font:700 21px var(--font-display);letter-spacing:.1em}.game-card-desc{font:600 10px var(--font-display);letter-spacing:.14em;opacity:.62}.game-card-action{margin-top:10px;font:700 10px var(--font-display);letter-spacing:.16em;opacity:.8}.game-card-disabled{opacity:.4;cursor:not-allowed;filter:saturate(.35)}
 .home-tools{display:grid;grid-template-columns:repeat(3,minmax(110px,1fr));gap:10px;width:min(540px,100%);margin-top:10px}.home-footer{width:min(920px,100%);display:flex;align-items:center;justify-content:space-between}.menu-settings{width:46px;height:46px;border-radius:50%;font-size:20px}.ghost-btn{background:transparent;border:0;box-shadow:none;opacity:.58}.ghost-btn:hover{opacity:1;background:rgba(255,255,255,.06)}
-#screen-lobby,#screen-roulette-lobby{align-items:center;justify-content:center;padding:22px;overflow:auto}#screen-lobby .lobby-card,#screen-roulette-lobby .lobby-card{width:min(560px,94vw);max-width:560px;margin:auto;max-height:calc(100vh - 44px);overflow:auto}
-.roulette-lobby-card{text-align:center}.roulette-mark{width:66px;height:66px;border-radius:50%;display:grid;place-items:center;margin:0 auto 8px;border:2px solid rgba(255,255,255,.35);font-size:34px}
+#screen-lobby,#screen-poker-lobby{align-items:center;justify-content:center;padding:22px;overflow:auto}#screen-lobby .lobby-card,#screen-poker-lobby .lobby-card{width:min(560px,94vw);max-width:560px;margin:auto;max-height:calc(100vh - 44px);overflow:auto}
+.poker-lobby-card{text-align:center}.poker-mark{width:66px;height:66px;border-radius:50%;display:grid;place-items:center;margin:0 auto 8px;border:2px solid rgba(255,255,255,.35);font-size:34px}
 .roulette-stage{width:min(1050px,96vw);margin:auto;display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px 12px 24px;overflow:auto;max-height:calc(100vh - 74px)}
 .roulette-header{text-align:center;font:700 26px var(--font-display);letter-spacing:.16em}.roulette-header small{display:block;font:600 9px var(--font-display);letter-spacing:.2em;opacity:.58;margin-top:3px}
 .roulette-wheel-wrap{width:clamp(170px,26vw,260px);height:clamp(170px,26vw,260px);display:grid;place-items:center}.roulette-wheel{width:100%;height:100%;border-radius:50%;border:12px solid rgba(255,255,255,.13);background:conic-gradient(from 0deg,#111 0 8deg,#a92d43 8deg 18deg,#111 18deg 28deg,#a92d43 28deg 38deg,#111 38deg 48deg,#a92d43 48deg 58deg,#111 58deg 68deg,#a92d43 68deg 78deg,#111 78deg 88deg,#a92d43 88deg 98deg,#111 98deg 108deg,#a92d43 108deg 118deg,#111 118deg 128deg,#a92d43 128deg 138deg,#111 138deg 148deg,#a92d43 148deg 158deg,#111 158deg 168deg,#a92d43 168deg 178deg,#111 178deg 188deg,#a92d43 188deg 198deg,#111 198deg 208deg,#a92d43 208deg 218deg,#111 218deg 228deg,#a92d43 228deg 238deg,#111 238deg 248deg,#a92d43 248deg 258deg,#111 258deg 268deg,#a92d43 268deg 278deg,#111 278deg 288deg,#a92d43 288deg 298deg,#111 298deg 308deg,#a92d43 308deg 318deg,#111 318deg 328deg,#a92d43 328deg 338deg,#111 338deg 348deg,#a92d43 348deg 360deg);box-shadow:0 16px 50px rgba(0,0,0,.4),inset 0 0 0 18px rgba(255,255,255,.04);position:relative;display:grid;place-items:center}.roulette-wheel:after{content:"";position:absolute;width:48%;height:48%;border-radius:50%;background:radial-gradient(circle,#b58a3c 0 12%,#1d1d1d 13% 55%,#caa85c 56% 60%,#171717 61%);border:3px solid rgba(255,255,255,.18)}.roulette-wheel-ring{position:relative;z-index:2;font:700 12px var(--font-display);letter-spacing:.16em;color:#fff}.roulette-zero{position:absolute;z-index:3;top:8px;font:700 12px var(--font-display);color:#fff}.spin-now{animation:rouletteSpin .9s cubic-bezier(.15,.7,.2,1)}@keyframes rouletteSpin{to{transform:rotate(620deg)}}
 .roulette-result{font:700 14px var(--font-display);letter-spacing:.14em;min-height:20px}.roulette-bets-grid{width:min(760px,100%);display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.roulette-bet{min-height:54px;border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;background:#222;font:700 12px var(--font-display);letter-spacing:.05em;cursor:pointer}.roulette-bet small{opacity:.55}.roulette-bet.red{background:#8d2639}.roulette-bet.black{background:#151515}.roulette-bet.green{background:#1f7650}.roulette-bet.neutral,.roulette-bet.dozen{background:rgba(255,255,255,.08)}.roulette-number-strip{width:min(920px,100%);display:grid;grid-template-columns:repeat(19,1fr);gap:4px}.roulette-number{min-height:30px;border:0;border-radius:5px;color:#fff;font:700 10px var(--font-display);cursor:pointer}.roulette-number.red{background:#8d2639}.roulette-number.black{background:#151515}.roulette-number.green{background:#1f7650}.roulette-controls{width:min(760px,100%);display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap}.roulette-chip-amount{min-width:86px;text-align:center;font:700 14px var(--font-display);padding:11px 12px;border-radius:10px;background:rgba(255,255,255,.08)}.roulette-seat-info{font-size:11px;color:var(--text-soft);letter-spacing:.08em}
-@media(max-width:760px){.casino-home{min-height:auto;height:100%;justify-content:flex-start;overflow:auto;padding:22px 12px}.game-picker{grid-template-columns:1fr;width:min(440px,100%);gap:10px}.game-card{min-height:124px;display:grid;grid-template-columns:58px 1fr auto;grid-template-rows:1fr 1fr;text-align:left;padding:14px 16px}.game-card-icon{grid-row:1/3;width:56px;height:56px;margin:0}.game-card-name{align-self:end}.game-card-desc{align-self:start}.game-card-action{grid-column:3;grid-row:1/3;align-self:center;margin:0}.home-tools{width:min(440px,100%)}#screen-lobby,#screen-roulette-lobby{padding:12px}#screen-lobby .lobby-card,#screen-roulette-lobby .lobby-card{max-height:calc(100vh - 24px);width:100%}.roulette-stage{width:100%;max-height:calc(100vh - 65px);padding:8px 8px 18px}.roulette-bets-grid{grid-template-columns:repeat(3,1fr)}.roulette-number-strip{grid-template-columns:repeat(9,1fr)}.roulette-controls .btn{min-height:46px}.roulette-number{min-height:36px}}
+@media(max-width:760px){.casino-home{min-height:auto;height:100%;justify-content:flex-start;overflow:auto;padding:22px 12px}.game-picker{grid-template-columns:1fr;width:min(440px,100%);gap:10px}.game-card{min-height:124px;display:grid;grid-template-columns:58px 1fr auto;grid-template-rows:1fr 1fr;text-align:left;padding:14px 16px}.game-card-icon{grid-row:1/3;width:56px;height:56px;margin:0}.game-card-name{align-self:end}.game-card-desc{align-self:start}.game-card-action{grid-column:3;grid-row:1/3;align-self:center;margin:0}.home-tools{width:min(440px,100%)}#screen-lobby,#screen-poker-lobby{padding:12px}#screen-lobby .lobby-card,#screen-poker-lobby .lobby-card{max-height:calc(100vh - 24px);width:100%}.roulette-stage{width:100%;max-height:calc(100vh - 65px);padding:8px 8px 18px}.roulette-bets-grid{grid-template-columns:repeat(3,1fr)}.roulette-number-strip{grid-template-columns:repeat(9,1fr)}.roulette-controls .btn{min-height:46px}.roulette-number{min-height:36px}}
 @media(max-width:420px){.home-tools{grid-template-columns:1fr;width:min(320px,100%)}.roulette-bets-grid{grid-template-columns:repeat(2,1fr)}.roulette-wheel-wrap{width:170px;height:170px}}
 
 /* ==================== CASINO HUB LAYOUT HOTFIX ====================
@@ -2942,7 +2947,7 @@ html[data-mobile="0"] .felt-table {
   /* ---- Home / lobby: stacked cards ---- */
   #screen-join .auth-card,
   #screen-lobby .auth-card,
-  #screen-roulette-lobby .auth-card {
+  #screen-poker-lobby .auth-card {
     width: 100% !important;
     max-width: 100% !important;
     min-height: 100dvh !important;
@@ -6479,4 +6484,1072 @@ aside.mobile-ad-rail-right {
     visibility: hidden !important;
     pointer-events: none !important;
   }
+}
+
+
+/* ===== POKER TABLE ===== */
+.game-card-poker { border-color: rgba(212,175,55,0.35); }
+.game-card-poker:hover { box-shadow: 0 0 24px rgba(212,175,55,0.25); }
+.poker-mark { font-size: 2.4rem; color: #d4af37; text-align: center; margin-bottom: 4px; }
+.poker-table-shell { display:flex; flex-direction:column; align-items:center; gap:12px; padding:12px; min-height: calc(100vh - 70px); }
+.poker-felt {
+  position: relative;
+  width: min(1100px, 98vw);
+  height: min(620px, 72vh);
+  background: radial-gradient(ellipse at center, #1a5c3a 0%, #0d3d28 55%, #082418 100%);
+  border: 6px solid #2a1a0a;
+  border-radius: 50% / 42%;
+  box-shadow: inset 0 0 60px rgba(0,0,0,0.45), 0 8px 32px rgba(0,0,0,0.5);
+  margin: 8px auto;
+}
+.poker-community {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%);
+  display: flex; gap: 8px; min-height: 70px; align-items: center; justify-content: center;
+}
+.poker-comm-placeholder { opacity: 0.35; font-size: 0.75rem; letter-spacing: 0.12em; color: #c8e6c9; }
+.poker-pot-display {
+  position: absolute; left: 50%; top: 58%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.55); color: #f5e6a3; padding: 6px 16px; border-radius: 999px;
+  font-weight: 700; font-size: 0.95rem; letter-spacing: 0.04em;
+}
+.poker-winners { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); z-index: 5; width: 80%; text-align: center; }
+.poker-winner-chip { background: rgba(212,175,55,0.2); border: 1px solid rgba(212,175,55,0.5); color: #f5e6a3; padding: 6px 12px; border-radius: 8px; margin: 4px; display: inline-block; font-size: 0.85rem; }
+.poker-seats { position: absolute; inset: 0; pointer-events: none; }
+.poker-seat {
+  position: absolute; transform: translate(-50%,-50%);
+  min-width: 90px; text-align: center; pointer-events: auto;
+  background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+  padding: 6px 8px; font-size: 0.75rem; color: #eee;
+}
+.poker-seat.me { border-color: rgba(212,175,55,0.6); box-shadow: 0 0 12px rgba(212,175,55,0.25); }
+.poker-seat.turn { border-color: #4ade80; box-shadow: 0 0 14px rgba(74,222,128,0.35); }
+.poker-seat.folded { opacity: 0.45; }
+.poker-seat-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+.poker-seat-chips { color: #f5e6a3; font-weight: 600; }
+.poker-seat-bet { color: #93c5fd; min-height: 1em; }
+.poker-seat-status { opacity: 0.7; font-size: 0.68rem; text-transform: uppercase; }
+.poker-seat-cards { display: flex; gap: 3px; justify-content: center; margin-bottom: 4px; min-height: 36px; }
+.poker-badge { display: inline-block; margin-left: 4px; padding: 1px 5px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; }
+.poker-badge.dealer { background: #d4af37; color: #111; }
+.poker-badge.sb { background: #64748b; color: #fff; }
+.poker-badge.bb { background: #3b82f6; color: #fff; }
+.poker-hole-row { display: flex; gap: 10px; justify-content: center; min-height: 90px; }
+.poker-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 8px; }
+.poker-act { min-width: 88px; font-weight: 700; }
+.poker-act:disabled { opacity: 0.35; }
+.poker-act.allin { background: linear-gradient(135deg,#b91c1c,#7f1d1d); border-color: #ef4444; }
+.poker-bet-input { display: flex; gap: 8px; align-items: center; justify-content: center; }
+.poker-bet-input input { width: 120px; padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.4); color: #fff; }
+.poker-table-footer { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding-bottom: 12px; }
+
+/* Playing cards (shared) */
+.playing-card {
+  width: 54px; height: 76px; border-radius: 6px; background: #f8f5ef;
+  border: 1px solid #ccc; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.35); position: relative;
+  animation: cardDeal 0.28s ease-out;
+}
+.playing-card.small { width: 32px; height: 44px; font-size: 0.7rem; }
+.playing-card.red { color: #c41e3a; }
+.playing-card.black { color: #1a1a1a; }
+.playing-card .card-rank { font-size: 1.05em; line-height: 1; }
+.playing-card .card-suit { font-size: 1.15em; line-height: 1; }
+.playing-card.card-back {
+  background: linear-gradient(145deg, #1e3a5f 0%, #0f1c2e 100%);
+  border-color: #2a4a6f;
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.04) 4px, rgba(255,255,255,0.04) 8px);
+}
+@keyframes cardDeal {
+  from { transform: translateY(-12px) scale(0.9); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Store rarity */
+.store-item-rarity { font-size: 0.65rem; letter-spacing: 0.1em; font-weight: 800; text-transform: uppercase; }
+.rarity-COMMON { color: #94a3b8; }
+.rarity-UNCOMMON { color: #4ade80; }
+.rarity-RARE { color: #60a5fa; }
+.rarity-EPIC { color: #c084fc; }
+.rarity-LEGENDARY { color: #fbbf24; }
+.rarity-ADMIN { color: #f472b6; text-shadow: 0 0 8px rgba(244,114,182,0.5); }
+.store-card-item.rarity-border-LEGENDARY { border-color: rgba(251,191,36,0.5); box-shadow: 0 0 16px rgba(251,191,36,0.15); }
+.store-card-item.rarity-border-EPIC { border-color: rgba(192,132,252,0.45); }
+.store-card-item.rarity-border-ADMIN { border-color: rgba(244,114,182,0.6); box-shadow: 0 0 20px rgba(244,114,182,0.2); }
+
+@media (max-width: 700px) {
+  .poker-felt { height: min(420px, 48vh); border-radius: 48% / 40%; }
+  .poker-seat { min-width: 72px; font-size: 0.65rem; padding: 4px; }
+  .playing-card { width: 42px; height: 60px; }
+  .playing-card.small { width: 26px; height: 36px; }
+  .poker-actions { gap: 6px; }
+  .poker-act { min-width: 72px; font-size: 0.8rem; padding: 8px 10px; }
+}
+
+
+/* poker lobby center fix */
+#screen-poker-lobby {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 22px !important;
+  overflow: auto !important;
+}
+#screen-poker-lobby .lobby-card,
+#screen-poker-lobby .poker-lobby-card {
+  width: min(560px, 94vw) !important;
+  max-width: 560px !important;
+  margin: auto !important;
+  max-height: calc(100vh - 44px);
+  overflow: auto;
+  text-align: center;
+}
+#screen-poker-lobby .field,
+#screen-poker-lobby .lobby-actions,
+#screen-poker-lobby .public-table-list {
+  text-align: left;
+}
+#screen-poker-lobby .lobby-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+#screen-poker {
+  align-items: stretch;
+  justify-content: flex-start;
+}
+.poker-mark {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 8px;
+  border: 2px solid rgba(215, 181, 109, 0.45);
+  font-size: 34px;
+  color: #d4af37;
+}
+/* top bar profile avatar */
+.profile-chip .chip-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+.poker-seat .seat-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin: 0 auto 4px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: #fff;
+  background-size: cover;
+  background-position: center;
+  border: 2px solid rgba(255,255,255,0.2);
+}
+.poker-seat.me .seat-avatar {
+  border-color: #d7b56d;
+  box-shadow: 0 0 0 2px rgba(215,181,109,0.4);
+}
+
+.poker-table-msg {
+  text-align: center;
+  min-height: 1.4em;
+  color: #fbbf24;
+  font: 700 12px var(--font-display);
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+}
+.poker-table-msg.error { color: #f87171; }
+.poker-table-msg.ok { color: #4ade80; }
+#btn-poker-start-hand {
+  min-width: 140px;
+  font-weight: 800;
+}
+#btn-poker-start-hand:disabled {
+  opacity: 0.45;
+}
+
+
+/* ==========================================================================
+   SEASON 2 — CASINO X: CRIMSON ROYALE
+   ========================================================================== */
+html.season-crimson {
+  --season-crimson: #8b1e2d;
+  --season-crimson-hi: #c43b4e;
+  --season-ivory: #f3ede2;
+  --season-soft-gold: #d4b87a;
+  --season-ink: #1a0a0c;
+}
+html.season-crimson body {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(139,30,45,.22), transparent 40%),
+    radial-gradient(circle at 80% 20%, rgba(212,184,122,.08), transparent 30%),
+    linear-gradient(180deg, #1a080c 0%, #0a0506 55%, #050304 100%) !important;
+  color: var(--season-ivory);
+}
+html.season-crimson body::after {
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:1;
+  opacity: .18;
+  background:
+    repeating-linear-gradient(0deg, rgba(243,237,226,.03) 0 1px, transparent 1px 5px);
+  mix-blend-mode: overlay;
+}
+html.season-crimson #app { position: relative; z-index: 2; }
+html.season-crimson .top-bar,
+html.season-crimson .auth-card,
+html.season-crimson .overlay-card,
+html.season-crimson .chat-panel,
+html.season-crimson .control-dock,
+html.season-crimson .room-chip,
+html.season-crimson .profile-chip,
+html.season-crimson .lobby-card,
+html.season-crimson .store-item,
+html.season-crimson .stat-box,
+html.season-crimson .public-table-row,
+html.season-crimson .friend-item,
+html.season-crimson .leaderboard-row {
+  border-color: rgba(212,184,122,.28) !important;
+  background: linear-gradient(145deg, rgba(60,16,24,.94), rgba(12,6,8,.96)) !important;
+  box-shadow: inset 0 1px rgba(243,237,226,.06), 0 12px 34px rgba(0,0,0,.4) !important;
+}
+html.season-crimson .btn {
+  color: var(--season-ivory);
+  border: 1px solid rgba(212,184,122,.4);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(139,30,45,.95), rgba(70,12,20,.98));
+  box-shadow: inset 0 1px rgba(255,255,255,.1), 0 6px 16px rgba(0,0,0,.35);
+}
+html.season-crimson .btn:hover {
+  border-color: var(--season-soft-gold);
+  filter: brightness(1.1);
+}
+html.season-crimson .btn.secondary {
+  color: var(--season-ink) !important;
+  background: linear-gradient(180deg, #f3ede2, #d4b87a) !important;
+}
+html.season-crimson .btn.menu-primary,
+html.season-crimson .btn.auth-submit.menu-primary {
+  background: linear-gradient(180deg, #c43b4e, #8b1e2d) !important;
+  color: #fff !important;
+  border-color: rgba(212,184,122,.5);
+}
+html.season-crimson input,
+html.season-crimson select,
+html.season-crimson textarea {
+  color: var(--season-ivory) !important;
+  background: linear-gradient(145deg, #2a1016, #0c0709) !important;
+  border-color: rgba(212,184,122,.28) !important;
+}
+html.season-crimson .icon-btn {
+  border-color: rgba(212,184,122,.4) !important;
+  color: var(--season-soft-gold) !important;
+  background: linear-gradient(145deg, #3a141c, #12080a) !important;
+}
+html.season-crimson .overlay-title,
+html.season-crimson .main-menu-title,
+html.season-crimson .game-card-name {
+  color: var(--season-ivory) !important;
+}
+html.season-crimson .felt-table,
+html.season-crimson .poker-felt {
+  background: radial-gradient(ellipse at center, #9a2436 0%, #5c1220 50%, #2a0a12 100%) !important;
+  border-color: #e8dcc8 !important;
+  box-shadow: inset 0 0 50px rgba(0,0,0,.45), 0 0 0 3px rgba(212,184,122,.35) !important;
+}
+html.season-crimson .game-card-poker,
+html.season-crimson .game-card-featured {
+  border-color: rgba(196,59,78,.45) !important;
+}
+html.season-crimson .balance-chip {
+  color: var(--season-soft-gold) !important;
+}
+
+/* Season overlay art */
+.season-art-crimson,
+.season-crimson-pass .season-art {
+  background:
+    radial-gradient(circle at 75% 25%, rgba(196,59,78,.25), transparent 40%),
+    linear-gradient(135deg, rgba(90,18,28,.98), rgba(12,6,8,.98)) !important;
+  border-color: rgba(212,184,122,.35) !important;
+}
+.season-crimson-pass .season-art:before {
+  border-color: rgba(212,184,122,.4) !important;
+}
+.season-crimson-pass .season-art-copy strong {
+  color: var(--season-ivory, #f3ede2);
+}
+.season-crimson-pass .season-progress {
+  background: rgba(139,30,45,.25);
+}
+.season-crimson-pass #season-progress-fill,
+.season-crimson-pass .season-progress > div {
+  background: linear-gradient(90deg, #8b1e2d, #d4b87a) !important;
+}
+.season-crimson-pass .season-tier.unlocked {
+  border-color: rgba(196,59,78,.4);
+}
+.season-crimson-pass .limited-badge {
+  color: #d4b87a;
+  border-color: rgba(212,184,122,.35);
+}
+
+
+/* ==========================================================================
+   CRIMSON ROYALE — stronger full-UI coverage
+   ========================================================================== */
+html.season-crimson,
+html.season-crimson body {
+  --cx-crimson: #9b1c2e;
+  --cx-crimson-deep: #4a0e18;
+  --cx-crimson-glow: rgba(196, 59, 78, 0.45);
+  --cx-ivory: #f4eee6;
+  --cx-gold: #d4b87a;
+}
+html.season-crimson body {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(196,59,78,.35), transparent 55%),
+    radial-gradient(circle at 15% 90%, rgba(139,30,45,.2), transparent 40%),
+    radial-gradient(circle at 85% 70%, rgba(212,184,122,.08), transparent 35%),
+    linear-gradient(165deg, #2a0a12 0%, #120508 40%, #080304 100%) !important;
+}
+html.season-crimson #bg-canvas {
+  opacity: 0.35;
+  filter: sepia(0.35) hue-rotate(-20deg) saturate(1.4);
+}
+html.season-crimson .auth-card.main-menu-mode,
+html.season-crimson .auth-card,
+html.season-crimson .overlay-card,
+html.season-crimson .lobby-card {
+  background:
+    linear-gradient(160deg, rgba(70,14,24,.96), rgba(18,6,10,.98)) !important;
+  border: 1px solid rgba(212,184,122,.32) !important;
+  box-shadow:
+    0 0 40px rgba(139,30,45,.25),
+    0 20px 50px rgba(0,0,0,.45),
+    inset 0 1px rgba(244,238,230,.08) !important;
+}
+html.season-crimson .casino-home,
+html.season-crimson #screen-join .auth-card.main-menu-mode {
+  background: transparent !important;
+}
+html.season-crimson .game-card {
+  background: linear-gradient(160deg, rgba(55,12,20,.9), rgba(20,6,10,.95)) !important;
+  border-color: rgba(212,184,122,.28) !important;
+}
+html.season-crimson .game-card:hover {
+  border-color: rgba(196,59,78,.55) !important;
+  box-shadow: 0 0 24px rgba(196,59,78,.2) !important;
+}
+html.season-crimson .home-tools .btn,
+html.season-crimson .btn.secondary {
+  color: #1a0a0c !important;
+  background: linear-gradient(180deg, #f4eee6, #d4b87a) !important;
+  border-color: rgba(212,184,122,.5) !important;
+}
+html.season-crimson .main-menu-title,
+html.season-crimson .overlay-title {
+  color: var(--cx-ivory) !important;
+  text-shadow: 0 0 24px rgba(196,59,78,.35);
+}
+
+/* Settings — readable labels under seasonal theme */
+html.season-crimson .settings-row label,
+html.season-crimson .settings-row {
+  color: var(--cx-ivory) !important;
+  opacity: 1 !important;
+}
+html.season-crimson .settings-help {
+  color: rgba(244,238,230,.72) !important;
+  opacity: 1 !important;
+}
+html.season-crimson .settings-row {
+  border-bottom-color: rgba(212,184,122,.15) !important;
+}
+html.season-crimson .toggle,
+html.season-crimson .toggle.on {
+  border-color: rgba(212,184,122,.4);
+}
+
+/* Poker / BJ tables under crimson */
+html.season-crimson #screen-poker,
+html.season-crimson #screen-table {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(139,30,45,.25), transparent 60%),
+    linear-gradient(180deg, #1a080c, #0a0406) !important;
+}
+html.season-crimson .poker-table-shell {
+  background: transparent !important;
+}
+html.season-crimson .poker-felt {
+  background: radial-gradient(ellipse at center, #a82438 0%, #6b1524 48%, #2e0a12 100%) !important;
+  border: 5px solid #e8dcc8 !important;
+  box-shadow:
+    inset 0 0 60px rgba(0,0,0,.5),
+    0 0 0 2px rgba(212,184,122,.4),
+    0 16px 40px rgba(0,0,0,.5) !important;
+}
+html.season-crimson .felt-table {
+  background: radial-gradient(ellipse at center, #a82438 0%, #5c1220 55%, #2a0a12 100%) !important;
+  border-color: #e8dcc8 !important;
+}
+
+/* ==========================================================================
+   POKER — bottom seat row (blackjack style)
+   ========================================================================== */
+.poker-table-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 16px;
+  min-height: calc(100vh - 64px);
+  width: 100%;
+  box-sizing: border-box;
+}
+.poker-felt {
+  position: relative;
+  width: min(1100px, 98vw);
+  flex: 1 1 auto;
+  min-height: min(520px, 70vh);
+  max-height: none;
+  height: min(620px, 72vh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 36px 28px 20px;
+  background: radial-gradient(ellipse at center, #1a5c3a 0%, #0d3d28 55%, #082418 100%);
+  border: 6px solid #2a1a0a;
+  border-radius: 48% / 40%;
+  box-shadow: inset 0 0 60px rgba(0,0,0,.45), 0 8px 32px rgba(0,0,0,.5);
+}
+.poker-community {
+  position: relative;
+  left: auto; top: auto; transform: none;
+  display: flex;
+  gap: 8px;
+  min-height: 72px;
+  align-items: center;
+  justify-content: center;
+  margin: 12px 0 6px;
+}
+.poker-pot-display {
+  position: relative;
+  left: auto; top: auto; transform: none;
+  margin: 6px auto 10px;
+}
+.poker-hole-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 48px;
+  margin-bottom: 8px;
+}
+.poker-seats-row {
+  position: relative !important;
+  inset: auto !important;
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+  max-width: 720px;
+  margin-top: auto;
+  padding-top: 8px;
+  pointer-events: auto !important;
+}
+.poker-seat-slot {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  min-width: 118px;
+  max-width: 140px;
+  text-align: center;
+  background: rgba(0,0,0,.55);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  padding: 10px 10px 12px;
+  font-size: 0.8rem;
+  color: #eee;
+}
+.poker-seat-slot.me {
+  border-color: rgba(212,175,55,.65);
+  box-shadow: 0 0 14px rgba(212,175,55,.25);
+}
+.poker-seat-slot.turn {
+  border-color: #4ade80;
+  box-shadow: 0 0 14px rgba(74,222,128,.35);
+}
+.poker-seat-slot.folded { opacity: 0.45; }
+.poker-seat-slot.empty {
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-style: dashed;
+  opacity: 0.85;
+}
+.poker-seat-slot .seat-plus {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255,255,255,.35);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+.poker-seat-slot .seat-plus:hover {
+  border-color: rgba(212,175,55,.7);
+  background: rgba(212,175,55,.12);
+}
+.poker-seat-slot .seat-open-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  opacity: 0.55;
+}
+.poker-seat-slot .seat-avatar {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 4px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #fff;
+  background-size: cover;
+  background-position: center;
+  border: 2px solid rgba(255,255,255,.2);
+}
+
+/* Friends */
+.friends-section-title {
+  font: 800 10px var(--font-display);
+  letter-spacing: 0.14em;
+  opacity: 0.55;
+  margin: 12px 0 6px;
+}
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  flex-shrink: 0;
+}
+.online-dot.online { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.6); }
+.online-dot.offline { background: #64748b; }
+.friend-status.online { color: #4ade80; }
+.friend-status.offline { color: #94a3b8; }
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.friend-meta { flex: 1; min-width: 0; }
+.friend-pending {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  opacity: 0.55;
+}
+
+/* ==========================================================================
+   MOBILE MODE OVERHAUL
+   ========================================================================== */
+html[data-mobile="1"] #app {
+  max-width: 430px;
+  margin: 0 auto;
+}
+html[data-mobile="1"] .top-bar {
+  padding: 8px 10px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+html[data-mobile="1"] .top-bar .room-chip {
+  font-size: 0.65rem;
+  padding: 4px 8px;
+}
+html[data-mobile="1"] .profile-chip {
+  max-width: 100%;
+}
+html[data-mobile="1"] .felt-table {
+  width: min(100%, 400px);
+  max-width: 100%;
+  min-height: 280px;
+  margin: 0 auto;
+  border-width: 6px;
+}
+html[data-mobile="1"] .playing-card,
+html[data-mobile="1"] .card {
+  width: 48px !important;
+  height: 68px !important;
+  font-size: 0.85rem;
+}
+html[data-mobile="1"] .playing-card.small {
+  width: 30px !important;
+  height: 42px !important;
+}
+html[data-mobile="1"] .hand .card,
+html[data-mobile="1"] .dealer-area .card {
+  width: 52px !important;
+  height: 74px !important;
+}
+html[data-mobile="1"] .control-dock {
+  padding: 10px 12px 16px;
+  gap: 8px;
+}
+html[data-mobile="1"] .control-dock .btn {
+  min-height: 48px;
+  font-size: 0.85rem;
+  padding: 10px 14px;
+}
+html[data-mobile="1"] .chip-row {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+html[data-mobile="1"] .chip {
+  width: 50px;
+  height: 50px;
+}
+html[data-mobile="1"] .poker-felt {
+  width: 100%;
+  max-width: 100%;
+  min-height: 360px;
+  height: auto;
+  max-height: none;
+  border-radius: 28px;
+  padding: 20px 12px 14px;
+}
+html[data-mobile="1"] .poker-seats-row {
+  gap: 6px;
+}
+html[data-mobile="1"] .poker-seat-slot {
+  min-width: 86px;
+  max-width: 100px;
+  padding: 6px;
+  font-size: 0.68rem;
+}
+html[data-mobile="1"] .poker-actions {
+  gap: 6px;
+  padding: 6px;
+}
+html[data-mobile="1"] .poker-act {
+  min-width: 64px;
+  min-height: 44px;
+  font-size: 0.75rem;
+  padding: 8px 10px;
+}
+html[data-mobile="1"] .poker-table-footer {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+html[data-mobile="1"] .side-notif,
+html[data-mobile="1"] .notif-stack {
+  left: 8px !important;
+  right: 8px !important;
+  max-width: calc(100vw - 16px) !important;
+  width: auto !important;
+}
+html[data-mobile="1"] .overlay-card {
+  width: min(100vw - 16px, 440px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+}
+html[data-mobile="1"] .seat-slot {
+  min-width: 88px;
+}
+html[data-mobile="1"] .seats-ring {
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+html[data-mobile="1"] .auth-card.main-menu-mode {
+  width: 100%;
+  max-width: 100%;
+  min-height: auto;
+  padding: 16px 12px;
+}
+html[data-mobile="1"] .game-picker {
+  width: 100%;
+  grid-template-columns: 1fr;
+}
+
+html[data-mobile="1"] #side-notif-stack,
+html[data-mobile="1"] .side-notif-stack {
+  left: 8px !important;
+  right: 8px !important;
+  top: 56px !important;
+  max-width: calc(100vw - 16px) !important;
+  width: auto !important;
+  z-index: 80;
+}
+html[data-mobile="1"] .side-notif {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+
+/* ==========================================================================
+   SEASONAL HOME TOOLS + LIGHT MODE OVERRIDE (Crimson Royale)
+   ========================================================================== */
+html.season-crimson .home-tools .btn,
+html.season-crimson .home-tools .btn.secondary,
+html.season-crimson[data-theme="light"] .home-tools .btn,
+html.season-crimson[data-theme="light"] .home-tools .btn.secondary,
+html.season-crimson[data-theme="dark"] .home-tools .btn,
+html.season-crimson[data-theme="dark"] .home-tools .btn.secondary {
+  background: linear-gradient(180deg, rgba(139,30,45,.92), rgba(70,12,20,.96)) !important;
+  color: #f4eee6 !important;
+  border: 1px solid rgba(212,184,122,.4) !important;
+  box-shadow: 0 4px 16px rgba(139,30,45,.25), inset 0 1px rgba(255,255,255,.08) !important;
+}
+html.season-crimson .home-tools .btn:hover,
+html.season-crimson[data-theme="light"] .home-tools .btn:hover {
+  background: linear-gradient(180deg, rgba(196,59,78,.95), rgba(139,30,45,.98)) !important;
+  border-color: rgba(212,184,122,.6) !important;
+  filter: brightness(1.06);
+}
+
+/* When seasonal UI is on, kill beige light-mode shells */
+html.season-crimson[data-theme="light"] body,
+html.season-crimson[data-theme="light"] {
+  color: #f4eee6 !important;
+}
+html.season-crimson[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(196,59,78,.35), transparent 55%),
+    linear-gradient(165deg, #2a0a12 0%, #120508 40%, #080304 100%) !important;
+}
+html.season-crimson[data-theme="light"] .auth-card,
+html.season-crimson[data-theme="light"] .auth-card.main-menu-mode,
+html.season-crimson[data-theme="light"] .overlay-card,
+html.season-crimson[data-theme="light"] .lobby-card {
+  background: linear-gradient(160deg, rgba(70,14,24,.96), rgba(18,6,10,.98)) !important;
+  border-color: rgba(212,184,122,.32) !important;
+  color: #f4eee6 !important;
+  box-shadow: 0 0 40px rgba(139,30,45,.25), 0 20px 50px rgba(0,0,0,.45) !important;
+}
+html.season-crimson[data-theme="light"] .main-menu-title,
+html.season-crimson[data-theme="light"] .overlay-title,
+html.season-crimson[data-theme="light"] .game-card-name,
+html.season-crimson[data-theme="light"] .game-card-desc,
+html.season-crimson[data-theme="light"] .auth-sub,
+html.season-crimson[data-theme="light"] .home-footer,
+html.season-crimson[data-theme="light"] label,
+html.season-crimson[data-theme="light"] .settings-row label,
+html.season-crimson[data-theme="light"] .settings-help {
+  color: #f4eee6 !important;
+  opacity: 1 !important;
+}
+html.season-crimson[data-theme="light"] .game-card {
+  background: linear-gradient(160deg, rgba(55,12,20,.92), rgba(20,6,10,.96)) !important;
+  border-color: rgba(212,184,122,.3) !important;
+  color: #f4eee6 !important;
+}
+html.season-crimson[data-theme="light"] .game-card-action {
+  color: rgba(244,238,230,.75) !important;
+}
+html.season-crimson[data-theme="light"] .ghost-btn {
+  color: #f4eee6 !important;
+}
+html.season-crimson[data-theme="light"] .btn.secondary {
+  color: #1a0a0c !important;
+  background: linear-gradient(180deg, #f4eee6, #d4b87a) !important;
+}
+html.season-crimson[data-theme="light"] input,
+html.season-crimson[data-theme="light"] select,
+html.season-crimson[data-theme="light"] textarea {
+  color: #f4eee6 !important;
+  background: linear-gradient(145deg, #2a1016, #0c0709) !important;
+  border-color: rgba(212,184,122,.28) !important;
+}
+html.season-crimson[data-theme="light"] #screen-poker,
+html.season-crimson[data-theme="light"] #screen-table {
+  background: linear-gradient(180deg, #1a080c, #0a0406) !important;
+}
+html.season-crimson[data-theme="light"] .poker-table-shell {
+  background: transparent !important;
+}
+
+/* Home tools always themed when seasonal */
+html.season-crimson .home-tools {
+  width: min(540px, 100%);
+}
+
+
+/* ==========================================================================
+   FORCE: Crimson seasonal overrides light-mode beige everywhere
+   ========================================================================== */
+html.season-crimson[data-theme="light"],
+html.season-crimson[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -15%, rgba(196,59,78,.38), transparent 52%),
+    linear-gradient(165deg, #2a0a12 0%, #140508 42%, #080304 100%) !important;
+  color: #f4eee6 !important;
+}
+html.season-crimson[data-theme="light"] body::after {
+  opacity: 0.15 !important;
+  background: repeating-linear-gradient(0deg, rgba(244,238,230,.03) 0 1px, transparent 1px 5px) !important;
+}
+html.season-crimson[data-theme="light"] .table-wrap,
+html.season-crimson[data-theme="light"] #table-wrap,
+html.season-crimson[data-theme="light"] #screen-table,
+html.season-crimson[data-theme="light"] #screen-poker,
+html.season-crimson[data-theme="light"] #screen-join,
+html.season-crimson[data-theme="light"] #screen-lobby,
+html.season-crimson[data-theme="light"] #screen-poker-lobby,
+html.season-crimson[data-theme="light"] .poker-table-shell {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(139,30,45,.28), transparent 55%),
+    linear-gradient(180deg, #1a080c, #0a0406) !important;
+}
+html.season-crimson[data-theme="light"] .auth-card,
+html.season-crimson[data-theme="light"] .auth-card.main-menu-mode,
+html.season-crimson[data-theme="light"] .overlay-card,
+html.season-crimson[data-theme="light"] .lobby-card,
+html.season-crimson[data-theme="light"] .progress-card,
+html.season-crimson[data-theme="light"] .appearance-card,
+html.season-crimson[data-theme="light"] .admin-card,
+html.season-crimson[data-theme="light"] .leaderboard-card {
+  background: linear-gradient(160deg, rgba(72,16,26,.97), rgba(16,6,10,.98)) !important;
+  border: 1px solid rgba(212,184,122,.34) !important;
+  color: #f4eee6 !important;
+  box-shadow: 0 0 40px rgba(139,30,45,.28), 0 20px 50px rgba(0,0,0,.5) !important;
+}
+html.season-crimson[data-theme="light"] .main-menu-title,
+html.season-crimson[data-theme="light"] .overlay-title,
+html.season-crimson[data-theme="light"] .auth-sub,
+html.season-crimson[data-theme="light"] .game-card-name,
+html.season-crimson[data-theme="light"] .game-card-desc,
+html.season-crimson[data-theme="light"] .game-card-action,
+html.season-crimson[data-theme="light"] label,
+html.season-crimson[data-theme="light"] .settings-row label,
+html.season-crimson[data-theme="light"] .settings-help,
+html.season-crimson[data-theme="light"] small,
+html.season-crimson[data-theme="light"] .home-footer,
+html.season-crimson[data-theme="light"] .ghost-btn {
+  color: #f4eee6 !important;
+  opacity: 1 !important;
+}
+html.season-crimson[data-theme="light"] .game-card {
+  background: linear-gradient(160deg, rgba(55,12,20,.94), rgba(20,6,10,.97)) !important;
+  border-color: rgba(212,184,122,.3) !important;
+  color: #f4eee6 !important;
+}
+html.season-crimson[data-theme="light"] .control-dock,
+html.season-crimson[data-theme="light"] .top-bar,
+html.season-crimson[data-theme="light"] .chat-panel {
+  background: linear-gradient(145deg, rgba(60,16,24,.94), rgba(12,6,8,.96)) !important;
+  border-color: rgba(212,184,122,.28) !important;
+  color: #f4eee6 !important;
+}
+html.season-crimson[data-theme="light"] input,
+html.season-crimson[data-theme="light"] select,
+html.season-crimson[data-theme="light"] textarea {
+  color: #f4eee6 !important;
+  background: linear-gradient(145deg, #2a1016, #0c0709) !important;
+  border-color: rgba(212,184,122,.28) !important;
+}
+html.season-crimson[data-theme="light"] .btn.secondary {
+  color: #1a0a0c !important;
+  background: linear-gradient(180deg, #f4eee6, #d4b87a) !important;
+}
+html.season-crimson[data-theme="light"] .home-tools .btn,
+html.season-crimson[data-theme="light"] .home-tools .btn.secondary {
+  background: linear-gradient(180deg, rgba(139,30,45,.92), rgba(70,12,20,.96)) !important;
+  color: #f4eee6 !important;
+  border: 1px solid rgba(212,184,122,.4) !important;
+}
+
+/* Settings inventory grid */
+.settings-divider {
+  height: 1px;
+  background: rgba(255,255,255,.1);
+  margin: 14px 0 10px;
+}
+.settings-inv-head { margin-bottom: 8px; }
+.settings-inventory {
+  max-height: 280px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding-right: 4px;
+}
+.settings-inv-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.settings-inv-grid .appearance-item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(0,0,0,.25);
+}
+.settings-inv-grid .appearance-preview {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--preview-a), var(--preview-b));
+}
+.settings-inv-grid .appearance-item.equipped {
+  border-color: rgba(212,184,122,.45);
+}
+html.season-crimson .settings-inventory .store-section-title {
+  color: rgba(244,238,230,.7);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  margin: 10px 0 6px;
+}
+
+
+/* Spectator panel — bottom-left desktop, bottom-right mobile 9:16 */
+.spectator-panel {
+  position: fixed;
+  left: 12px;
+  bottom: 88px;
+  top: auto;
+  z-index: 30;
+  width: 148px;
+  max-height: min(36vh, 260px);
+  overflow: auto;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(8, 6, 10, 0.88);
+  border: 1px solid rgba(212, 184, 122, 0.28);
+  backdrop-filter: blur(12px);
+  color: #f4eee6;
+  pointer-events: auto;
+  box-shadow: 0 8px 28px rgba(0,0,0,.4);
+}
+.spectator-panel .spec-title {
+  font: 800 10px var(--font-display), system-ui, sans-serif;
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+.spectator-panel .spec-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+}
+.spectator-panel .spec-row .seat-avatar,
+.spectator-panel .spec-row .chip-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 0.65rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.spectator-panel .spec-empty {
+  font-size: 0.72rem;
+  opacity: 0.45;
+}
+.spectator-panel .spec-sit {
+  width: 100%;
+  margin-top: 8px;
+  min-height: 36px;
+  font-size: 0.72rem;
+}
+html[data-mobile="1"] .spectator-panel {
+  left: auto;
+  right: 8px;
+  bottom: 100px;
+  top: auto;
+  width: 120px;
+  max-height: 32vh;
+  padding: 8px;
+}
+/* Hide empty panel chrome slightly when no content - still show for TAKE SEAT */
+#screen-join .spectator-panel,
+#screen-lobby .spectator-panel,
+#screen-poker-lobby .spectator-panel { display: none; }
+
+/* BG canvas always visible under seasonal + light */
+html.season-crimson #bg-canvas,
+html.season-crimson[data-theme="light"] #bg-canvas {
+  opacity: 0.55 !important;
+  filter: none !important;
+  z-index: 0;
+}
+html.season-crimson[data-theme="light"] body {
+  /* let canvas show through a bit */
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -15%, rgba(196,59,78,.25), transparent 52%),
+    linear-gradient(165deg, rgba(42,10,18,.92) 0%, rgba(8,3,4,.94) 100%) !important;
+}
+
+.spectator-panel.hidden{display:none!important;}
+
+
+/* ==========================================================================
+   LOGO — Crimson Royale / seasonal: always bright ivory-gold (light or dark)
+   ========================================================================== */
+html.season-crimson .casino-brand,
+html.season-crimson .auth-logo,
+html.season-crimson[data-theme="light"] .casino-brand,
+html.season-crimson[data-theme="light"] .auth-logo,
+html.season-crimson[data-theme="dark"] .casino-brand,
+html.season-crimson[data-theme="dark"] .auth-logo {
+  background: linear-gradient(120deg, #fff8e8 0%, #f0d48a 35%, #e8c56a 55%, #fff5d0 78%, #d4b87a 100%) !important;
+  background-size: 200% 100% !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55))
+          drop-shadow(0 0 8px rgba(232, 197, 106, 0.55))
+          drop-shadow(0 0 18px rgba(196, 59, 78, 0.25)) !important;
+}
+html.season-crimson .casino-brand::before,
+html.season-crimson .auth-logo::before,
+html.season-crimson[data-theme="light"] .casino-brand::before,
+html.season-crimson[data-theme="light"] .auth-logo::before {
+  background: radial-gradient(ellipse at center,
+    rgba(240, 215, 138, 0.5) 0%,
+    rgba(196, 59, 78, 0.18) 48%,
+    transparent 72%) !important;
+  opacity: 0.75 !important;
+}
+html.season-crimson .casino-brand::after,
+html.season-crimson .auth-logo::after,
+html.season-crimson[data-theme="light"] .casino-brand::after,
+html.season-crimson[data-theme="light"] .auth-logo::after {
+  opacity: 0.85 !important;
+}
+/* Kill muddy dark-on-light logo gradient when seasonal is on */
+html.season-crimson[data-theme="light"] .casino-brand,
+html.season-crimson[data-theme="light"] .auth-logo {
+  background: linear-gradient(120deg, #ffffff 0%, #f5e6b8 30%, #e8c56a 55%, #fff6d8 80%, #d4b87a 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
 }
