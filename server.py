@@ -3584,6 +3584,25 @@ async def process_http_request(connection, request):
             "Content-Length": str(len(body)),
         }), body)
 
+    if path == "/manifest.json":
+        manifest = (PUBLIC_DIR / "manifest.json").resolve()
+        body = manifest.read_bytes()
+        return Response(200, "OK", Headers({
+            "Content-Type": "application/manifest+json; charset=utf-8",
+            "Content-Length": str(len(body)),
+            "Cache-Control": "no-cache",
+        }), body)
+
+    if path == "/service-worker.js":
+        sw = (PUBLIC_DIR / "service-worker.js").resolve()
+        body = sw.read_bytes()
+        return Response(200, "OK", Headers({
+            "Content-Type": "application/javascript; charset=utf-8",
+            "Content-Length": str(len(body)),
+            "Cache-Control": "no-cache",
+            "Service-Worker-Allowed": "/",
+        }), body)
+
     if path == "/googleff4f65bc0fb8bc95.html":
         body = b"google-site-verification: googleff4f65bc0fb8bc95.html\n"
         return Response(200, "OK", Headers({

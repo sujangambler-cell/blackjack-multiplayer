@@ -6,6 +6,13 @@
 <title>Casino X — Free Multiplayer Blackjack & Poker</title>
 <meta name="description" content="Casino X is a free multiplayer online casino game. Play Blackjack and Poker with friends — no real money, no downloads, just fun." />
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Casino X" />
+<link rel="apple-touch-icon" href="/icon-512.svg" />
+<meta name="theme-color" content="#0f1923" />
 
 <!-- Google Search Console Verification -->
 <meta name="google-site-verification" content="JapUYZPjwsDneY521H2QCBb39EGTPF9cxUy9HMbVFbI" />
@@ -872,5 +879,14 @@
 </div>
 
 <script src="game.js"></script>
+<!-- PWA Service Worker Registration -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+</script>
 </body>
 </html>
