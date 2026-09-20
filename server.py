@@ -3584,6 +3584,34 @@ async def process_http_request(connection, request):
             "Content-Length": str(len(body)),
         }), body)
 
+    if path == "/googleff4f65bc0fb8bc95.html":
+        body = b"google-site-verification: googleff4f65bc0fb8bc95.html\n"
+        return Response(200, "OK", Headers({
+            "Content-Type": "text/html; charset=utf-8",
+            "Content-Length": str(len(body)),
+        }), body)
+
+    if path == "/robots.txt":
+        body = b"User-agent: *\nAllow: /\nSitemap: https://blackjack-multiplayer-u38p.onrender.com/sitemap.xml\n"
+        return Response(200, "OK", Headers({
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Length": str(len(body)),
+        }), body)
+
+    if path == "/sitemap.xml":
+        body = b"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://blackjack-multiplayer-u38p.onrender.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>"""
+        return Response(200, "OK", Headers({
+            "Content-Type": "application/xml; charset=utf-8",
+            "Content-Length": str(len(body)),
+        }), body)
+
     # The browser's normal HTTP request to the Render URL should load the game.
     if path == "/":
         path = "/index.html"
@@ -3599,6 +3627,13 @@ async def process_http_request(connection, request):
         }), b"Forbidden")
 
     if not requested.is_file():
+        page_404 = (PUBLIC_DIR / "404.html").resolve()
+        if page_404.is_file():
+            body_404 = page_404.read_bytes()
+            return Response(404, "Not Found", Headers({
+                "Content-Type": "text/html; charset=utf-8",
+                "Content-Length": str(len(body_404)),
+            }), body_404)
         return Response(404, "Not Found", Headers({
             "Content-Type": "text/plain; charset=utf-8"
         }), b"Not Found")

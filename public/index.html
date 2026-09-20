@@ -3,7 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<title>Casino X</title>
+<title>Casino X — Free Multiplayer Blackjack & Poker</title>
+<meta name="description" content="Casino X is a free multiplayer online casino game. Play Blackjack and Poker with friends — no real money, no downloads, just fun." />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
+<!-- Google Search Console Verification -->
+<meta name="google-site-verification" content="JapUYZPjwsDneY521H2QCBb39EGTPF9cxUy9HMbVFbI" />
+
+<!-- Open Graph: social sharing previews (WhatsApp, Discord, Twitter etc) -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://blackjack-multiplayer-u38p.onrender.com/" />
+<meta property="og:title" content="Casino X — Free Multiplayer Blackjack & Poker" />
+<meta property="og:description" content="Play free multiplayer Blackjack and Poker online with friends. No real money, no downloads — just jump in and play." />
+<meta property="og:image" content="https://blackjack-multiplayer-u38p.onrender.com/og-image.svg" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Casino X — Free Multiplayer Blackjack & Poker" />
+<meta name="twitter:description" content="Play free multiplayer Blackjack and Poker online with friends. No real money, no downloads — just jump in and play." />
+<meta name="twitter:image" content="https://blackjack-multiplayer-u38p.onrender.com/og-image.svg" />
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WKNHNXPC42"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-WKNHNXPC42');
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -12,6 +37,9 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4526604443102763" crossorigin="anonymous"></script>
 </head>
 <body>
+<!-- Google Tag Manager (noscript): replace GTM-XXXXXXX with your real ID -->
+<!-- <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXXXX" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript> -->
+
 <canvas id="bg-canvas" aria-hidden="true"></canvas>
 
 <!-- ================================================================
@@ -150,7 +178,59 @@
         </div>
         <div class="auth-error" id="join-error"></div>
         <button class="btn auth-submit" id="btn-auth">LOGIN</button>
+        <p class="tos-notice hidden" id="tos-notice">
+          By clicking Sign Up, you agree to our
+          <a href="#" id="tos-link" class="tos-link">Terms of Service</a>
+          and confirm you are 18 years of age or older.
+        </p>
       </div>
+
+  <!-- ==================== TERMS OF SERVICE MODAL ==================== -->
+  <div id="tos-modal" class="tos-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="tos-title">
+    <div class="tos-modal-box">
+      <div class="tos-modal-header">
+        <span class="tos-modal-logo">♠</span>
+        <h2 class="tos-modal-title" id="tos-title">Terms of Service</h2>
+        <button class="tos-close-btn" id="tos-close" aria-label="Close">✕</button>
+      </div>
+      <div class="tos-modal-body">
+
+        <div class="tos-section">
+          <h3>⚠️ Disclaimer — No Real Money</h3>
+          <p>Casino X is a <strong>free-to-play entertainment game only</strong>. No real money is ever wagered, won, or lost on this platform. All in-game chips and virtual currency are purely fictional and have <strong>absolutely no real-world monetary value</strong>. They cannot be exchanged, withdrawn, or redeemed for cash, prizes, or any goods or services. Casino X is not a gambling platform and does not offer real-money gaming of any kind.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>🔞 Age Requirement</h3>
+          <p>You must be <strong>18 years of age or older</strong> to create an account and use Casino X. By signing up, you confirm that you meet this age requirement. Casino X is not intended for use by minors.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>📋 Account Rules</h3>
+          <p>Your account is for personal use only. You agree not to cheat, exploit bugs, use bots or automated tools, harass other players, or attempt to disrupt the game or its servers. Accounts found in violation of these rules may be suspended or permanently banned without notice.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>⚙️ Our Rights</h3>
+          <p>Casino X reserves the right to modify, suspend, or discontinue the game or any of its features at any time without notice. We may also update these Terms of Service at any time. Continued use of the platform after changes constitutes your acceptance of the revised terms.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>🛡️ Limitation of Liability</h3>
+          <p>Casino X is provided "as is" without warranties of any kind. We make no guarantees regarding uptime, availability, or the persistence of account data or virtual currency balances. We are not liable for any loss of virtual items, account access, or any other damages arising from your use of the platform.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>🔒 Privacy</h3>
+          <p>Casino X only stores your username and a securely hashed password. We do not collect, sell, or share any personal information. No tracking cookies or analytics tools are used on this platform.</p>
+        </div>
+
+      </div>
+      <div class="tos-modal-footer">
+        <button class="btn auth-submit" id="tos-close-btn" onclick="document.getElementById('tos-modal').classList.add('hidden')">Got it — Close</button>
+      </div>
+    </div>
+  </div>
       <div id="room-form" class="hidden">
         <div class="casino-home">
           <button type="button" class="update-log-btn" id="btn-update-log" title="Update Log" aria-label="Update Log">

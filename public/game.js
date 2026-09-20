@@ -1190,6 +1190,30 @@ function setAuthMode(mode) {
   $("#confirm-wrap").classList.toggle("hidden", mode !== "signup");
   $("#btn-auth").textContent = mode === "signup" ? "CREATE ACCOUNT" : "LOGIN";
   $("#join-error").textContent = "";
+  // Show the "By clicking Sign Up..." line only on the signup tab
+  const tosLine = $("#tos-notice");
+  if (tosLine) tosLine.classList.toggle("hidden", mode !== "signup");
+}
+
+// ---------------------------------------------------------------------------
+// Terms of Service modal
+// ---------------------------------------------------------------------------
+function openTosModal() {
+  const modal = $("#tos-modal");
+  if (modal) {
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  }
+}
+
+function closeTosModal() {
+  const modal = $("#tos-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2928,6 +2952,16 @@ function initJoin() {
   $("#tab-login").addEventListener("click", () => setAuthMode("login"));
   $("#tab-signup").addEventListener("click", () => setAuthMode("signup"));
   wireButton($("#btn-auth"), loginOrSignup);
+
+  // Terms of Service modal wiring
+  const tosLink = $("#tos-link");
+  if (tosLink) tosLink.addEventListener("click", (e) => { e.preventDefault(); openTosModal(); });
+  const tosClose = $("#tos-close");
+  if (tosClose) tosClose.addEventListener("click", closeTosModal);
+  const tosOverlay = $("#tos-modal");
+  if (tosOverlay) tosOverlay.addEventListener("click", (e) => { if (e.target === tosOverlay) closeTosModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeTosModal(); });
+
   wireButton($("#btn-play"), openBlackjackLobby);
   wireButton($("#game-blackjack"), openBlackjackLobby);
   wireButton($("#game-poker"), openPokerLobby);
