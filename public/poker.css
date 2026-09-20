@@ -2115,3 +2115,40 @@ html[data-mobile="1"] #screen-poker.active .poker-seat-cards .playing-card.small
   background: linear-gradient(145deg, #1e3a5f 0%, #0f1c2e 100%) !important;
   border: 1px solid rgba(255,255,255,0.3) !important;
 }
+
+/* ==========================================================================
+   PWA SAFE-AREA FIXES FOR POKER (mirror of style.css)
+   ========================================================================== */
+html[data-mobile="1"] #screen-poker.active .top-bar {
+  padding-top: max(8px, env(safe-area-inset-top, 0px)) !important;
+  padding-left: max(10px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(10px, env(safe-area-inset-right, 0px)) !important;
+  padding-bottom: 8px !important;
+  min-height: calc(48px + env(safe-area-inset-top, 0px));
+  box-sizing: border-box;
+  position: relative;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+html[data-mobile="1"] #screen-poker.active .top-bar .icon-btn,
+html[data-mobile="1"] #screen-poker.active .top-actions {
+  pointer-events: auto;
+  position: relative;
+  z-index: 31;
+}
+
+html[data-mobile="1"] #screen-poker.active .poker-actions,
+html[data-mobile="1"] #screen-poker.active .poker-table-footer,
+html[data-mobile="1"] #screen-poker.active .poker-bet-input,
+html[data-mobile="1"] #screen-poker.active .poker-buyin-bar {
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+  padding-left: max(8px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(8px, env(safe-area-inset-right, 0px)) !important;
+}
+
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  html[data-mobile="1"] #screen-poker.active .top-bar {
+    padding-top: max(10px, env(safe-area-inset-top, 0px)) !important;
+  }
+}

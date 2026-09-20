@@ -110,9 +110,27 @@ h1, h2, h3 {
 #app {
   position: relative;
   z-index: 2;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  /* Default (100% scale): fill the viewport normally.
+     When --ui-scale != 1 the desktop rule below takes over. */
+}
+
+/* Desktop / non-mobile: true GUI scale via transform.
+   Sizes the layout box by the inverse factor, then scales it back so the
+   visual result always fills the viewport and stays centered (no more
+   "shrunk into the upper-middle" effect from the old zoom approach). */
+html[data-mobile="0"] #app,
+html:not([data-mobile]) #app {
+  position: fixed;
+  left: 50%;
+  top: 0;
   width: calc(100vw / var(--ui-scale));
   height: calc(100dvh / var(--ui-scale));
-  zoom: var(--ui-scale);
+  transform: translateX(-50%) scale(var(--ui-scale));
+  transform-origin: top center;
+  overflow: hidden;
 }
 
 .screen {
@@ -3372,11 +3390,18 @@ html[data-mobile="1"] body {
 html[data-mobile="1"] #app {
   max-width: 430px !important;
   width: 100% !important;
-  margin: 0 auto !important;
+  height: 100% !important;
   min-height: 100dvh !important;
+  margin: 0 auto !important;
   box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 0 60px rgba(0,0,0,.55);
-  position: relative;
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important; /* cancel desktop scale transform */
   overflow-x: hidden;
+  /* Optional: allow a mild content scale inside the phone column via zoom
+     (safer than transform on the constrained column) */
+  zoom: var(--ui-scale);
 }
 
 /* Screens: ONLY the active one is visible — never force display on inactive screens */
@@ -5327,11 +5352,16 @@ html[data-mobile="1"] body {
 html[data-mobile="1"] #app {
   max-width: 430px !important;
   width: 100% !important;
+  height: 100% !important;
   margin: 0 auto !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
   isolation: isolate;
+  zoom: var(--ui-scale);
 }
 html[data-mobile="1"] .screen,
 html[data-mobile="1"] .screen.active {
@@ -5409,6 +5439,10 @@ html[data-mobile="1"] #app {
   height: 100dvh !important;
   overflow: hidden !important;
   position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  zoom: var(--ui-scale);
 }
 html[data-mobile="1"] #screen-join.active {
   display: flex !important;
@@ -6798,6 +6832,10 @@ html.season-crimson .toggle.on {
 html[data-mobile="1"] #app {
   max-width: 430px;
   margin: 0 auto;
+  transform: none !important;
+  left: auto !important;
+  top: auto !important;
+  zoom: var(--ui-scale);
 }
 html[data-mobile="1"] .top-bar {
   padding: 8px 10px;
@@ -6889,7 +6927,7 @@ html[data-mobile="1"] #side-notif-stack,
 html[data-mobile="1"] .side-notif-stack {
   left: 8px !important;
   right: 8px !important;
-  top: 56px !important;
+  top: calc(56px + env(safe-area-inset-top, 0px)) !important;
   max-width: calc(100vw - 16px) !important;
   width: auto !important;
   z-index: 80;
@@ -7310,7 +7348,7 @@ html.season-crimson[data-theme="light"] .auth-logo {
 html[data-mobile="1"] .spectator-panel {
   left: auto !important;
   right: 8px !important;
-  top: 56px !important;
+  top: calc(56px + env(safe-area-inset-top, 0px)) !important;
   bottom: auto !important;
   width: 118px;
   max-height: 30vh;
@@ -8542,3 +8580,115 @@ html[data-mobile="1"] #screen-table.active .chat-panel {
   .tos-modal-body { padding: 14px 16px; }
   .tos-modal-footer { padding: 12px 16px; }
 }
+
+/* ==========================================================================
+   PWA / STANDALONE SAFE-AREA FIXES (mobile + installed PWA)
+   Ensures top UI (top-bar, buttons, auth header) is never covered by the
+   system status bar / notch / Dynamic Island on iOS & Android PWAs.
+   env(safe-area-inset-*) resolves to 0 outside standalone / cover contexts,
+   so desktop and regular browser tabs are completely unaffected.
+   ========================================================================== */
+
+/* Global: do NOT pad #app itself (would double with top-bar/screen padding).
+   Screens and top-bars handle insets so the phone column stays full-bleed
+   under the status bar while interactive chrome is pushed into the safe area. */
+html[data-mobile="1"] #app {
+  /* keep existing max-width / centering rules elsewhere */
+  box-sizing: border-box;
+  transform: none !important;
+  left: auto !important;
+  top: auto !important;
+  zoom: var(--ui-scale);
+}
+
+/* Top bars: push content below the status bar / notch.
+   High specificity so we win over #screen-table.active .top-bar media rules. */
+html[data-mobile="1"] .top-bar,
+html[data-mobile="1"] #screen-table.active .top-bar,
+html[data-mobile="1"] #screen-poker.active .top-bar,
+html[data-mobile="1"] #screen-roulette.active .top-bar {
+  padding-top: max(8px, env(safe-area-inset-top, 0px)) !important;
+  padding-left: max(10px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(10px, env(safe-area-inset-right, 0px)) !important;
+  padding-bottom: 8px !important;
+  min-height: calc(48px + env(safe-area-inset-top, 0px)) !important;
+  box-sizing: border-box !important;
+  position: relative !important;
+  z-index: 30 !important;
+  pointer-events: auto !important;
+}
+
+/* Make sure icon buttons and chips inside top-bar are tappable */
+html[data-mobile="1"] .top-bar .icon-btn,
+html[data-mobile="1"] .top-bar .profile-chip,
+html[data-mobile="1"] .top-bar .balance-chip,
+html[data-mobile="1"] .top-bar .room-chip,
+html[data-mobile="1"] .top-bar .refresh-btn,
+html[data-mobile="1"] .top-actions {
+  pointer-events: auto;
+  position: relative;
+  z-index: 31;
+}
+
+/* Auth / join / main-menu card already has some safe-area, strengthen it */
+html[data-mobile="1"] #screen-join.active,
+html[data-mobile="1"] #screen-join.active .auth-card,
+html[data-mobile="1"] .auth-card.main-menu-mode {
+  padding-top: max(16px, env(safe-area-inset-top, 0px)) !important;
+  padding-left: max(14px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(14px, env(safe-area-inset-right, 0px)) !important;
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)) !important;
+  box-sizing: border-box;
+}
+
+/* Lobby screens */
+html[data-mobile="1"] #screen-lobby.active,
+html[data-mobile="1"] #screen-poker-lobby.active {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+}
+
+/* Blackjack table screen: top-bar already handled; ensure docks clear home indicator */
+html[data-mobile="1"] #screen-table.active .control-dock,
+html[data-mobile="1"] #betting-dock,
+html[data-mobile="1"] #action-dock,
+html[data-mobile="1"] #waiting-dock {
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  padding-left: max(10px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(10px, env(safe-area-inset-right, 0px)) !important;
+}
+
+/* Roulette bottom bar */
+html[data-mobile="1"] #screen-roulette.active .roulette-bottom-bar {
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+  padding-left: max(8px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(8px, env(safe-area-inset-right, 0px)) !important;
+}
+
+/* Any floating update-log / absolute top buttons */
+html[data-mobile="1"] .update-log-btn {
+  top: max(8px, env(safe-area-inset-top, 0px)) !important;
+  right: max(8px, env(safe-area-inset-right, 0px)) !important;
+}
+
+/* Side notification stack already has safe-area; reinforce */
+.side-notif-stack {
+  top: max(12px, env(safe-area-inset-top, 0px)) !important;
+  right: max(12px, env(safe-area-inset-right, 0px)) !important;
+}
+
+/* Extra safety for display-mode: standalone / fullscreen (true installed PWA) */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  html[data-mobile="1"] .top-bar,
+  html[data-mobile="1"] #screen-table.active .top-bar,
+  html[data-mobile="1"] #screen-poker.active .top-bar,
+  html[data-mobile="1"] #screen-roulette.active .top-bar {
+    padding-top: max(10px, env(safe-area-inset-top, 0px)) !important;
+  }
+}
+
+/* Keep game screens clipped; other screens can scroll if needed.
+   Top-bar itself has high z-index + pointer-events so it stays tappable. */
