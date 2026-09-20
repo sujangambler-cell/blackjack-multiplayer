@@ -2924,6 +2924,8 @@ async def ws_handler(websocket):
                     player["poker_chips"] = 0
                     persist_player_money(player)
             ADMIN_SOCKETS.discard(websocket)
+            leave_balance = None
+            leave_key = None
             if player and room:
                 leaving_id = player["id"]
                 was_active = room["active_player_id"] == leaving_id
@@ -2935,6 +2937,8 @@ async def ws_handler(websocket):
                         persist_player_money(player)
                     room.get("roulette_bets",{}).pop(leaving_id,None)
                 invalidate_dealer_preview(room)
+                leave_balance = int(player.get("money", 0))
+                leave_key = player.get("username_key")
                 try:
                     room["players"].remove(player)
                 except ValueError:
@@ -2952,8 +2956,14 @@ async def ws_handler(websocket):
                         if room.get("game") != "poker":
                             await move_to_next_or_dealer(room)
                     await broadcast(room)
+            # Prefer persisted account balance after cash-out / chip return
+            if leave_key and leave_key in ACCOUNTS:
+                leave_balance = int(ACCOUNTS[leave_key].get("money", leave_balance or 0))
             await broadcast_public_tables()
-            await websocket.send(json.dumps({"type":"left_table"}))
+            payload = {"type": "left_table"}
+            if leave_balance is not None:
+                payload["balance"] = leave_balance
+            await websocket.send(json.dumps(payload))
             await send_admin_data(websocket, room)
             continue
 

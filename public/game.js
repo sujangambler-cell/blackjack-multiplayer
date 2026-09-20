@@ -21,6 +21,7 @@ let loggedUsername = null;
 let authMode = "login";
 let isAdmin = false;
 let myProfile = null;
+let myBalance = 0;
 let leaderboardData = null;
 let activeRank = "balance";
 let publicTables = [];
@@ -405,6 +406,9 @@ function showMainMenu() {
   $("#auth-form")?.classList.add("hidden");
   $("#room-form")?.classList.remove("hidden");
   $("#room-error") && ($("#room-error").textContent = "");
+  // Restore real account balance (never leave $0 from table UI)
+  if (myProfile?.balance != null) setMenuBalance(myProfile.balance);
+  else if (myBalance) setMenuBalance(myBalance);
   showScreen("#screen-join");
   // Mobile: always land at top so logo / name / XP are visible
   requestAnimationFrame(() => {
@@ -805,7 +809,7 @@ function connect() {
       $("#welcome-user").textContent = `Welcome, ${loggedUsername}`;
       $("#auth-form").classList.add("hidden");
       $("#room-form").classList.remove("hidden");
-      $("#menu-balance").textContent = "$" + msg.balance;
+      setMenuBalance(msg.balance);
       $("#join-error").textContent = "";
       showMainMenu();
       if (msg.profile) updateProfileUI(msg.profile);
@@ -892,7 +896,7 @@ function connect() {
       currentGame = msg.game || "blackjack";
       $("#room-chip").textContent = "TABLE " + myRoom;
       $("#profile-name").textContent = msg.username || loggedUsername || "PLAYER";
-      $("#menu-balance").textContent = "$" + msg.balance;
+      setMenuBalance(msg.balance);
       $("#btn-admin-float").classList.add("hidden"); $("#btn-admin-table").classList.remove("hidden");
       $("#chat-messages").innerHTML = "";
       toggleChat(false);
@@ -912,11 +916,14 @@ function connect() {
       return;
     }
     if (msg.type === "left_table") {
-      const bal = $("#balance-chip")?.textContent || $("#menu-balance")?.textContent || "$0";
       clearTableClientState();
       $("#btn-admin-float")?.classList.add("hidden");
-      if ($("#menu-balance")) $("#menu-balance").textContent = bal;
+      if (msg.balance != null) setMenuBalance(msg.balance);
+      else if (myProfile?.balance != null) setMenuBalance(myProfile.balance);
+      else if (myBalance) setMenuBalance(myBalance);
       showMainMenu();
+      // Refresh profile so menu balance is always accurate after cash-out
+      if (authToken) send({ type: "profile", token: authToken });
       play("leave");
       return;
     }
@@ -927,9 +934,7 @@ function connect() {
       return;
     }
     if (msg.type === "balance") {
-      $("#balance-chip").textContent = "$" + msg.balance;
-      $("#menu-balance").textContent = "$" + msg.balance;
-      $("#poker-balance").textContent = "$" + Number(msg.balance||0).toLocaleString();
+      setMenuBalance(msg.balance);
       return;
     }
     if (msg.type === "info") {
@@ -1108,8 +1113,7 @@ function onState(state) {
 
   const me = state.players.find((p) => p.id === myId);
   if (me) {
-    $("#balance-chip").textContent = "$" + me.money;
-    $("#menu-balance").textContent = "$" + me.money;
+    setMenuBalance(me.money);
     $("#profile-name").textContent = me.username || loggedUsername || me.name;
     setChipAvatar($("#table-profile-avatar"), me);
     applyGameCosmetics(me.cosmetics || myProfile?.cosmetics || {});
@@ -1489,6 +1493,24 @@ function renderAdminUsers(users, tablePlayers = [], previewActive = false, previ
 // ---------------------------------------------------------------------------
 // Progression UI — stats, rankings, achievements, daily rewards/challenges
 // ---------------------------------------------------------------------------
+
+function formatMoney(n) {
+  return "$" + Number(n || 0).toLocaleString();
+}
+function setMenuBalance(amount) {
+  if (amount == null || amount === "" || Number.isNaN(Number(amount))) return;
+  myBalance = Number(amount);
+  const text = formatMoney(myBalance);
+  const menu = $("#menu-balance");
+  if (menu) menu.textContent = text;
+  const chip = $("#balance-chip");
+  if (chip) chip.textContent = text;
+  const poker = $("#poker-balance");
+  if (poker) poker.textContent = text;
+  const store = $("#store-balance");
+  if (store) store.textContent = text;
+  if (myProfile) myProfile.balance = myBalance;
+}
 function updateProfileUI(profile) {
   if (!profile) return;
   myProfile = profile;
@@ -1496,7 +1518,7 @@ function updateProfileUI(profile) {
   applyCosmeticTheme(profile.cosmetics?.theme || "classic");
   applyGameCosmetics(profile.cosmetics || {});
   refreshAvatarPreview();
-  $("#menu-balance").textContent = "$" + Number(profile.balance || 0).toLocaleString();
+  setMenuBalance(profile.balance);
   $("#menu-level").textContent = `LEVEL ${profile.level || 1} • ${(profile.levelTitle || "Rookie").toUpperCase()}`;
   $("#menu-xp").textContent = `${Number(profile.xp || 0).toLocaleString()} XP`;
   applyCosmeticTheme(profile.cosmetics?.theme || "classic");
@@ -2701,11 +2723,15 @@ function initSettings() {
     send({ type: "leave_table" });
     // Immediate local exit — server confirms with left_table; fail-safe if not
     clearTableClientState();
+    if (myBalance) setMenuBalance(myBalance);
+    else if (myProfile?.balance != null) setMenuBalance(myProfile.balance);
     showMainMenu();
+    if (authToken) send({ type: "profile", token: authToken });
     setTimeout(() => {
       if ($("#screen-table")?.classList.contains("active") || $("#screen-poker")?.classList.contains("active")) {
         clearTableClientState();
         showMainMenu();
+        if (authToken) send({ type: "profile", token: authToken });
       }
     }, 600);
   });
@@ -2832,6 +2858,9 @@ function initJoin() {
   wireButton($("#btn-poker-sit-down"), () => send({ type: "sit_down", token: authToken }));
   wireButton($("#btn-poker-leave"), () => {
     send({ type: "leave_table" });
+    if (myBalance) setMenuBalance(myBalance);
+    else if (myProfile?.balance != null) setMenuBalance(myProfile.balance);
+    if (authToken) send({ type: "profile", token: authToken });
     clearTableClientState();
     showMainMenu();
     setTimeout(() => {
