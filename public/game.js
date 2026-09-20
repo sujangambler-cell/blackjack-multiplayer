@@ -71,7 +71,97 @@ let storeData = null;
 let seasonData = null;
 let appearanceData = null;
 let pokerAnimationTimer = null;
+let prevPokerPhase = null;
+let pokerResultPlayedKey = null;
 const POKER_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+
+function updatePokerChipPile(pot) {
+  const pile = $("#poker-chip-pile");
+  if (!pile) return;
+  const amount = Number(pot || 0);
+  if (amount <= 0) {
+    pile.innerHTML = "";
+    pile.className = "poker-chip-pile";
+    return;
+  }
+  // 1–3 chips for small pots, up to 5 for large
+  let n = 1;
+  if (amount >= 50) n = 2;
+  if (amount >= 150) n = 3;
+  if (amount >= 400) n = 4;
+  if (amount >= 1000) n = 5;
+  const key = String(n) + ":" + Math.floor(amount / 50);
+  if (pile.dataset.chipKey === key) return;
+  pile.dataset.chipKey = key;
+  let html = "";
+  for (let i = 0; i < n; i++) html += '<span class="chip-disc"></span>';
+  pile.innerHTML = html;
+  pile.className = "poker-chip-pile has-chips" + (n >= 4 ? " tier-2" : "") + (n >= 5 ? " tier-3" : "");
+}
+
+function triggerPokerResult(state, me) {
+  const phase = state.phase || "";
+  if (phase !== "HAND_OVER" && phase !== "SHOWDOWN") return;
+  const winners = state.winners || [];
+  if (!winners.length) return;
+  // One-shot per hand (use pot+winner names as key)
+  const key = (state.code || "") + "|" + winners.map(w => (w.username || "") + (w.amount || 0)).join(",");
+  if (pokerResultPlayedKey === key) return;
+  pokerResultPlayedKey = key;
+
+  const felt = $("#poker-felt");
+  const pile = $("#poker-chip-pile");
+  const iWon = me && winners.some(w =>
+    (w.id != null && w.id === myId) ||
+    (w.username && me.username && String(w.username).toLowerCase() === String(me.username).toLowerCase())
+  );
+  const wasInHand = me && !me.spectator && me.status !== "folded";
+
+  // Clear old banner
+  const oldBanner = felt?.querySelector(".poker-result-banner");
+  if (oldBanner) oldBanner.remove();
+
+  if (iWon) {
+    play("win");
+    try { flash("win"); } catch (_) {}
+    try { burstConfetti(); } catch (_) {}
+    if (felt) {
+      felt.classList.remove("poker-loss-shake", "poker-win-pulse");
+      void felt.offsetWidth;
+      felt.classList.add("poker-win-pulse");
+    }
+    if (pile) {
+      pile.classList.remove("win-burst");
+      void pile.offsetWidth;
+      pile.classList.add("win-burst");
+    }
+    const banner = document.createElement("div");
+    banner.className = "poker-result-banner win";
+    const amt = winners.find(w =>
+      (w.id != null && w.id === myId) ||
+      (w.username && me.username && String(w.username).toLowerCase() === String(me.username).toLowerCase())
+    );
+    banner.textContent = amt ? `YOU WIN $${Number(amt.amount || 0).toLocaleString()}!` : "YOU WIN!";
+    felt?.appendChild(banner);
+    setTimeout(() => banner.remove(), 2300);
+    setTimeout(() => felt?.classList.remove("poker-win-pulse"), 1200);
+  } else if (wasInHand) {
+    play("lose");
+    try { flash("lose"); } catch (_) {}
+    try { shakeTable(); } catch (_) {}
+    if (felt) {
+      felt.classList.remove("poker-win-pulse", "poker-loss-shake");
+      void felt.offsetWidth;
+      felt.classList.add("poker-loss-shake");
+    }
+    const banner = document.createElement("div");
+    banner.className = "poker-result-banner lose";
+    banner.textContent = "YOU LOSE";
+    felt?.appendChild(banner);
+    setTimeout(() => banner.remove(), 2300);
+    setTimeout(() => felt?.classList.remove("poker-loss-shake"), 800);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Update Log — versioned changelog shown once per account after update
@@ -372,6 +462,8 @@ function clearTableClientState() {
   myRoom = null;
   lastState = null;
   pokerState = null;
+  prevPokerPhase = null;
+  pokerResultPlayedKey = null;
   isAdmin = false;
   $("#settings-overlay")?.classList.remove("open");
   $("#host-overlay")?.classList.remove("open");
@@ -2051,6 +2143,18 @@ function renderPokerState(state){
   $("#poker-status") && ($("#poker-status").textContent = isSpectator ? "SPECTATING" : (state.phase || "WAITING"));
   $("#poker-street") && ($("#poker-street").textContent = state.street || "—");
   $("#poker-pot") && ($("#poker-pot").textContent = "POT $" + Number(state.pot||0).toLocaleString());
+  updatePokerChipPile(state.pot);
+
+  // Win / loss animations when a hand resolves
+  if (state.phase !== prevPokerPhase) {
+    if (state.phase === "HAND_OVER" || state.phase === "SHOWDOWN") {
+      triggerPokerResult(state, me);
+    }
+    if (state.phase === "PREFLOP" || state.phase === "WAITING") {
+      pokerResultPlayedKey = null;
+    }
+    prevPokerPhase = state.phase;
+  }
 
   // Live hand strength for local player (name + which cards to highlight)
   let liveHand = null;
@@ -2111,20 +2215,20 @@ function renderPokerState(state){
     players.forEach(p => { if (p.id !== myId) ordered.push(p); });
 
     const desktopPositionsByCount = {
-      // Fixed, evenly spaced positions around the desktop oval.
-      2: [[50, 82], [50, 21]],
-      3: [[50, 82], [18, 25], [82, 25]],
-      4: [[50, 82], [16, 56], [50, 21], [84, 56]],
-      5: [[50, 78], [15, 65], [22, 25], [78, 25], [85, 65]],
-      6: [[50, 82], [15, 68], [18, 25], [50, 21], [82, 25], [85, 68]]
+      // YOU at bottom rim; opponents around the oval — leave centre free for board/pot/hole.
+      2: [[50, 90], [50, 14]],
+      3: [[50, 90], [14, 22], [86, 22]],
+      4: [[50, 90], [12, 50], [50, 14], [88, 50]],
+      5: [[50, 90], [12, 58], [18, 18], [82, 18], [88, 58]],
+      6: [[50, 90], [12, 62], [14, 20], [50, 12], [86, 20], [88, 62]]
     };
     const mobilePositionsByCount = {
-      // Player (YOU) low on the felt; hole cards sit above at ~62% via CSS.
-      2: [[50, 90], [50, 14]],
-      3: [[50, 90], [13, 28], [87, 28]],
-      4: [[50, 90], [8,  50], [50, 12], [92, 50]],
-      5: [[50, 90], [8,  58], [14, 20], [86, 20], [92, 58]],
-      6: [[50, 90], [8,  60], [12, 20], [50, 12], [88, 20], [92, 60]]
+      // Compact oval — YOU at bottom, opponents around the rim without crowding the board.
+      2: [[50, 88], [50, 16]],
+      3: [[50, 88], [14, 30], [86, 30]],
+      4: [[50, 88], [10, 48], [50, 14], [90, 48]],
+      5: [[50, 88], [10, 55], [16, 22], [84, 22], [90, 55]],
+      6: [[50, 88], [10, 58], [14, 22], [50, 14], [86, 22], [90, 58]]
     };
     const mobileMode = document.documentElement.getAttribute("data-mobile") === "1";
     const positionsByCount = mobileMode ? mobilePositionsByCount : desktopPositionsByCount;
@@ -2149,18 +2253,29 @@ function renderPokerState(state){
         if (p.isSB) badges.push('<span class="poker-badge sb">SB</span>');
         if (p.isBB) badges.push('<span class="poker-badge bb">BB</span>');
         const isMe = p.id === myId;
-        // Opponents: always show 2 card-backs while they are in the hand (Gambit style).
+        // Opponents: always show 2 card-backs during an active hand (unless folded).
         // Self: large hole cards live in #poker-hole — seat only shows avatar/name/chips.
         let holeHtml = "";
         if (!isMe) {
-          const inHand = p.status && p.status !== "waiting" && p.status !== "folded";
-          const backs = (p.hole && p.hole.length) ? p.hole : (inHand ? [{faceUp:false},{faceUp:false}] : []);
-          holeHtml = backs.map(c => pokerCardHTML(c, true)).join("");
+          const phaseActive = ["PREFLOP","FLOP","TURN","RIVER","SHOWDOWN"].includes(state.phase);
+          const folded = p.status === "folded";
+          if (phaseActive && !folded) {
+            const backs = (p.hole && p.hole.length >= 2)
+              ? p.hole
+              : [{ faceUp: false }, { faceUp: false }];
+            holeHtml = backs.map(c => pokerCardHTML(c, true)).join("");
+          } else if (p.hole && p.hole.length && !folded) {
+            holeHtml = p.hole.map(c => pokerCardHTML(c, true)).join("");
+          }
         }
         const actionBadge = p.isTurn ? '<div class="poker-action-badge">ACTION</div>' : "";
-        const handLabel = (isMe && p._liveHand) ? `<div class="poker-seat-hand">${escapeHtml(p._liveHand)}</div>` : (p.handName ? `<div class="poker-seat-hand">${escapeHtml(p.handName)}</div>` : "");
-        seat.innerHTML = `${actionBadge}${avatarHTML(p)}
+        // Hand label for ME is shown under hole cards (#poker-hole-hand) to avoid overlapping the board.
+        // Opponents still show hand name on their seat at showdown.
+        const handLabel = (!isMe && p.handName) ? `<div class="poker-seat-hand">${escapeHtml(p.handName)}</div>` : "";
+        // Card backs ABOVE avatar so they are visible (Gambit-style)
+        seat.innerHTML = `${actionBadge}
           <div class="poker-seat-cards">${holeHtml}</div>
+          ${avatarHTML(p)}
           <div class="poker-seat-name">${escapeHtml(p.username || "?")}${isMe ? " (YOU)" : ""}${p.isBot ? " 🤖" : ""}${badges.join("")}</div>
           <div class="poker-seat-chips">$${Number(p.chips || 0).toLocaleString()}</div>
           <div class="poker-seat-bet">${p.bet ? ("$" + Number(p.bet).toLocaleString()) : ""}</div>
@@ -2183,10 +2298,12 @@ function renderPokerState(state){
 
   // My hole cards — large, above the player seat (Gambit-style), highlighted if in best hand
   const hole = $("#poker-hole");
+  const holeHand = $("#poker-hole-hand");
   if (hole) {
     const myHole = (me && me.hole) ? me.hole : [];
     const hlKeys = liveHand ? liveHand.highlightKeys : null;
-    const hKey = myHole.map(c => (c.rank||"")+(c.suit||"")+(c.faceUp===false?"x":"")).join("|") + "|" + (liveHand ? liveHand.name : "");
+    const handName = (liveHand && liveHand.name) || (me && me.handName) || "";
+    const hKey = myHole.map(c => (c.rank||"")+(c.suit||"")+(c.faceUp===false?"x":"")).join("|") + "|" + handName;
     if (hole.dataset.holeKey !== hKey) {
       hole.dataset.holeKey = hKey;
       if (myHole.length) {
@@ -2200,6 +2317,18 @@ function renderPokerState(state){
         hole.innerHTML = "";
       }
     }
+    if (holeHand) {
+      if (myHole.length && handName) {
+        holeHand.textContent = handName;
+        holeHand.classList.remove("hidden");
+      } else {
+        holeHand.textContent = "";
+        holeHand.classList.add("hidden");
+      }
+    }
+  } else if (holeHand) {
+    holeHand.textContent = "";
+    holeHand.classList.add("hidden");
   }
 
   // Action buttons — primary mobile trio is Fold / Check / Call;
