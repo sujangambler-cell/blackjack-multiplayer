@@ -3,26 +3,26 @@
     "username": "test12345",
     "salt": "614b502af9bc115c59472636d1718e79",
     "password": "ed23accb247c2e7084b372bd4c579bea3ee8b10509c6416b35d22552de57dbca",
-    "money": 5000,
+    "money": 4000,
     "created": 1788489505.1104405,
-    "games_played": 0,
+    "games_played": 1,
     "wins": 0,
-    "losses": 0,
+    "losses": 1,
     "pushes": 0,
     "blackjacks": 0,
     "best_win_streak": 0,
     "current_win_streak": 0,
     "biggest_win": 0,
-    "xp": 0,
+    "xp": 8,
     "achievements": [],
     "daily_claim": "",
     "daily_challenges": {
-      "play10": 0,
+      "play10": 1,
       "win3": 0,
       "blackjack1": 0,
       "poker1": 0
     },
-    "daily_challenge_date": "2026-09-19",
+    "daily_challenge_date": "2026-09-20",
     "daily_challenge_claimed": [],
     "friends": [],
     "avatar": null,
@@ -47,7 +47,7 @@
     "equipped_deck": "classic",
     "equipped_table": "classic",
     "equipped_ball": "classic",
-    "season_xp": 0,
+    "season_xp": 8,
     "season_claimed": [],
     "season_title": "",
     "roulette_games": 0,
@@ -63,14 +63,14 @@
         "wins": 0
       },
       "poker": {
-        "games": 0,
+        "games": 1,
         "wins": 0
       }
     },
     "session_token": "8ec9febdc015636a4a2d4d9adfda288243af714deb35b9c2",
     "friend_requests": [],
     "friend_outgoing": [],
-    "play_seconds": 20,
+    "play_seconds": 40,
     "season_id": 2
   },
   "pokertest1": {

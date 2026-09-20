@@ -51,6 +51,13 @@ POKER_DEFAULT_BUYIN = 1000
 POKER_MIN_BUYIN = 200
 POKER_MAX_BUYIN = 50000
 POKER_ACTION_TIMEOUT_S = 30
+POKER_BOT_ACTION_DELAY = (0.9, 2.2)  # min/max seconds before a bot acts
+
+BOT_NAME_POOL = [
+    "AceBot", "ChipRunner", "RiverShark", "BluffKing", "PotOdds",
+    "FoldMaster", "AllInAnnie", "TightTony", "LooseLucy", "CallStation",
+    "NitBot", "ManiacMax", "CoolerCarl", "SuitsSam", "NutsNora",
+]
 
 # ---------------------------------------------------------------------------
 # Cards / deck
@@ -741,11 +748,13 @@ def public_tables_payload():
             continue
         players = active_players(room)
         spectators = connected_spectators(room)
+        bots = [p for p in players if p.get("is_bot")]
         host = find_player(room, room.get("host_id")) if room.get("host_id") else None
         max_p = int(room.get("max_players", MAX_PLAYERS_DEFAULT))
         rows.append({
             "code": room["code"], "game": room.get("game", "blackjack"), "players": len(players), "maxPlayers": max_p,
-            "spectators": len(spectators), "host": host.get("username") if host else "—",
+            "spectators": len(spectators), "bots": len(bots),
+            "host": host.get("username") if host else "—",
             "phase": room.get("poker_phase") if room.get("game")=="poker" else room.get("phase", "LOBBY"),
             "buyIn": int(room.get("poker_buyin", 0)) if room.get("game")=="poker" else None,
             "canJoin": len(players) < max_p,
@@ -889,7 +898,10 @@ async def send_public_tables(websocket):
     await websocket.send(json.dumps({"type": "public_tables", "tables": public_tables_payload()}))
 
 def chat_clean(text):
-    text = " ".join(str(text or "").split())[:180]
+    # Keep emoji / unicode; only collapse whitespace and cap length
+    text = " ".join(str(text or "").split())[:280]
+    if not text:
+        return None
     low = text.lower()
     for word in BANNED_WORDS:
         if word in low:
@@ -983,6 +995,17 @@ def lucky_card(room, player, hand):
 # Game flow
 # ---------------------------------------------------------------------------
 async def reset_for_betting(room):
+    # Promote pending spectators into seats between rounds when space allows
+    max_p = int(room.get("max_players", MAX_PLAYERS_DEFAULT))
+    seated = sum(1 for p in room.get("players", []) if p.get("connected") and not p.get("spectator"))
+    for p in list(room.get("players", [])):
+        if seated >= max_p:
+            break
+        if p.get("connected") and p.get("spectator") and p.get("pending_seat"):
+            p["spectator"] = False
+            p["pending_seat"] = False
+            p["status"] = "betting"
+            seated += 1
     room["phase"] = "BETTING"
     room["dealer_hand"] = []
     room["active_player_id"] = None
@@ -1350,6 +1373,212 @@ def poker_seated(room):
 def poker_in_hand(room):
     return [p for p in poker_seated(room) if p.get("poker_status") not in ("folded", "sitting_out") and p.get("poker_in_hand")]
 
+def _next_bot_name(room):
+    used = {str(p.get("username") or "").lower() for p in room.get("players", [])}
+    pool = list(BOT_NAME_POOL)
+    random.shuffle(pool)
+    for name in pool:
+        if name.lower() not in used:
+            return name
+    return f"Bot{random.randint(100, 999)}"
+
+def create_poker_bot(room):
+    """Create a bot player object. Caller decides spectator vs seated."""
+    pid = new_id()
+    buyin = int(room.get("poker_buyin", POKER_DEFAULT_BUYIN))
+    buyin = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, buyin))
+    name = _next_bot_name(room)
+    return {
+        "id": pid,
+        "ws": None,
+        "name": name,
+        "username": name,
+        "username_key": f"bot_{pid}",
+        "money": buyin * 20,
+        "bet": 0,
+        "hand": [],
+        "status": "waiting",
+        "spectator": False,
+        "result": None,
+        "connected": True,
+        "is_bot": True,
+        "pending_seat": False,
+        "pending_buyin": 0,
+        "consecutive_losses": 0,
+        "pity_banner": False,
+        "double_used": False,
+        "cosmetics": {"theme": "classic", "chip": "classic", "deck": "classic", "table": "classic", "ball": "classic"},
+        "avatar": None,
+        "avatar_color": random.choice(["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"]),
+        "friendBoost": 0,
+        "poker_chips": 0,
+        "poker_bet": 0,
+        "poker_hole": [],
+        "poker_status": "waiting",
+        "poker_in_hand": False,
+        "poker_is_dealer": False,
+        "poker_is_sb": False,
+        "poker_is_bb": False,
+        "poker_acted": False,
+        "poker_hand_name": None,
+    }
+
+async def promote_pending_poker_players(room):
+    """Move pending spectators (humans + bots) into seats between hands when space allows."""
+    if room.get("game") != "poker":
+        return
+    max_p = int(room.get("max_players", POKER_MAX_PLAYERS))
+    seated = sum(1 for p in room.get("players", []) if p.get("connected") and not p.get("spectator"))
+    default_buyin = int(room.get("poker_buyin", POKER_DEFAULT_BUYIN))
+    default_buyin = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, default_buyin))
+    for p in list(room.get("players", [])):
+        if seated >= max_p:
+            break
+        if not p.get("connected") or not p.get("spectator"):
+            continue
+        if not (p.get("pending_seat") or p.get("is_bot")):
+            continue
+        # Bots always get chips; humans need balance or pending_buyin
+        if p.get("is_bot"):
+            if int(p.get("poker_chips", 0)) <= 0:
+                p["poker_chips"] = default_buyin
+            p["spectator"] = False
+            p["status"] = "waiting"
+            p["poker_status"] = "waiting"
+            p["poker_in_hand"] = False
+            p["pending_seat"] = False
+            seated += 1
+            continue
+        buyin = int(p.get("pending_buyin") or default_buyin)
+        buyin = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, buyin))
+        money = int(p.get("money", 0))
+        if money < buyin:
+            p["pending_seat"] = False
+            continue
+        p["money"] = money - buyin
+        p["poker_chips"] = buyin
+        p["poker_status"] = "waiting"
+        p["poker_in_hand"] = False
+        p["spectator"] = False
+        p["status"] = "waiting"
+        p["pending_seat"] = False
+        p["pending_buyin"] = 0
+        persist_player_money(p)
+        seated += 1
+
+def poker_bot_decide(room, player):
+    """Simple tight-aggressive-ish bot decision. Returns (action, amount)."""
+    to_call = max(0, int(room.get("poker_current_bet", 0)) - int(player.get("poker_bet", 0)))
+    chips = int(player.get("poker_chips", 0))
+    pot = int(room.get("poker_pot", 0))
+    bb = int(room.get("poker_big_blind", POKER_BIG_BLIND))
+    min_raise = int(room.get("poker_min_raise", bb))
+    hole = player.get("poker_hole") or []
+    community = room.get("poker_community") or []
+    # crude hand strength 0..1
+    strength = 0.35
+    try:
+        if hole and len(hole) >= 2:
+            ranks = [c.get("rank") for c in hole]
+            suits = [c.get("suit") for c in hole]
+            if ranks[0] == ranks[1]:
+                strength = 0.72  # pair
+            elif suits[0] == suits[1]:
+                strength = 0.48  # suited
+            high = {"A": 14, "K": 13, "Q": 12, "J": 11, "10": 10}
+            vals = [high.get(r, int(r) if str(r).isdigit() else 7) for r in ranks]
+            if max(vals) >= 12:
+                strength = max(strength, 0.55)
+            if community:
+                score = best_poker_hand(hole, community)
+                rank_idx = score[0] if score else 0
+                strength = min(0.95, 0.35 + rank_idx * 0.08)
+    except Exception:
+        strength = 0.4
+    r = random.random()
+    if to_call == 0:
+        if strength > 0.55 and r < 0.45 and chips > bb:
+            raise_amt = min(chips, max(min_raise, int(pot * 0.5) or bb * 2))
+            return ("raise" if int(room.get("poker_current_bet", 0)) > 0 else "bet", raise_amt + int(player.get("poker_bet", 0)))
+        return ("check", 0)
+    # facing a bet
+    pot_odds = to_call / max(1, pot + to_call)
+    if to_call >= chips:
+        if strength > 0.5 or r < 0.15:
+            return ("allin", 0)
+        return ("fold", 0)
+    if strength < 0.35 and pot_odds > 0.35:
+        return ("fold", 0)
+    if strength > 0.65 and chips > to_call + min_raise and r < 0.4:
+        raise_to = min(chips, to_call + max(min_raise, int(pot * 0.6)))
+        return ("raise", int(player.get("poker_bet", 0)) + raise_to)
+    if strength > 0.4 or pot_odds < 0.3:
+        return ("call", 0)
+    if r < 0.25:
+        return ("call", 0)
+    return ("fold", 0)
+
+async def poker_bot_act(room, bot_id):
+    """Delayed bot action for the active bot player."""
+    try:
+        await asyncio.sleep(random.uniform(*POKER_BOT_ACTION_DELAY))
+        if room.get("game") != "poker":
+            return
+        if room.get("active_player_id") != bot_id:
+            return
+        player = find_player(room, bot_id)
+        if not player or not player.get("is_bot"):
+            return
+        action, amount = poker_bot_decide(room, player)
+        ok, _ = await poker_handle_action(room, player, action, amount)
+        if not ok and action != "fold":
+            # fallback
+            to_call = max(0, int(room.get("poker_current_bet", 0)) - int(player.get("poker_bet", 0)))
+            if to_call == 0:
+                await poker_handle_action(room, player, "check", 0)
+            else:
+                await poker_handle_action(room, player, "fold", 0)
+        # schedule next bot if still a bot's turn
+        active = find_player(room, room.get("active_player_id"))
+        if active and active.get("is_bot") and room.get("poker_phase") in ("PREFLOP", "FLOP", "TURN", "RIVER"):
+            asyncio.create_task(poker_bot_act(room, active["id"]))
+    except Exception:
+        pass
+
+def schedule_bot_if_needed(room):
+    """Schedule bot AI or human action timeout (auto-fold) for the active player."""
+    active = find_player(room, room.get("active_player_id"))
+    if not active or room.get("poker_phase") not in ("PREFLOP", "FLOP", "TURN", "RIVER"):
+        room["poker_action_deadline"] = None
+        return
+    # Deadline for UI + auto-fold (unix seconds)
+    room["poker_action_deadline"] = time.time() + POKER_ACTION_TIMEOUT_S
+    room["poker_action_token"] = id(active)  # invalidate stale timers
+    token = room["poker_action_token"]
+    if active.get("is_bot"):
+        asyncio.create_task(poker_bot_act(room, active["id"]))
+    else:
+        asyncio.create_task(poker_action_timeout(room, active["id"], token))
+
+async def poker_action_timeout(room, player_id, token):
+    """Auto-fold (or check if free) when a human runs out of time — Gambit-style."""
+    try:
+        await asyncio.sleep(POKER_ACTION_TIMEOUT_S)
+        if room.get("poker_action_token") != token:
+            return
+        if room.get("active_player_id") != player_id:
+            return
+        if room.get("poker_phase") not in ("PREFLOP", "FLOP", "TURN", "RIVER"):
+            return
+        player = find_player(room, player_id)
+        if not player or player.get("is_bot"):
+            return
+        to_call = max(0, int(room.get("poker_current_bet", 0)) - int(player.get("poker_bet", 0)))
+        action = "check" if to_call == 0 else "fold"
+        await poker_handle_action(room, player, action, 0)
+    except Exception:
+        pass
+
 def poker_serialise(room, viewer_id=None):
     phase = room.get("poker_phase", "WAITING")
     community = room.get("poker_community", [])
@@ -1363,6 +1592,7 @@ def poker_serialise(room, viewer_id=None):
                 "name": p.get("name") or p.get("username"),
                 "avatar": p.get("avatar"),
                 "avatarColor": p.get("avatar_color"),
+                "isBot": bool(p.get("is_bot")),
             })
             continue
         show_cards = False
@@ -1394,6 +1624,7 @@ def poker_serialise(room, viewer_id=None):
             "avatar": p.get("avatar"),
             "avatarColor": p.get("avatar_color"),
             "money": int(p.get("money", 0)),
+            "isBot": bool(p.get("is_bot")),
         })
     return {
         "code": room["code"],
@@ -1404,6 +1635,8 @@ def poker_serialise(room, viewer_id=None):
         "currentBet": int(room.get("poker_current_bet", 0)),
         "minRaise": int(room.get("poker_min_raise", room.get("poker_big_blind", POKER_BIG_BLIND))),
         "activePlayerId": room.get("active_player_id"),
+        "actionDeadline": room.get("poker_action_deadline"),
+        "actionTimeout": POKER_ACTION_TIMEOUT_S,
         "hostId": room.get("host_id"),
         "maxPlayers": int(room.get("max_players", POKER_MAX_PLAYERS)),
         "buyIn": int(room.get("poker_buyin", POKER_DEFAULT_BUYIN)),
@@ -1530,6 +1763,7 @@ async def poker_start_hand(room):
     room["poker_action_idx"] = act_idx
     room["active_player_id"] = players[act_idx]["id"]
     await poker_broadcast(room)
+    schedule_bot_if_needed(room)
 
 def poker_betting_complete(room):
     players = poker_active_list(room)
@@ -1591,6 +1825,7 @@ async def poker_advance_street(room):
             room["poker_action_idx"] = act_idx
             room["active_player_id"] = p["id"]
             await poker_broadcast(room)
+            schedule_bot_if_needed(room)
             return
         act_idx = (act_idx + 1) % n
     # everyone all-in — run out
@@ -1669,6 +1904,8 @@ async def poker_showdown(room):
     save_accounts()
     await poker_broadcast(room)
     await asyncio.sleep(4.5)
+    # Seat pending spectators / bots before the next hand
+    await promote_pending_poker_players(room)
     # auto next hand if enough players
     if len(poker_seated(room)) >= POKER_MIN_PLAYERS:
         await poker_start_hand(room)
@@ -1676,6 +1913,7 @@ async def poker_showdown(room):
         room["poker_phase"] = "WAITING"
         room["active_player_id"] = None
         await poker_broadcast(room)
+        await broadcast_public_tables()
 
 async def poker_handle_action(room, player, action, amount=0):
     if room.get("game") != "poker":
@@ -1820,11 +2058,13 @@ async def poker_handle_action(room, player, action, amount=0):
             room["active_player_id"] = None
             await poker_broadcast(room)
             await asyncio.sleep(3.0)
+            await promote_pending_poker_players(room)
             if len(poker_seated(room)) >= POKER_MIN_PLAYERS:
                 await poker_start_hand(room)
             else:
                 room["poker_phase"] = "WAITING"
                 await poker_broadcast(room)
+                await broadcast_public_tables()
         return True, "ok"
 
     if poker_betting_complete(room):
@@ -1851,6 +2091,7 @@ async def poker_handle_action(room, player, action, amount=0):
                 room["active_player_id"] = p["id"]
                 break
         await poker_broadcast(room)
+        schedule_bot_if_needed(room)
     return True, "ok"
 
 # ---------------------------------------------------------------------------
@@ -2388,14 +2629,22 @@ async def ws_handler(websocket):
             # Seating rules
             is_poker = room.get("game") == "poker"
             seated_now = sum(1 for p in room["players"] if p.get("connected") and not p.get("spectator"))
+            player["pending_seat"] = False
             if spectate or seated_now >= max_p:
                 player["spectator"] = True
                 player["status"] = "spectating"
             elif is_poker:
-                # Poker: seat + auto buy-in when possible
+                poker_phase = room.get("poker_phase") or "WAITING"
+                mid_hand = poker_phase in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN")
                 buyin = int(room.get("poker_buyin", POKER_DEFAULT_BUYIN))
                 buyin = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, buyin))
-                if player["money"] >= buyin:
+                if mid_hand:
+                    # Join mid-hand as spectator; auto-seat when the hand ends
+                    player["spectator"] = True
+                    player["status"] = "spectating"
+                    player["pending_seat"] = True
+                    player["pending_buyin"] = buyin if player["money"] >= buyin else 0
+                elif player["money"] >= buyin:
                     player["money"] -= buyin
                     player["poker_chips"] = buyin
                     player["poker_status"] = "waiting"
@@ -2410,6 +2659,7 @@ async def ws_handler(websocket):
                 if room["phase"] not in ("LOBBY", "BETTING"):
                     player["spectator"] = True
                     player["status"] = "spectating"
+                    player["pending_seat"] = True
                 else:
                     player["spectator"] = False
                     player["status"] = "betting"
@@ -2493,6 +2743,49 @@ async def ws_handler(websocket):
                     await websocket.send(json.dumps({"type": "poker_state", "state": poker_serialise(room, viewer_id=player["id"])}))
                 except Exception:
                     pass
+            continue
+
+        if kind == "add_bot":
+            if not room or not player:
+                await websocket.send(json.dumps({"type": "error", "message": "Join a table first."}))
+                continue
+            if room.get("game") != "poker":
+                await websocket.send(json.dumps({"type": "error", "message": "Bots are available at Poker tables only."}))
+                continue
+            if room.get("host_id") != player.get("id"):
+                await websocket.send(json.dumps({"type": "error", "message": "Only the host can add bots."}))
+                continue
+            max_p = int(room.get("max_players", POKER_MAX_PLAYERS))
+            seated = sum(1 for p in room["players"] if p.get("connected") and not p.get("spectator"))
+            total = sum(1 for p in room["players"] if p.get("connected"))
+            if seated >= max_p and room.get("poker_phase") in ("WAITING", "HAND_OVER", "LOBBY", None):
+                await websocket.send(json.dumps({"type": "error", "message": "Table is full — no open seats."}))
+                continue
+            if total >= max_p + 4:
+                await websocket.send(json.dumps({"type": "error", "message": "Too many spectators already."}))
+                continue
+            bot = create_poker_bot(room)
+            buyin = int(room.get("poker_buyin", POKER_DEFAULT_BUYIN))
+            buyin = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, buyin))
+            phase = room.get("poker_phase") or "WAITING"
+            mid_hand = phase in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN")
+            if mid_hand or seated >= max_p:
+                # Join as spectator; seat when the current hand ends
+                bot["spectator"] = True
+                bot["status"] = "spectating"
+                bot["pending_seat"] = True
+                bot["poker_chips"] = 0
+            else:
+                bot["spectator"] = False
+                bot["status"] = "waiting"
+                bot["poker_chips"] = buyin
+                bot["poker_status"] = "waiting"
+            room["players"].append(bot)
+            await poker_broadcast(room)
+            await broadcast_public_tables()
+            if (not mid_hand and len(poker_seated(room)) >= POKER_MIN_PLAYERS
+                    and phase in ("WAITING", "HAND_OVER", "LOBBY", None)):
+                asyncio.create_task(_poker_autostart(room))
             continue
 
         if kind == "poker_action":
@@ -2678,12 +2971,20 @@ async def ws_handler(websocket):
             if kind == "kick" and room.get("host_id") == player.get("id"):
                 target = find_player(room, msg.get("targetId"))
                 if target and target.get("id") != player.get("id"):
-                    target_ws = target.get("ws")
-                    try:
-                        await target_ws.send(json.dumps({"type":"kicked","message":"The host removed you from this table."}))
-                        await target_ws.close()
-                    except Exception:
-                        pass
+                    if target.get("is_bot"):
+                        room["players"] = [p for p in room["players"] if p.get("id") != target.get("id")]
+                        if room.get("game") == "poker":
+                            await poker_broadcast(room)
+                        else:
+                            await broadcast(room)
+                        await broadcast_public_tables()
+                    else:
+                        target_ws = target.get("ws")
+                        try:
+                            await target_ws.send(json.dumps({"type":"kicked","message":"The host removed you from this table."}))
+                            await target_ws.close()
+                        except Exception:
+                            pass
                 continue
             if not kind.startswith("admin_"):
                 # Other Blackjack actions do not apply to Roulette.
@@ -2875,6 +3176,14 @@ async def ws_handler(websocket):
             target_id = msg.get("targetId")
             target = find_player(room, target_id)
             if not target or target["id"] == player["id"]:
+                continue
+            if target.get("is_bot"):
+                room["players"] = [p for p in room["players"] if p.get("id") != target.get("id")]
+                if room.get("game") == "poker":
+                    await poker_broadcast(room)
+                else:
+                    await broadcast(room)
+                await broadcast_public_tables()
                 continue
             if target.get("username_key"):
                 room.setdefault("kicked", []).append(target["username_key"])

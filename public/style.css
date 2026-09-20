@@ -7764,3 +7764,218 @@ html[data-mobile="1"] .auth-card.main-menu-mode .home-footer #btn-logout {
     margin-top: 4px !important;
   }
 }
+
+/* ============================================================
+   BLACKJACK MOBILE FIX — dealer card anchored to top of felt
+   ============================================================ */
+
+/* Real phone viewport */
+@media (max-width: 700px), (max-aspect-ratio: 3/4) {
+  /* Felt is a flex column; dealer area sticks to top, seats ring is absolute */
+  #screen-table.active .felt-table {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 10px 8px 8px !important;
+    overflow: visible !important;
+  }
+  /* Table-rules banner stays compact at very top */
+  #screen-table.active .table-rules {
+    flex: 0 0 auto !important;
+    margin-bottom: 4px !important;
+  }
+  /* Dealer block anchored below banner */
+  #screen-table.active .dealer-area {
+    flex: 0 0 auto !important;
+    margin-top: 4px !important;
+    gap: 2px !important;
+  }
+  #screen-table.active .dealer-area .seat-label {
+    font-size: 11px !important;
+  }
+  #screen-table.active .dealer-area .hand-value {
+    font-size: 14px !important;
+    min-height: 18px !important;
+  }
+  /* Seats ring is absolute over the whole felt */
+  #screen-table.active .seats-ring,
+  #screen-table.active #seats-row {
+    position: absolute !important;
+    inset: 0 !important;
+    overflow: visible !important;
+    pointer-events: none !important;
+  }
+}
+
+/* data-mobile="1" mirror */
+html[data-mobile="1"] #screen-table.active .felt-table {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  padding: 10px 8px 8px !important;
+  overflow: visible !important;
+}
+html[data-mobile="1"] #screen-table.active .table-rules {
+  flex: 0 0 auto !important;
+  margin-bottom: 4px !important;
+}
+html[data-mobile="1"] #screen-table.active .dealer-area {
+  flex: 0 0 auto !important;
+  margin-top: 4px !important;
+  gap: 2px !important;
+}
+html[data-mobile="1"] #screen-table.active .dealer-area .seat-label {
+  font-size: 11px !important;
+}
+html[data-mobile="1"] #screen-table.active .dealer-area .hand-value {
+  font-size: 14px !important;
+  min-height: 18px !important;
+}
+html[data-mobile="1"] #screen-table.active .seats-ring,
+html[data-mobile="1"] #screen-table.active #seats-row {
+  position: absolute !important;
+  inset: 0 !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================
+   Help overlays + chat emoji / mobile fix
+   ============================================================ */
+.help-card {
+  max-width: min(520px, 94vw);
+  max-height: min(82vh, 720px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.help-body {
+  overflow: auto;
+  padding: 4px 4px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255,255,255,0.88);
+}
+.help-body h4 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #d4af37;
+  text-transform: uppercase;
+}
+.help-body p, .help-body li { margin: 0 0 6px; }
+.help-body ol, .help-body ul { padding-left: 1.2em; margin: 0 0 8px; }
+.help-hands li { margin-bottom: 4px; }
+.help-note {
+  margin-top: 12px !important;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(212,175,55,0.1);
+  border: 1px solid rgba(212,175,55,0.25);
+  font-size: 12px;
+}
+
+/* Chat panel — fixed size, never expands into a full-width bottom bar */
+.chat-panel {
+  position: fixed !important;
+  right: 14px !important;
+  bottom: 14px !important;
+  left: auto !important;
+  width: min(360px, calc(100vw - 28px)) !important;
+  height: min(440px, 55dvh) !important;
+  max-height: min(440px, 55dvh) !important;
+  z-index: 120 !important;
+  display: none;
+  flex-direction: column !important;
+  border-radius: 18px !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+.chat-panel.open {
+  display: flex !important;
+}
+.chat-messages {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+}
+.chat-compose {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 8px 10px !important;
+}
+.chat-compose input {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  font-size: 14px !important;
+}
+.chat-emoji-btn {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+}
+.chat-emoji-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px;
+  max-height: 88px;
+  overflow: auto;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.25);
+}
+.chat-emoji-bar.hidden { display: none !important; }
+.chat-emoji-item {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.chat-emoji-item:hover { background: rgba(255,255,255,0.1); }
+.chat-media {
+  display: block;
+  max-width: 160px;
+  max-height: 120px;
+  border-radius: 10px;
+  margin-top: 4px;
+}
+.chat-text { overflow-wrap: anywhere; }
+.chat-line strong { flex-shrink: 0; }
+
+html[data-mobile="1"] .chat-panel,
+@media (max-width: 700px) {
+  .chat-panel {
+    right: 8px !important;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px)) !important;
+    width: min(340px, calc(100vw - 16px)) !important;
+    height: min(400px, 50dvh) !important;
+    max-height: min(400px, 50dvh) !important;
+  }
+  .chat-float {
+    bottom: max(14px, env(safe-area-inset-bottom, 0px)) !important;
+    right: 12px !important;
+  }
+}
+
+.host-add-bot-row {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  margin-bottom: 10px !important;
+}
+.host-add-bot-row .btn {
+  width: 100%;
+}

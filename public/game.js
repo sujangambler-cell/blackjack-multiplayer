@@ -1732,7 +1732,74 @@ function renderSeason(){if(!seasonData)return;const xp=Number(seasonData.xp||0),
 function openProgress(id) { $(id).classList.add("open"); }
 function closeProgress(id) { $(id).classList.remove("open"); }
 
-function sendChat(){ const input=$("#chat-input"); const text=input.value.trim(); if(!text) return; send({type:"chat",text}); input.value=""; }
+const CHAT_EMOJIS = ["😀","😂","🤣","😍","🔥","💯","👏","🙌","😎","🤔","😭","💪","🎉","🃏","♠️","♥️","♦️","♣️","🤑","👀","✅","❌","🙏","💀","🤝","🏆"];
+
+function formatChatText(text) {
+  const raw = String(text || "");
+  // Allow safe image/gif URLs to render inline
+  const urlRe = /(https?:\/\/[^\s]+\.(?:gif|png|jpe?g|webp)(?:\?[^\s]*)?)/gi;
+  const parts = raw.split(urlRe);
+  return parts.map(part => {
+    if (/^https?:\/\//i.test(part) && /\.(gif|png|jpe?g|webp)/i.test(part)) {
+      return `<a class="chat-media-link" href="${escapeAttr(part)}" target="_blank" rel="noopener noreferrer"><img class="chat-media" src="${escapeAttr(part)}" alt="gif" loading="lazy" /></a>`;
+    }
+    return escapeHtml(part);
+  }).join("");
+}
+
+function sendChat(){
+  const input = $("#chat-input");
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  send({ type: "chat", text });
+  input.value = "";
+  $("#chat-emoji-bar")?.classList.add("hidden");
+}
+
+function appendChat(username, text) {
+  if (chatMuted) return;
+  const box = $("#chat-messages");
+  if (!box) return;
+  const row = el("div", "chat-line");
+  row.innerHTML = `<strong>${escapeHtml(username)}</strong><span class="chat-text">${formatChatText(text)}</span>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function toggleChat(open) {
+  const panel = $("#chat-panel");
+  if (!panel) return;
+  panel.classList.toggle("open", !!open);
+  $("#btn-chat-open")?.classList.toggle("hidden", !!open);
+  if (open) {
+    // Prevent the panel from stretching the bottom of the app on mobile
+    panel.style.maxHeight = "min(440px, 55dvh)";
+    setTimeout(() => $("#chat-input")?.focus(), 50);
+  } else {
+    $("#chat-emoji-bar")?.classList.add("hidden");
+  }
+}
+
+function populateEmojiBar() {
+  const bar = $("#chat-emoji-bar");
+  if (!bar || bar.dataset.ready) return;
+  bar.dataset.ready = "1";
+  bar.innerHTML = CHAT_EMOJIS.map(e => `<button type="button" class="chat-emoji-item" data-emoji="${e}">${e}</button>`).join("");
+  bar.querySelectorAll("[data-emoji]").forEach(btn => {
+    wireButton(btn, () => {
+      const input = $("#chat-input");
+      if (!input) return;
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      const emoji = btn.dataset.emoji || "";
+      input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
+      input.focus();
+      const pos = start + emoji.length;
+      input.setSelectionRange(pos, pos);
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Profile / friends / public tables / chat
@@ -1780,7 +1847,12 @@ function renderFriends(){
 let seasonTicker=null;function startSeasonTicker(){if(seasonTicker)clearInterval(seasonTicker);seasonTicker=setInterval(()=>{if(!seasonData?.season)return;const rem=Math.max(0,Math.floor(Number(seasonData.season.endAt||0)-Date.now()/1000));seasonData.season.remainingSeconds=rem;if(rem<=0)seasonData.season.active=false;if($("#season-overlay").classList.contains("open"))renderSeason();applySeasonTheme()},1000)}
 function renderPublicTables(){
   const box=$("#public-table-list"); if(!box) return;
-  box.innerHTML = publicTables.length ? publicTables.map(t=>`<div class="public-table-row"><div><strong>${escapeHtml((t.game||"BLACKJACK").toUpperCase())} • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host)} • ${t.players}/${t.maxPlayers} Players • ${t.phase === 'PLAYING' ? 'IN GAME' : 'WAITING'}</small></div><div class="public-table-actions">${t.canJoin?`<button class="btn" data-join="${t.code}">JOIN</button>`:''}${t.canSpectate?`<button class="btn secondary" data-spec="${t.code}">WATCH</button>`:''}</div></div>`).join("") : '<div class="admin-empty">No public tables yet. Create one!</div>';
+  box.innerHTML = publicTables.length ? publicTables.map(t=>{
+    const bots = Number(t.bots||0);
+    const specs = Number(t.spectators||0);
+    const extra = [bots ? `${bots} bot${bots===1?"":"s"}` : null, specs ? `${specs} spectator${specs===1?"":"s"}` : null].filter(Boolean).join(" · ");
+    return `<div class="public-table-row"><div><strong>${escapeHtml((t.game||"BLACKJACK").toUpperCase())} • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host)} · ${t.players}/${t.maxPlayers} players · ${t.phase === 'PLAYING' ? 'IN GAME' : 'WAITING'}${extra ? " · " + extra : ""}</small></div><div class="public-table-actions">${t.canJoin?`<button class="btn" data-join="${t.code}">JOIN</button>`:''}${t.canSpectate?`<button class="btn secondary" data-spec="${t.code}">WATCH</button>`:''}</div></div>`;
+  }).join("") : '<div class="admin-empty">No public tables yet. Create one!</div>';
   box.querySelectorAll('[data-join]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.join})));
   box.querySelectorAll('[data-spec]').forEach(b=>wireButton(b,()=>send({type:'join',token:authToken,room:b.dataset.spec,spectate:true})));
 }
@@ -1788,16 +1860,130 @@ function renderPublicTables(){
 function renderPokerTables(){
   const box=$("#poker-table-list"); if(!box) return;
   const tables=pokerTables.filter(t=>t.game==="poker");
-  box.innerHTML=tables.length ? tables.map(t=>`<div class="public-table-row"><div><strong>POKER • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host||"—")} • ${t.players}/${t.maxPlayers} • Buy-in $${Number(t.buyIn||1000).toLocaleString()} • ${escapeHtml(t.phase||"WAITING")}</small></div><div class="public-table-actions">${t.canJoin!==false?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}<button class="btn secondary" data-rspec="${t.code}">WATCH</button></div></div>`).join("") : '<div class="admin-empty">No Poker tables yet. Create one!</div>';
+  box.innerHTML=tables.length ? tables.map(t=>{
+    const bots = Number(t.bots||0);
+    const specs = Number(t.spectators||0);
+    const extra = [bots ? `${bots} bot${bots===1?"":"s"}` : null, specs ? `${specs} spectator${specs===1?"":"s"}` : null].filter(Boolean).join(" · ");
+    return `<div class="public-table-row"><div><strong>POKER • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host||"—")} · ${t.players}/${t.maxPlayers} seated · Buy-in $${Number(t.buyIn||1000).toLocaleString()} · ${escapeHtml(t.phase||"WAITING")}${extra ? " · " + extra : ""}</small></div><div class="public-table-actions">${t.canJoin!==false?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}<button class="btn secondary" data-rspec="${t.code}">WATCH</button></div></div>`;
+  }).join("") : '<div class="admin-empty">No Poker tables yet. Create one!</div>';
   box.querySelectorAll("[data-rjoin]").forEach(b=>wireButton(b,()=>send({type:"join",token:authToken,room:b.dataset.rjoin,game:"poker"})));
   box.querySelectorAll("[data-rspec]").forEach(b=>wireButton(b,()=>send({type:"join",token:authToken,room:b.dataset.rspec,game:"poker",spectate:true})));
 }
 
-function pokerCardHTML(c, small){
+
+const RANK_VAL = {A:14,K:13,Q:12,J:11,"10":10,"9":9,"8":8,"7":7,"6":6,"5":5,"4":4,"3":3,"2":2};
+const HAND_LABELS = ["High Card","One Pair","Two Pair","Three of a Kind","Straight","Flush","Full House","Four of a Kind","Straight Flush","Royal Flush"];
+
+function evalPokerHandLive(hole, community) {
+  const cards = [...(hole||[]), ...(community||[])].filter(c => c && c.rank && c.suit && c.faceUp !== false);
+  if (cards.length < 2) return null;
+  const all = cards.map(c => ({ r: RANK_VAL[c.rank] || 0, s: c.suit, raw: c }));
+  // generate 5-card combos (or use all if <5)
+  function score5(five) {
+    const ranks = five.map(c => c.r).sort((a,b)=>b-a);
+    const suits = five.map(c => c.s);
+    const flush = suits.every(s => s === suits[0]);
+    const uniq = [...new Set(ranks)].sort((a,b)=>b-a);
+    let straight = false, sh = 0;
+    if (uniq.length === 5 && uniq[0] - uniq[4] === 4) { straight = true; sh = uniq[0]; }
+    if (new Set(ranks).size === 5 && ranks.includes(14) && ranks.includes(5) && ranks.includes(4) && ranks.includes(3) && ranks.includes(2)) {
+      straight = true; sh = 5;
+    }
+    const counts = {};
+    ranks.forEach(r => counts[r] = (counts[r]||0)+1);
+    const byC = Object.entries(counts).map(([r,c]) => [Number(r), c]).sort((a,b) => b[1]-a[1] || b[0]-a[0]);
+    let tier = 0, tb = ranks.slice();
+    if (straight && flush) { tier = sh === 14 ? 9 : 8; tb = [sh]; }
+    else if (byC[0][1] === 4) { tier = 7; tb = [byC[0][0], byC[1]?.[0]||0]; }
+    else if (byC[0][1] === 3 && byC[1] && byC[1][1] === 2) { tier = 6; tb = [byC[0][0], byC[1][0]]; }
+    else if (flush) { tier = 5; }
+    else if (straight) { tier = 4; tb = [sh]; }
+    else if (byC[0][1] === 3) { tier = 3; tb = [byC[0][0], ...byC.slice(1).map(x=>x[0])]; }
+    else if (byC[0][1] === 2 && byC[1] && byC[1][1] === 2) { tier = 2; tb = [Math.max(byC[0][0],byC[1][0]), Math.min(byC[0][0],byC[1][0]), byC[2]?.[0]||0]; }
+    else if (byC[0][1] === 2) { tier = 1; tb = [byC[0][0], ...byC.slice(1).map(x=>x[0])]; }
+    else { tier = 0; }
+    return { tier, tb, five };
+  }
+  let best = null;
+  const n = all.length;
+  if (n <= 5) {
+    best = score5(all);
+  } else {
+    // combinations of 5
+    const idx = [];
+    function rec(start, path) {
+      if (path.length === 5) {
+        const sc = score5(path.map(i => all[i]));
+        if (!best || sc.tier > best.tier || (sc.tier === best.tier && JSON.stringify(sc.tb) > JSON.stringify(best.tb))) best = sc;
+        return;
+      }
+      for (let i = start; i < n; i++) { path.push(i); rec(i+1, path); path.pop(); }
+    }
+    rec(0, []);
+  }
+  if (!best) return null;
+  // Only highlight the cards that *make* the hand (pair cards, trips, etc.) — not kickers.
+  const five = best.five;
+  const ranks = five.map(c => c.r);
+  const counts = {};
+  ranks.forEach(r => { counts[r] = (counts[r] || 0) + 1; });
+  const tier = best.tier;
+  let keySet = new Set();
+  if (tier === 0) {
+    // High card: only the highest card
+    const top = five.slice().sort((a,b) => b.r - a.r)[0];
+    if (top) keySet.add(top.raw.rank + top.raw.suit);
+  } else if (tier === 1) {
+    // One pair: only the two pairing ranks
+    const pairRank = Object.keys(counts).map(Number).find(r => counts[r] === 2);
+    five.filter(c => c.r === pairRank).forEach(c => keySet.add(c.raw.rank + c.raw.suit));
+  } else if (tier === 2) {
+    // Two pair: both pairs (4 cards), not the kicker
+    Object.keys(counts).map(Number).filter(r => counts[r] === 2).forEach(pr => {
+      five.filter(c => c.r === pr).forEach(c => keySet.add(c.raw.rank + c.raw.suit));
+    });
+  } else if (tier === 3) {
+    // Three of a kind: only the trips
+    const tripRank = Object.keys(counts).map(Number).find(r => counts[r] === 3);
+    five.filter(c => c.r === tripRank).forEach(c => keySet.add(c.raw.rank + c.raw.suit));
+  } else if (tier === 6) {
+    // Full house: trips + pair (all 5 are "made")
+    five.forEach(c => keySet.add(c.raw.rank + c.raw.suit));
+  } else if (tier === 7) {
+    // Quads: only the four of a kind
+    const quadRank = Object.keys(counts).map(Number).find(r => counts[r] === 4);
+    five.filter(c => c.r === quadRank).forEach(c => keySet.add(c.raw.rank + c.raw.suit));
+  } else if (tier === 4 || tier === 5 || tier === 8 || tier === 9) {
+    // Straight / Flush / Straight Flush / Royal: all five make the hand
+    five.forEach(c => keySet.add(c.raw.rank + c.raw.suit));
+  } else {
+    five.forEach(c => keySet.add(c.raw.rank + c.raw.suit));
+  }
+  // Also mark matching rank cards on the full board/hole (e.g. pair of 9s both highlighted even if best-5 picked specific suits)
+  // For pairs/trips/quads, highlight every instance of that rank among hole+community so board + hand both glow.
+  if (tier === 1 || tier === 2 || tier === 3 || tier === 7) {
+    const madeRanks = new Set();
+    keySet.forEach(k => {
+      // recover rank from key: rank is all but last char(s) for suit - better use five ranks we already have
+    });
+    const targetRanks = new Set();
+    if (tier === 1) Object.keys(counts).map(Number).filter(r => counts[r] === 2).forEach(r => targetRanks.add(r));
+    if (tier === 2) Object.keys(counts).map(Number).filter(r => counts[r] === 2).forEach(r => targetRanks.add(r));
+    if (tier === 3) Object.keys(counts).map(Number).filter(r => counts[r] === 3).forEach(r => targetRanks.add(r));
+    if (tier === 7) Object.keys(counts).map(Number).filter(r => counts[r] === 4).forEach(r => targetRanks.add(r));
+    // expand to all cards of those ranks in hole+community (not just the chosen 5)
+    keySet = new Set();
+    all.filter(c => targetRanks.has(c.r)).forEach(c => keySet.add(c.raw.rank + c.raw.suit));
+  }
+  return { name: HAND_LABELS[best.tier] || "High Card", tier: best.tier, highlightKeys: keySet };
+}
+
+function pokerCardHTML(c, small, highlight){
   if(!c || c.faceUp===false) return `<div class="playing-card card-back ${small?"small":""}"></div>`;
   const red = c.suit==="H"||c.suit==="D";
   const suitSym = {S:"♠",H:"♥",D:"♦",C:"♣"}[c.suit]||c.suit;
-  return `<div class="playing-card ${red?"red":"black"} ${small?"small":""}"><span class="card-rank">${c.rank}</span><span class="card-suit">${suitSym}</span></div>`;
+  const hl = highlight ? " poker-card-hl" : "";
+  return `<div class="playing-card ${red?"red":"black"} ${small?"small":""}${hl}"><span class="card-rank">${c.rank}</span><span class="card-suit">${suitSym}</span></div>`;
 }
 
 
@@ -1844,12 +2030,34 @@ function renderPokerState(state){
   $("#poker-street") && ($("#poker-street").textContent = state.street || "—");
   $("#poker-pot") && ($("#poker-pot").textContent = "POT $" + Number(state.pot||0).toLocaleString());
 
-  // Community cards
+  // Live hand strength for local player (name + which cards to highlight)
+  let liveHand = null;
+  if (me && (me.hole || []).length) {
+    liveHand = evalPokerHandLive(me.hole, state.community || []);
+    if (liveHand) me._liveHand = liveHand.name;
+  }
+
+  // Community cards — highlight cards that contribute to your best hand
   const comm = $("#poker-community");
-  if(comm){
-    const cards = state.community||[];
-    if(!cards.length) comm.innerHTML = '<div class="poker-comm-placeholder">COMMUNITY</div>';
-    else comm.innerHTML = cards.map(c=>pokerCardHTML(c)).join("");
+  if (comm) {
+    const cards = state.community || [];
+    const hlKeys = liveHand ? liveHand.highlightKeys : null;
+    const key = cards.map(c => (c.rank || "") + (c.suit || "")).join("|") + "|" + (liveHand ? liveHand.name : "");
+    if (comm.dataset.boardKey !== key) {
+      const prevLen = Number(comm.dataset.prevLen || 0);
+      comm.dataset.boardKey = key;
+      comm.dataset.prevLen = String(cards.length);
+      if (!cards.length) {
+        comm.innerHTML = '<div class="poker-comm-placeholder">COMMUNITY</div>';
+      } else {
+        const isNewBoard = cards.length !== prevLen;
+        comm.innerHTML = cards.map((c) => {
+          const ck = (c.rank || "") + (c.suit || "");
+          const html = pokerCardHTML(c, false, hlKeys && hlKeys.has(ck));
+          return isNewBoard ? html.replace('class="playing-card', 'class="playing-card poker-deal-in') : html;
+        }).join("");
+      }
+    }
   }
 
   // Winners banner
@@ -1889,12 +2097,12 @@ function renderPokerState(state){
       6: [[50, 82], [15, 68], [18, 25], [50, 21], [82, 25], [85, 68]]
     };
     const mobilePositionsByCount = {
-      // Phone geometry: seats follow the taller oval and stay clear of the centre stack.
-      2: [[50, 81], [50, 20]],
-      3: [[50, 81], [18, 28], [82, 28]],
-      4: [[50, 81], [16, 59], [50, 20], [84, 59]],
-      5: [[50, 81], [15, 62], [19, 28], [81, 28], [85, 62]],
-      6: [[50, 81], [15, 63], [19, 28], [50, 20], [81, 28], [85, 63]]
+      // Player (YOU) low on the felt; hole cards sit above at ~62% via CSS.
+      2: [[50, 90], [50, 14]],
+      3: [[50, 90], [13, 28], [87, 28]],
+      4: [[50, 90], [8,  50], [50, 12], [92, 50]],
+      5: [[50, 90], [8,  58], [14, 20], [86, 20], [92, 58]],
+      6: [[50, 90], [8,  60], [12, 20], [50, 12], [88, 20], [92, 60]]
     };
     const mobileMode = document.documentElement.getAttribute("data-mobile") === "1";
     const positionsByCount = mobileMode ? mobilePositionsByCount : desktopPositionsByCount;
@@ -1918,13 +2126,23 @@ function renderPokerState(state){
         if (p.isDealer) badges.push('<span class="poker-badge dealer">D</span>');
         if (p.isSB) badges.push('<span class="poker-badge sb">SB</span>');
         if (p.isBB) badges.push('<span class="poker-badge bb">BB</span>');
-        const holeHtml = (p.hole || []).map(c => pokerCardHTML(c, true)).join("");
-        seat.innerHTML = `${avatarHTML(p)}
+        const isMe = p.id === myId;
+        // Opponents: always show 2 card-backs while they are in the hand (Gambit style).
+        // Self: large hole cards live in #poker-hole — seat only shows avatar/name/chips.
+        let holeHtml = "";
+        if (!isMe) {
+          const inHand = p.status && p.status !== "waiting" && p.status !== "folded";
+          const backs = (p.hole && p.hole.length) ? p.hole : (inHand ? [{faceUp:false},{faceUp:false}] : []);
+          holeHtml = backs.map(c => pokerCardHTML(c, true)).join("");
+        }
+        const actionBadge = p.isTurn ? '<div class="poker-action-badge">ACTION</div>' : "";
+        const handLabel = (isMe && p._liveHand) ? `<div class="poker-seat-hand">${escapeHtml(p._liveHand)}</div>` : (p.handName ? `<div class="poker-seat-hand">${escapeHtml(p.handName)}</div>` : "");
+        seat.innerHTML = `${actionBadge}${avatarHTML(p)}
           <div class="poker-seat-cards">${holeHtml}</div>
-          <div class="poker-seat-name">${escapeHtml(p.username || "?")}${p.id === myId ? " (YOU)" : ""}${badges.join("")}</div>
+          <div class="poker-seat-name">${escapeHtml(p.username || "?")}${isMe ? " (YOU)" : ""}${p.isBot ? " 🤖" : ""}${badges.join("")}</div>
           <div class="poker-seat-chips">$${Number(p.chips || 0).toLocaleString()}</div>
-          <div class="poker-seat-bet">${p.bet ? ("BET $" + Number(p.bet).toLocaleString()) : ""}</div>
-          <div class="poker-seat-status">${escapeHtml(p.status || "")}${p.handName ? " • " + escapeHtml(p.handName) : ""}</div>`;
+          <div class="poker-seat-bet">${p.bet ? ("$" + Number(p.bet).toLocaleString()) : ""}</div>
+          ${handLabel}`;
         seats.appendChild(seat);
       } else {
         const empty = el("div", "poker-seat-slot empty");
@@ -1941,16 +2159,35 @@ function renderPokerState(state){
     }
   }
 
-  // My hole cards (large)
+  // My hole cards — large, above the player seat (Gambit-style), highlighted if in best hand
   const hole = $("#poker-hole");
-  if(hole && me){
-    hole.innerHTML = (me.hole||[]).map(c=>pokerCardHTML(c)).join("") || "";
+  if (hole) {
+    const myHole = (me && me.hole) ? me.hole : [];
+    const hlKeys = liveHand ? liveHand.highlightKeys : null;
+    const hKey = myHole.map(c => (c.rank||"")+(c.suit||"")+(c.faceUp===false?"x":"")).join("|") + "|" + (liveHand ? liveHand.name : "");
+    if (hole.dataset.holeKey !== hKey) {
+      hole.dataset.holeKey = hKey;
+      if (myHole.length) {
+        hole.classList.remove("hidden");
+        hole.innerHTML = myHole.map(c => {
+          const key = (c.rank||"")+(c.suit||"");
+          return pokerCardHTML(c, false, hlKeys && hlKeys.has(key));
+        }).join("");
+      } else {
+        hole.classList.add("hidden");
+        hole.innerHTML = "";
+      }
+    }
   }
 
-  // Action buttons
+  // Action buttons — primary mobile trio is Fold / Check / Call;
+  // Bet or Raise appears next to Call only when it is your turn and legal.
   const isMyTurn = state.activePlayerId === myId && ["PREFLOP","FLOP","TURN","RIVER"].includes(state.phase);
   const toCall = Math.max(0, Number(state.currentBet||0) - Number(me?.bet||0));
   const chips = Number(me?.chips||0);
+  const canBet = isMyTurn && toCall===0 && chips>0;
+  const canRaise = isMyTurn && toCall>0 && chips>toCall;
+  const canAllin = isMyTurn && chips>0;
   const setBtn = (id, enabled, label) => {
     const b = $(id); if(!b) return;
     b.disabled = !enabled;
@@ -1959,18 +2196,48 @@ function renderPokerState(state){
   setBtn("#poker-fold", isMyTurn && me && me.status!=="folded" && me.status!=="allin", "FOLD");
   setBtn("#poker-check", isMyTurn && toCall===0 && me?.status!=="allin", "CHECK");
   setBtn("#poker-call", isMyTurn && toCall>0 && chips>0, toCall>0 ? `CALL $${toCall.toLocaleString()}` : "CALL");
-  setBtn("#poker-bet", isMyTurn && toCall===0 && chips>0, "BET");
-  setBtn("#poker-raise", isMyTurn && toCall>0 && chips>toCall, "RAISE");
-  setBtn("#poker-allin", isMyTurn && chips>0, "ALL-IN");
+  setBtn("#poker-bet", canBet, "BET");
+  setBtn("#poker-raise", canRaise, "RAISE");
+  setBtn("#poker-allin", canAllin, "ALL-IN");
 
-  // Host start button
+  // Mobile: only surface Bet / Raise / All-In when they are actually available
+  // so the main row stays Fold · Check/Call · (Bet/Raise when your turn).
+  $("#poker-bet")?.classList.toggle("poker-act-secondary", true);
+  $("#poker-raise")?.classList.toggle("poker-act-secondary", true);
+  $("#poker-allin")?.classList.toggle("poker-act-secondary", true);
+  $("#poker-bet")?.classList.toggle("hidden", !canBet);
+  $("#poker-raise")?.classList.toggle("hidden", !canRaise);
+  // Keep All-In visible whenever it is legal (common quick action), hide otherwise
+  $("#poker-allin")?.classList.toggle("hidden", !canAllin);
+
+  // Host start button + pre-game chrome
   const startBtn = $("#btn-poker-start-hand");
   const msgEl = $("#poker-table-msg");
   const isHost = !!(me?.isHost || state.hostId===myId);
   const canPhase = state.phase==="WAITING" || state.phase==="HAND_OVER" || !state.phase;
+  const isActiveHand = ["PREFLOP","FLOP","TURN","RIVER","SHOWDOWN"].includes(state.phase);
   const seatedCount = (state.players||[]).filter(p => Number(p.chips||0) > 0).length;
+
+  // Buy-in: ONLY when you have 0 chips and no hand is running
+  const buyinBar = $("#poker-buyin-bar");
+  if (buyinBar) {
+    const needsBuyin = !!(me && Number(me.chips || 0) <= 0 && !isSpectator && !isActiveHand && canPhase);
+    buyinBar.classList.toggle("hidden", !needsBuyin);
+    if (!needsBuyin) buyinBar.classList.add("hidden");
+  }
+
+  // Hide bet amount row unless the player just opened it on their turn
+  const betRow = $("#poker-bet-row");
+  if (betRow && !isMyTurn) betRow.classList.add("hidden");
+
+  // Footer: during an active hand hide Start Hand; keep Cash Out / Leave compact
+  const footerEl = document.querySelector("#screen-poker .poker-table-footer");
+  if (footerEl) {
+    footerEl.classList.toggle("poker-footer-ingame", isActiveHand || !canPhase);
+    footerEl.classList.toggle("hidden", false);
+  }
   if(startBtn){
-    startBtn.classList.toggle("hidden", !isHost);
+    startBtn.classList.toggle("hidden", !isHost || isActiveHand || !canPhase);
     startBtn.disabled = !(isHost && canPhase);
     if(isHost && canPhase && seatedCount < 2){
       startBtn.textContent = `START HAND (${seatedCount}/2)`;
@@ -2006,19 +2273,39 @@ function renderPokerState(state){
 function renderPokerHostList(){
   const box=$("#host-list"); if(!box || !pokerState) return;
   box.innerHTML="";
+  const addRow = el("div","host-player host-add-bot-row");
+  const addBtn = el("button","btn menu-primary","+ ADD BOT");
+  addBtn.type = "button";
+  wireButton(addBtn, () => {
+    send({ type: "add_bot" });
+  });
+  addRow.appendChild(addBtn);
+  const hint = el("small","settings-help");
+  hint.textContent = "Bots join as spectators mid-hand and sit when the round ends.";
+  addRow.appendChild(hint);
+  box.appendChild(addRow);
   (pokerState.players||[]).forEach(p=>{
     const row=el("div","host-player");
-    row.appendChild(el("span",null,p.username+(p.id===myId?" (you)":"")));
+    const label = (p.username||"?") + (p.id===myId?" (you)":"") + (p.isBot?" 🤖":"");
+    row.appendChild(el("span",null,label));
     if(p.id===myId || p.isHost) row.appendChild(el("span","host-badge","HOST"));
     else {
       const actions=el("div","host-actions");
-      const transferBtn=el("button","btn secondary kick-btn","MAKE HOST");
-      wireButton(transferBtn,()=>{ if(confirm("Transfer host to "+p.username+"?")){ send({type:"transfer_host",targetId:p.id}); $("#host-overlay").classList.remove("open"); }});
+      if (!p.isBot) {
+        const transferBtn=el("button","btn secondary kick-btn","MAKE HOST");
+        wireButton(transferBtn,()=>{ if(confirm("Transfer host to "+p.username+"?")){ send({type:"transfer_host",targetId:p.id}); $("#host-overlay").classList.remove("open"); }});
+        actions.appendChild(transferBtn);
+      }
       const kickBtn=el("button","kick-btn","KICK");
-      wireButton(kickBtn,()=>{ if(confirm("Kick "+p.username+"?")) send({type:"kick",targetId:p.id}); });
-      actions.appendChild(transferBtn); actions.appendChild(kickBtn);
+      wireButton(kickBtn,()=>{ if(confirm("Remove "+p.username+"?")) send({type:"kick",targetId:p.id}); });
+      actions.appendChild(kickBtn);
       row.appendChild(actions);
     }
+    box.appendChild(row);
+  });
+  (pokerState.spectators||[]).forEach(s=>{
+    const row=el("div","host-player");
+    row.appendChild(el("span",null,(s.username||"?")+(s.isBot?" 🤖":"")+" (spectator)"));
     box.appendChild(row);
   });
 }
@@ -2048,14 +2335,8 @@ function openBlackjackLobby(){
   send({ type: "public_tables", game: "blackjack" });
 }
 
-function appendChat(username,text){
-  if(chatMuted) return;
-  const box=$("#chat-messages"); if(!box) return;
-  const row=el('div','chat-line'); row.innerHTML=`<strong>${escapeHtml(username)}</strong><span>${escapeHtml(text)}</span>`; box.appendChild(row); box.scrollTop=box.scrollHeight;
-}
 function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function escapeAttr(v){return escapeHtml(v);}
-function toggleChat(open){$("#chat-panel").classList.toggle('open',open);$("#btn-chat-open").classList.toggle('hidden',open);if(open) $("#chat-input").focus();}
 
 // ---------------------------------------------------------------------------
 // Settings (dark mode + volume) — persisted locally for convenience
@@ -2606,7 +2887,15 @@ function initJoin() {
   wireButton($("#btn-chat-toggle"), () => toggleChat(false));
   wireButton($("#btn-chat-mute"), () => { chatMuted=!chatMuted; localStorage.setItem('bj_chat_muted',chatMuted?'1':'0'); $("#btn-chat-mute").textContent=chatMuted?'🔇':'🔊'; });
   wireButton($("#btn-chat-send"), () => sendChat());
-  $("#chat-input").addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+  wireButton($("#btn-chat-emoji"), () => {
+    populateEmojiBar();
+    $("#chat-emoji-bar")?.classList.toggle("hidden");
+  });
+  $("#chat-input")?.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+  wireButton($("#poker-help"), () => openProgress("#help-poker-overlay"));
+  wireButton($("#btn-help-poker-close"), () => closeProgress("#help-poker-overlay"));
+  wireButton($("#bj-help"), () => openProgress("#help-bj-overlay"));
+  wireButton($("#btn-help-bj-close"), () => closeProgress("#help-bj-overlay"));
 
   wireButton($("#btn-stats"), () => { renderStats(); openProgress("#stats-overlay"); send({type:"profile", token:authToken}); });
   wireButton($("#btn-rankings"), () => { openProgress("#leaderboard-overlay"); send({type:"leaderboard_playtime",token:authToken}); send({type:"leaderboard",token:authToken}); send({type:"leaderboard"}); });

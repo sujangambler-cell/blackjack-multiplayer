@@ -266,6 +266,7 @@
         <span class="room-chip" id="poker-street">—</span>
       </div>
       <div class="top-actions">
+        <button class="icon-btn" id="poker-help" aria-label="How to play Poker" title="How to play">?</button>
         <button class="icon-btn hidden" id="poker-host" aria-label="Host controls">♛</button>
         <button class="icon-btn table-admin-btn" id="poker-admin" aria-label="Admin controls">ADMIN</button>
         <button class="icon-btn" id="poker-settings" aria-label="Settings">⚙</button>
@@ -319,7 +320,7 @@
         <div class="profile-chip"><div class="chip-avatar" id="table-profile-avatar">?</div><span id="profile-name">PLAYER</span><span class="balance-chip" id="balance-chip">$0</span><button class="refresh-btn" id="btn-refresh-balance" title="Refresh balance">↻</button></div>
         <div class="room-chip" id="room-chip">TABLE</div>
       </div>
-      <div class="top-actions"><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn table-admin-btn" id="btn-admin-table" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
+      <div class="top-actions"><button class="icon-btn" id="bj-help" aria-label="How to play Blackjack" title="How to play">?</button><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn table-admin-btn" id="btn-admin-table" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
     </div>
 
     <div class="spectator-panel hidden" id="spectator-panel">
@@ -381,12 +382,17 @@
     </div>
 
     <div class="chat-panel" id="chat-panel">
-      <div class="chat-head"><span>TABLE CHAT</span><div><button class="chat-close" id="btn-chat-mute">🔊</button><button class="chat-close" id="btn-chat-toggle">×</button></div></div>
+      <div class="chat-head"><span>TABLE CHAT</span><div><button class="chat-close" id="btn-chat-mute" type="button">🔊</button><button class="chat-close" id="btn-chat-toggle" type="button">×</button></div></div>
       <div class="chat-messages" id="chat-messages"></div>
-      <div class="chat-compose"><input id="chat-input" maxlength="180" placeholder="Say something…"><button class="btn" id="btn-chat-send">SEND</button></div>
+      <div class="chat-emoji-bar hidden" id="chat-emoji-bar"></div>
+      <div class="chat-compose">
+        <button type="button" class="chat-emoji-btn" id="btn-chat-emoji" title="Emoji">😀</button>
+        <input id="chat-input" maxlength="280" placeholder="Message… emoji &amp; GIF links ok" autocomplete="off">
+        <button class="btn" id="btn-chat-send" type="button">SEND</button>
+      </div>
     </div>
 
-    <button class="chat-float" id="btn-chat-open">CHAT</button>
+    <button class="chat-float" id="btn-chat-open" type="button">CHAT</button>
     <button class="admin-float hidden" id="btn-admin-float">ADMIN</button>
   </div>
 
@@ -545,6 +551,78 @@
       <div class="claim-icon">💰</div>
       <p>Your balance reached zero. Claim a starter bonus to keep playing.</p>
       <button class="btn" id="btn-claim-100">CLAIM 100</button>
+    </div>
+  </div>
+
+  <!-- ==================== HELP: POKER ==================== -->
+  <div class="overlay" id="help-poker-overlay">
+    <div class="overlay-card help-card">
+      <div class="overlay-title">HOW TO PLAY — POKER</div>
+      <div class="help-body">
+        <h4>Goal</h4>
+        <p>Win chips by making the best 5-card hand or by making everyone else fold.</p>
+        <h4>Flow of a hand</h4>
+        <ol>
+          <li><strong>Preflop</strong> — each player gets 2 hole cards. Betting starts.</li>
+          <li><strong>Flop</strong> — 3 community cards are dealt. Another betting round.</li>
+          <li><strong>Turn</strong> — 1 more community card. Betting again.</li>
+          <li><strong>River</strong> — final community card. Last betting round.</li>
+          <li><strong>Showdown</strong> — best hand wins the pot.</li>
+        </ol>
+        <h4>Actions</h4>
+        <ul>
+          <li><strong>Fold</strong> — give up the hand.</li>
+          <li><strong>Check</strong> — pass when no bet is owed.</li>
+          <li><strong>Call</strong> — match the current bet.</li>
+          <li><strong>Bet / Raise</strong> — put more chips in; others must call or fold.</li>
+          <li><strong>All-In</strong> — bet every chip you have.</li>
+        </ul>
+        <h4>Hand rankings (best → worst)</h4>
+        <ol class="help-hands">
+          <li><strong>Royal Flush</strong> — A K Q J 10, same suit</li>
+          <li><strong>Straight Flush</strong> — five in a row, same suit</li>
+          <li><strong>Four of a Kind</strong> — four cards same rank</li>
+          <li><strong>Full House</strong> — three of a kind + a pair</li>
+          <li><strong>Flush</strong> — five cards, same suit</li>
+          <li><strong>Straight</strong> — five ranks in a row</li>
+          <li><strong>Three of a Kind</strong></li>
+          <li><strong>Two Pair</strong></li>
+          <li><strong>One Pair</strong></li>
+          <li><strong>High Card</strong></li>
+        </ol>
+        <p class="help-note">Joining mid-hand puts you in spectator mode until the round ends, then you are seated automatically if a seat is free.</p>
+      </div>
+      <button class="btn panel-btn" id="btn-help-poker-close">GOT IT</button>
+    </div>
+  </div>
+
+  <!-- ==================== HELP: BLACKJACK ==================== -->
+  <div class="overlay" id="help-bj-overlay">
+    <div class="overlay-card help-card">
+      <div class="overlay-title">HOW TO PLAY — BLACKJACK</div>
+      <div class="help-body">
+        <h4>Goal</h4>
+        <p>Get a hand total closer to 21 than the dealer without going over 21.</p>
+        <h4>Card values</h4>
+        <ul>
+          <li>Number cards = face value</li>
+          <li>J, Q, K = 10</li>
+          <li>Ace = 1 or 11 (whichever helps you)</li>
+        </ul>
+        <h4>Your actions</h4>
+        <ul>
+          <li><strong>Hit</strong> — take another card</li>
+          <li><strong>Stand</strong> — keep your current total</li>
+          <li><strong>Double</strong> — double your bet, take exactly one more card</li>
+          <li><strong>Split</strong> — if you have a pair, split into two hands (when offered)</li>
+        </ul>
+        <h4>Dealer rules</h4>
+        <p>The dealer hits on 16 or less and stands on 17 or more.</p>
+        <h4>Blackjack</h4>
+        <p>Ace + 10-value card on the first two cards pays 3:2 (when the dealer does not also have blackjack).</p>
+        <p class="help-note">If you join while a round is in progress you spectate until the next betting phase, then you can take a seat.</p>
+      </div>
+      <button class="btn panel-btn" id="btn-help-bj-close">GOT IT</button>
     </div>
   </div>
 
