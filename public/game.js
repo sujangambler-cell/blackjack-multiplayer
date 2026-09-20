@@ -1064,8 +1064,10 @@ function connect() {
       renderStore();
       if (msg.store && myProfile) {
         myProfile.cosmetics = myProfile.cosmetics || {};
-        myProfile.cosmetics.theme = msg.store.themes.find(x => x.equipped)?.id || myProfile.cosmetics.theme || "classic";
-        myProfile.cosmetics.chip = msg.store.chips.find(x => x.equipped)?.id || myProfile.cosmetics.chip || "classic";
+        const themes = [...(msg.store.themes || []), ...(msg.store.adminThemes || [])];
+        const chips = [...(msg.store.chips || []), ...(msg.store.adminChips || [])];
+        myProfile.cosmetics.theme = themes.find(x => x.equipped)?.id || myProfile.cosmetics.theme || "classic";
+        myProfile.cosmetics.chip = chips.find(x => x.equipped)?.id || myProfile.cosmetics.chip || "classic";
         myProfile.cosmetics.deck = msg.store.decks?.find(x => x.equipped)?.id || myProfile.cosmetics.deck || "classic";
         myProfile.cosmetics.table = msg.store.tables?.find(x => x.equipped)?.id || myProfile.cosmetics.table || "classic";
         myProfile.cosmetics.ball = msg.store.balls?.find(x => x.equipped)?.id || myProfile.cosmetics.ball || "classic";
@@ -1073,10 +1075,13 @@ function connect() {
         applyGameCosmetics(myProfile.cosmetics);
       }
       if (msg.purchased) { play("win"); centerBanner("ITEM UNLOCKED", "win"); }
+      if (msg.granted) {
+        play("win");
+        centerBanner("ITEM GRANTED: " + String(msg.granted).replace(/_/g, " ").toUpperCase(), "win");
+      }
       if (msg.equipped) {
         play("chip");
         centerBanner("EQUIPPED", "win");
-        // Re-apply from profile payload path as well
         if (myProfile?.cosmetics) {
           applyCosmeticTheme(myProfile.cosmetics.theme);
           applyGameCosmetics(myProfile.cosmetics);
@@ -1399,19 +1404,29 @@ function renderSeats(state, prev) {
   row.innerHTML = "";
   const maxP = Math.max(2, Math.min(10, Number(state.maxPlayers) || 5));
   const seated = (state.players || []).filter(p => p.connected && !p.spectator);
-  // Discord-style: evenly spaced along lower inner arc of the oval
+  // Mobile Mode toggle OR narrow phone viewport — PC desktop layout unchanged
+  const mobileMode =
+    document.documentElement.getAttribute("data-mobile") === "1" ||
+    (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 700px), (max-aspect-ratio: 3/4)").matches);
+  // Evenly spaced along lower arc — mobile seats stay in bottom half of felt
   for (let i = 0; i < maxP; i++) {
     const t = maxP === 1 ? 0.5 : i / (maxP - 1); // 0..1 left → right
-    // Wide bottom arc inside the rail — extra vertical air so seats aren't squashed
-    const x = 14 + t * 72;
-    const y = 66 + Math.sin(t * Math.PI) * 8;
+    let x, y;
+    if (mobileMode) {
+      x = 10 + t * 80;
+      y = 74 + Math.sin(t * Math.PI) * 8; // 74–82% — below dealer
+    } else {
+      x = 14 + t * 72;
+      y = 66 + Math.sin(t * Math.PI) * 8;
+    }
     const p = seated[i];
+    // Keep empty OPEN seats (+ invite) always visible
     const seat = el("div", "seat-slot" + (p ? (p.id === myId ? " me" : "") : " empty") + (p && state.activePlayerId === p.id ? " active-turn" : ""));
     seat.style.left = x + "%";
     seat.style.top = y + "%";
 
     if (p) {
-      // Identity first (like Discord), cards above when dealt
+      // Cards above identity
       const handDiv = el("div", "seat-hand");
       (p.hand || []).forEach((c) => handDiv.appendChild(buildCard(c, true)));
       if ((p.hand || []).length) seat.appendChild(handDiv);
@@ -1428,7 +1443,6 @@ function renderSeats(state, prev) {
         seat.appendChild(el("div", "seat-status " + statusClass, label));
       }
     } else {
-      // Empty seat: dashed + with OPEN under it
       const plus = el("button", "seat-plus", "+");
       plus.title = "Invite a friend";
       wireButton(plus, () => openSeatInvite());
@@ -1572,7 +1586,12 @@ function renderAdminUsers(users, tablePlayers = [], previewActive = false, previ
     season.appendChild(rewardRow);
 
     const itemRow=el("div","admin-control-row");
-    itemRow.innerHTML=`<strong>${escapeHtml(u.username)}</strong><select class="admin-select"><option value="admin_star">ADMIN STAR THEME</option><option value="admin_chip">ADMIN CHIP</option></select><button class="btn secondary">GIVE ITEM</button>`;
+    itemRow.innerHTML=`<strong>${escapeHtml(u.username)}</strong><select class="admin-select">
+      <option value="admin_star">ADMIN STAR THEME</option>
+      <option value="admin_blackout">ADMIN BLACKOUT</option>
+      <option value="founder">FOUNDER THEME</option>
+      <option value="admin_chip">ADMIN CHIP</option>
+    </select><button class="btn secondary">GIVE ITEM</button>`;
     itemRow.querySelector("button").addEventListener("click",()=>send({type:"admin_give_item",targetId:u.id,itemId:itemRow.querySelector("select").value}));
     items.appendChild(itemRow);
   });
@@ -1789,9 +1808,12 @@ function renderAppearance(){
 }
 function renderStore(){
   if(!storeData) return;
+  // Include admin-only items (granted) so they appear in inventory
   const catalog = [
     ...(storeData.themes||[]).map(x=>({...x,category:"theme",categoryLabel:"THEME"})),
+    ...(storeData.adminThemes||[]).map(x=>({...x,category:"theme",categoryLabel:"THEME",adminOnly:true})),
     ...(storeData.chips||[]).map(x=>({...x,category:"chip",categoryLabel:"CHIPS"})),
+    ...(storeData.adminChips||[]).map(x=>({...x,category:"chip",categoryLabel:"CHIPS",adminOnly:true})),
     ...(storeData.decks||[]).map(x=>({...x,category:"deck",categoryLabel:"BLACKJACK"})),
     ...(storeData.tables||[]).map(x=>({...x,category:"table",categoryLabel:"TABLE"})),
     ...(storeData.balls||[]).map(x=>({...x,category:"ball",categoryLabel:"CARD BACKS"}))
@@ -1978,7 +2000,7 @@ function renderPokerTables(){
     const bots = Number(t.bots||0);
     const specs = Number(t.spectators||0);
     const extra = [bots ? `${bots} bot${bots===1?"":"s"}` : null, specs ? `${specs} spectator${specs===1?"":"s"}` : null].filter(Boolean).join(" · ");
-    return `<div class="public-table-row"><div><strong>POKER • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host||"—")} · ${t.players}/${t.maxPlayers} seated · Buy-in $${Number(t.buyIn||1000).toLocaleString()} · ${escapeHtml(t.phase||"WAITING")}${extra ? " · " + extra : ""}</small></div><div class="public-table-actions">${t.canJoin!==false?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}<button class="btn secondary" data-rspec="${t.code}">WATCH</button></div></div>`;
+    return `<div class="public-table-row"><div><strong>POKER • TABLE ${escapeHtml(t.code)}</strong><small>Host: ${escapeHtml(t.host||"—")} · ${t.players}/${t.maxPlayers} seated · ${escapeHtml(t.phase||"WAITING")}${extra ? " · " + extra : ""}</small></div><div class="public-table-actions">${t.canJoin!==false?`<button class="btn" data-rjoin="${t.code}">JOIN</button>`:''}<button class="btn secondary" data-rspec="${t.code}">WATCH</button></div></div>`;
   }).join("") : '<div class="admin-empty">No Poker tables yet. Create one!</div>';
   box.querySelectorAll("[data-rjoin]").forEach(b=>wireButton(b,()=>send({type:"join",token:authToken,room:b.dataset.rjoin,game:"poker"})));
   box.querySelectorAll("[data-rspec]").forEach(b=>wireButton(b,()=>send({type:"join",token:authToken,room:b.dataset.rspec,game:"poker",spectate:true})));
@@ -2093,11 +2115,14 @@ function evalPokerHandLive(hole, community) {
 }
 
 function pokerCardHTML(c, small, highlight){
-  if(!c || c.faceUp===false) return `<div class="playing-card card-back ${small?"small":""}"></div>`;
-  const red = c.suit==="H"||c.suit==="D";
-  const suitSym = {S:"♠",H:"♥",D:"♦",C:"♣"}[c.suit]||c.suit;
+  // Face-down / missing card → permanent card-back (visible until showdown reveal)
+  if (!c || c.faceUp === false || c.faceUp === "false" || (!c.rank && !c.suit)) {
+    return `<div class="playing-card card-back ${small ? "small" : ""}" aria-hidden="true"></div>`;
+  }
+  const red = c.suit === "H" || c.suit === "D";
+  const suitSym = { S: "♠", H: "♥", D: "♦", C: "♣" }[c.suit] || c.suit;
   const hl = highlight ? " poker-card-hl" : "";
-  return `<div class="playing-card ${red?"red":"black"} ${small?"small":""}${hl}"><span class="card-rank">${c.rank}</span><span class="card-suit">${suitSym}</span></div>`;
+  return `<div class="playing-card ${red ? "red" : "black"} ${small ? "small" : ""}${hl}"><span class="card-rank">${c.rank}</span><span class="card-suit">${suitSym}</span></div>`;
 }
 
 
@@ -2133,7 +2158,10 @@ function renderPokerState(state){
   myRoom = state.code || myRoom;
   const me = (state.players||[]).find(p=>p.id===myId);
   $("#poker-profile-name") && ($("#poker-profile-name").textContent = me?.username || loggedUsername || "PLAYER");
-  $("#poker-balance") && ($("#poker-balance").textContent = "$" + Number(me?.money ?? myBalance ?? 0).toLocaleString());
+  // Universal balance: table chips === site money
+  const bal = Number(me?.chips ?? me?.money ?? myBalance ?? 0);
+  $("#poker-balance") && ($("#poker-balance").textContent = "$" + bal.toLocaleString());
+  if (me && me.chips != null) myBalance = Number(me.chips);
   setChipAvatar($("#poker-profile-avatar"), me ? {username: me.username, avatar: me.avatar || myProfile?.avatar, avatarColor: me.avatarColor || me.avatar_color || myProfile?.avatarColor} : myProfile);
   $("#poker-room-chip") && ($("#poker-room-chip").textContent = "POKER " + (state.code||""));
   $("#poker-player-count") && ($("#poker-player-count").textContent = `${(state.seatedCount!=null?state.seatedCount:(state.players||[]).length)}/${state.maxPlayers||6}`);
@@ -2253,19 +2281,21 @@ function renderPokerState(state){
         if (p.isSB) badges.push('<span class="poker-badge sb">SB</span>');
         if (p.isBB) badges.push('<span class="poker-badge bb">BB</span>');
         const isMe = p.id === myId;
-        // Opponents: always show 2 card-backs during an active hand (unless folded).
+        // Opponents: permanent card-backs during a live hand; real cards at showdown/hand-over.
         // Self: large hole cards live in #poker-hole — seat only shows avatar/name/chips.
         let holeHtml = "";
         if (!isMe) {
-          const phaseActive = ["PREFLOP","FLOP","TURN","RIVER","SHOWDOWN"].includes(state.phase);
+          const phaseActive = ["PREFLOP","FLOP","TURN","RIVER","SHOWDOWN","HAND_OVER"].includes(state.phase);
           const folded = p.status === "folded";
           if (phaseActive && !folded) {
-            const backs = (p.hole && p.hole.length >= 2)
+            const cards = (p.hole && p.hole.length)
               ? p.hole
               : [{ faceUp: false }, { faceUp: false }];
-            holeHtml = backs.map(c => pokerCardHTML(c, true)).join("");
-          } else if (p.hole && p.hole.length && !folded) {
-            holeHtml = p.hole.map(c => pokerCardHTML(c, true)).join("");
+            // Ensure at least 2 backs if server sent fewer
+            while (cards.length < 2 && !["SHOWDOWN","HAND_OVER"].includes(state.phase)) {
+              cards.push({ faceUp: false });
+            }
+            holeHtml = cards.map(c => pokerCardHTML(c, true)).join("");
           }
         }
         const actionBadge = p.isTurn ? '<div class="poker-action-badge">ACTION</div>' : "";
@@ -2370,12 +2400,9 @@ function renderPokerState(state){
   const seatedCount = (state.players||[]).filter(p => Number(p.chips||0) > 0).length;
 
   // Buy-in: ONLY when you have 0 chips and no hand is running
+  // Buy-in removed — full balance is always table chips
   const buyinBar = $("#poker-buyin-bar");
-  if (buyinBar) {
-    const needsBuyin = !!(me && Number(me.chips || 0) <= 0 && !isSpectator && !isActiveHand && canPhase);
-    buyinBar.classList.toggle("hidden", !needsBuyin);
-    if (!needsBuyin) buyinBar.classList.add("hidden");
-  }
+  if (buyinBar) buyinBar.classList.add("hidden");
 
   // Hide bet amount row unless the player just opened it on their turn
   const betRow = $("#poker-bet-row");
@@ -2788,9 +2815,25 @@ function initSettings() {
   wireButton($("#btn-settings-menu"), () => { $("#btn-leave-table").classList.add("hidden"); $("#settings-overlay").classList.add("open"); });
   wireButton($("#btn-settings-shop"), () => {
     $("#settings-overlay")?.classList.remove("open");
+    window.storeTab = "inventory";
+    window.storeOwnedOnly = true;
     openProgress("#store-overlay");
     send({ type: "store", token: authToken });
   });
+  // Settings "INVENTORY & EQUIP" header → open store inventory tab
+  const invHead = document.querySelector(".settings-inv-head");
+  if (invHead && !invHead.dataset.storeLink) {
+    invHead.dataset.storeLink = "1";
+    invHead.style.cursor = "pointer";
+    invHead.title = "Open store inventory";
+    invHead.addEventListener("click", () => {
+      $("#settings-overlay")?.classList.remove("open");
+      window.storeTab = "inventory";
+      window.storeOwnedOnly = true;
+      openProgress("#store-overlay");
+      send({ type: "store", token: authToken });
+    });
+  }
   // Refresh inventory whenever settings opens
   const _openSettingsInv = () => { send({ type: "store", token: authToken }); setTimeout(() => { try { renderAppearance(); } catch(e){} }, 120); };
   document.querySelectorAll("#btn-settings, #poker-settings, #btn-settings-menu").forEach(btn => {
@@ -2967,9 +3010,8 @@ function initJoin() {
     if (!authToken) { if (err) err.textContent = "Please log in first."; return; }
     if (!ws || ws.readyState !== WebSocket.OPEN) { if (err) err.textContent = "Not connected. Reconnecting…"; connect(); return; }
     const maxPlayers = parseInt($("#poker-max-players")?.value || "6", 10) || 6;
-    const buyIn = parseInt($("#poker-buyin")?.value || "1000", 10) || 1000;
     if (err) err.textContent = "Creating table…";
-    send({type:"create_public", token:authToken, game:"poker", maxPlayers, buyIn});
+    send({type:"create_public", token:authToken, game:"poker", maxPlayers});
   });
   wireButton($("#btn-poker-spectate"),()=>{const room=($("#poker-join-code")||$("#poker-room-input")||$("#input-poker-room"))?.value?.trim();if(!room){const el=$("#poker-lobby-error");if(el)el.textContent="Enter a code to spectate.";return;}send({type:"join",token:authToken,room,game:"poker",spectate:true});});
   wireButton($("#btn-poker-join"),()=>{
@@ -3034,11 +3076,6 @@ function initJoin() {
     if (!send({type:"poker_start"})) {
       if (msgEl) { msgEl.className = "poker-table-msg error"; msgEl.textContent = "Not connected."; }
     }
-  });
-  wireButton($("#btn-poker-buyin-go"), () => {
-    const amt = Math.floor(Number($("#poker-buyin-amt")?.value || 0));
-    if (amt <= 0) return;
-    send({ type: "poker_buyin", token: authToken, amount: amt });
   });
   wireButton($("#btn-poker-cashout"), () => send({type:"poker_cashout"}));
   wireButton($("#btn-chat-open"), () => toggleChat(true));

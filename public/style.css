@@ -7640,6 +7640,9 @@ html[data-mobile="1"] .mobile-turn-banner {
   }
   #screen-table.active #betting-dock .btn {
     min-height: 42px !important;
+  }
+} /* end mobile media query v2 */
+
 /* Mirror for data-mobile="1" (forced mobile mode on desktop) */
 html[data-mobile="1"] #screen-table.active {
   display: flex !important;
@@ -7978,4 +7981,405 @@ html[data-mobile="1"] .chat-panel,
 }
 .host-add-bot-row .btn {
   width: 100%;
+}
+
+/* ===== Blackjack mobile: dealer stays top, seats stay bottom — no overlap ===== */
+@media (max-width: 700px), (max-aspect-ratio: 3/4) {
+  #screen-table .felt-table {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    padding: 10px 8px 16px !important;
+    min-height: 300px !important;
+  }
+  #screen-table .dealer-area {
+    position: relative !important;
+    z-index: 8 !important;
+    margin-top: 6px !important;
+    margin-bottom: 8px !important;
+    flex: 0 0 auto !important;
+  }
+  #screen-table .dealer-area .hand,
+  #screen-table #dealer-hand {
+    min-height: 70px !important;
+    z-index: 8 !important;
+  }
+  #screen-table .dealer-area .card {
+    width: 48px !important;
+    height: 68px !important;
+    margin: 0 -10px !important;
+  }
+  #screen-table .seats-ring,
+  #screen-table #seats-row {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 5 !important;
+    pointer-events: none !important;
+  }
+  #screen-table .seat-slot {
+    pointer-events: auto !important;
+    transform: translate(-50%, -20%) !important;
+    z-index: 6 !important;
+  }
+  #screen-table .seat-slot.empty {
+    opacity: 0.55;
+  }
+  #screen-table .seat-slot .seat-hand .card {
+    width: 42px !important;
+    height: 60px !important;
+    margin: 0 -8px !important;
+  }
+  #screen-table .seat-slot.me .seat-hand .card {
+    width: 48px !important;
+    height: 68px !important;
+  }
+}
+html[data-mobile="1"] #screen-table .dealer-area {
+  position: relative !important;
+  z-index: 8 !important;
+  margin-top: 4px !important;
+}
+html[data-mobile="1"] #screen-table .seats-ring,
+html[data-mobile="1"] #screen-table #seats-row {
+  z-index: 5 !important;
+}
+html[data-mobile="1"] #screen-table .seat-slot {
+  transform: translate(-50%, -15%) !important;
+  max-width: 88px !important;
+}
+html[data-mobile="1"] #screen-table .seat-slot .seat-hand .card {
+  width: 40px !important;
+  height: 56px !important;
+  margin: 0 -8px !important;
+}
+html[data-mobile="1"] #screen-table .seat-slot.me .seat-hand .card {
+  width: 46px !important;
+  height: 64px !important;
+}
+/* Settings inventory header acts as store shortcut */
+.settings-inv-head {
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 4px 0 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: background 0.15s ease;
+}
+.settings-inv-head:hover {
+  background: rgba(255,255,255,0.08);
+}
+.settings-inv-head::after {
+  content: " → Store inventory";
+  display: block;
+  font-size: 11px;
+  opacity: 0.55;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   BLACKJACK — MOBILE MODE ONLY (data-mobile + phone breakpoint)
+   Centered felt, readable cards, seats inside table, + invites, chat/spec OK
+   Does NOT change desktop PC layout.
+   ========================================================================== */
+
+@media (max-width: 700px), (max-aspect-ratio: 3/4) {
+  #screen-table.active {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    margin: 0 auto !important;
+  }
+  #screen-table.active .top-bar {
+    flex: 0 0 auto !important;
+    z-index: 30 !important;
+  }
+  /* Spectator strip: compact, under top bar, full width */
+  #screen-table.active .spectator-panel {
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    flex: 0 0 auto !important;
+    width: calc(100% - 16px) !important;
+    max-width: 100% !important;
+    margin: 4px 8px !important;
+    max-height: 40px !important;
+    z-index: 25 !important;
+  }
+  /* Table fills middle of screen */
+  #screen-table.active .table-wrap,
+  #screen-table.active #table-wrap {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 4px 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    position: relative !important;
+  }
+  #screen-table.active .felt-table {
+    position: relative !important;
+    width: min(100%, 420px) !important;
+    max-width: 100% !important;
+    height: min(56dvh, 420px) !important;
+    min-height: 300px !important;
+    max-height: 58dvh !important;
+    margin: 0 auto !important;
+    border-radius: 48% / 38% !important;
+    padding: 10px 8px 12px !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+  }
+  /* Dealer — top center of felt, never covered */
+  #screen-table.active .dealer-area {
+    position: relative !important;
+    z-index: 8 !important;
+    margin: 4px auto 0 !important;
+    flex: 0 0 auto !important;
+  }
+  #screen-table.active .dealer-area .seat-label {
+    font-size: 12px !important;
+  }
+  #screen-table.active .dealer-area .hand-value {
+    font-size: 16px !important;
+  }
+  #screen-table.active .dealer-area .hand,
+  #screen-table.active #dealer-hand {
+    min-height: 72px !important;
+  }
+  #screen-table.active .dealer-area .card,
+  #screen-table.active #dealer-hand .card {
+    width: 52px !important;
+    height: 74px !important;
+    margin: 0 -12px !important;
+  }
+  #screen-table.active .table-rules {
+    font-size: 9px !important;
+    padding: 3px 8px !important;
+  }
+  #screen-table.active .shoe {
+    transform: scale(0.75);
+    transform-origin: top right;
+    z-index: 4 !important;
+  }
+  /* Seats ring — absolute over felt, bottom half only via JS % */
+  #screen-table.active .seats-ring,
+  #screen-table.active #seats-row {
+    position: absolute !important;
+    inset: 0 !important;
+    pointer-events: none !important;
+    overflow: visible !important;
+    z-index: 6 !important;
+  }
+  #screen-table.active .seat-slot {
+    position: absolute !important;
+    transform: translate(-50%, -35%) !important;
+    min-width: 64px !important;
+    max-width: 96px !important;
+    pointer-events: auto !important;
+    z-index: 7 !important;
+    gap: 2px !important;
+  }
+  #screen-table.active .seat-slot.empty {
+    opacity: 0.85 !important;
+    display: flex !important;
+  }
+  #screen-table.active .seat-plus {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 18px !important;
+    display: grid !important;
+    place-items: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  #screen-table.active .seat-open-label {
+    font-size: 8px !important;
+    letter-spacing: 0.1em !important;
+    display: block !important;
+  }
+  /* Player cards — readable, stacked, inside seat */
+  #screen-table.active .seat-slot .seat-hand {
+    display: flex !important;
+    justify-content: center !important;
+    margin: 0 0 2px !important;
+  }
+  #screen-table.active .seat-slot .seat-hand .card {
+    width: 44px !important;
+    height: 62px !important;
+    margin: 0 -10px !important;
+  }
+  #screen-table.active .seat-slot.me .seat-hand .card {
+    width: 50px !important;
+    height: 70px !important;
+    margin: 0 -11px !important;
+  }
+  #screen-table.active .seat-slot .seat-hand .card-face {
+    font-size: 12px !important;
+  }
+  #screen-table.active .seat-slot .seat-hand .card-face .pip-big {
+    font-size: 20px !important;
+  }
+  #screen-table.active .seat-slot .seat-avatar {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 12px !important;
+  }
+  #screen-table.active .seat-slot .seat-name {
+    font-size: 10px !important;
+    max-width: 80px !important;
+  }
+  #screen-table.active .seat-slot .seat-money,
+  #screen-table.active .seat-slot .seat-bet,
+  #screen-table.active .seat-slot .seat-value {
+    font-size: 10px !important;
+  }
+  /* Action / bet docks under table */
+  #screen-table.active #betting-dock:not(.hidden),
+  #screen-table.active #action-dock:not(.hidden),
+  #screen-table.active #waiting-dock:not(.hidden) {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    z-index: 40 !important;
+    padding: 10px 12px max(14px, env(safe-area-inset-bottom)) !important;
+  }
+  #screen-table.active #action-dock .btn {
+    min-height: 48px !important;
+    font-size: 14px !important;
+  }
+  /* Chat float — bottom-right, clear of controls */
+  #screen-table.active .chat-float {
+    position: fixed !important;
+    right: 12px !important;
+    bottom: max(72px, calc(env(safe-area-inset-bottom) + 64px)) !important;
+    left: auto !important;
+    top: auto !important;
+    z-index: 60 !important;
+  }
+  #screen-table.active .chat-panel {
+    position: fixed !important;
+    right: 8px !important;
+    left: 8px !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+    max-width: none !important;
+    height: min(50dvh, 360px) !important;
+    z-index: 80 !important;
+  }
+}
+
+/* Same rules when Mobile Mode toggle is on (desktop browser simulating phone) */
+html[data-mobile="1"] #screen-table.active {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  max-width: 430px !important;
+  margin: 0 auto !important;
+}
+html[data-mobile="1"] #screen-table.active .spectator-panel {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  flex: 0 0 auto !important;
+  width: calc(100% - 16px) !important;
+  margin: 4px 8px !important;
+  max-height: 40px !important;
+  z-index: 25 !important;
+}
+html[data-mobile="1"] #screen-table.active .table-wrap,
+html[data-mobile="1"] #screen-table.active #table-wrap {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  padding: 4px 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+html[data-mobile="1"] #screen-table.active .felt-table {
+  position: relative !important;
+  width: min(100%, 400px) !important;
+  height: min(56dvh, 400px) !important;
+  min-height: 300px !important;
+  max-height: 58dvh !important;
+  margin: 0 auto !important;
+  border-radius: 48% / 38% !important;
+  padding: 10px 8px 12px !important;
+  overflow: visible !important;
+}
+html[data-mobile="1"] #screen-table.active .dealer-area {
+  z-index: 8 !important;
+  margin: 4px auto 0 !important;
+}
+html[data-mobile="1"] #screen-table.active .dealer-area .card,
+html[data-mobile="1"] #screen-table.active #dealer-hand .card {
+  width: 52px !important;
+  height: 74px !important;
+  margin: 0 -12px !important;
+}
+html[data-mobile="1"] #screen-table.active .seats-ring,
+html[data-mobile="1"] #screen-table.active #seats-row {
+  position: absolute !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+  z-index: 6 !important;
+}
+html[data-mobile="1"] #screen-table.active .seat-slot {
+  position: absolute !important;
+  transform: translate(-50%, -35%) !important;
+  min-width: 64px !important;
+  max-width: 96px !important;
+  pointer-events: auto !important;
+  z-index: 7 !important;
+}
+html[data-mobile="1"] #screen-table.active .seat-slot.empty {
+  display: flex !important;
+  opacity: 0.85 !important;
+}
+html[data-mobile="1"] #screen-table.active .seat-plus {
+  width: 36px !important;
+  height: 36px !important;
+  font-size: 18px !important;
+  display: grid !important;
+  place-items: center !important;
+  visibility: visible !important;
+}
+html[data-mobile="1"] #screen-table.active .seat-slot .seat-hand .card {
+  width: 44px !important;
+  height: 62px !important;
+  margin: 0 -10px !important;
+}
+html[data-mobile="1"] #screen-table.active .seat-slot.me .seat-hand .card {
+  width: 50px !important;
+  height: 70px !important;
+}
+html[data-mobile="1"] #screen-table.active .chat-float {
+  position: fixed !important;
+  right: 12px !important;
+  bottom: max(72px, calc(env(safe-area-inset-bottom) + 64px)) !important;
+  left: auto !important;
+  z-index: 60 !important;
+}
+html[data-mobile="1"] #screen-table.active .chat-panel {
+  position: fixed !important;
+  left: 8px !important;
+  right: 8px !important;
+  bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  width: auto !important;
+  height: min(50dvh, 360px) !important;
+  z-index: 80 !important;
 }
