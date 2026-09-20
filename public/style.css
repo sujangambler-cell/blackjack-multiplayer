@@ -8692,3 +8692,83 @@ html[data-mobile="1"] .update-log-btn {
 
 /* Keep game screens clipped; other screens can scroll if needed.
    Top-bar itself has high z-index + pointer-events so it stays tappable. */
+
+/* ==========================================================================
+   PWA / REAL PHONE FULL-BLEED FIX
+   The artificial 430px "phone column" is only useful when testing mobile
+   layout on a wide desktop screen. On an actual phone or installed PWA the
+   viewport is already ~390–430px — keeping max-width:430px + centered
+   column + black body creates ugly letterbox bars (the screenshot issue).
+
+   Also reset scale transforms so the GUI scale slider no longer shrinks the
+   whole app into the upper-middle; on real phones we use a content-friendly
+   approach instead.
+   ========================================================================== */
+
+/* Real phone / narrow viewport / installed PWA → full bleed, no letterbox */
+@media (max-width: 500px), (display-mode: standalone), (display-mode: fullscreen) {
+  html, body {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  html[data-mobile="1"] body {
+    background: #050608 !important;
+  }
+
+  html[data-mobile="1"] #app {
+    /* Full-bleed phone: no 430px letterbox frame */
+    max-width: none !important;
+    width: calc(100vw / var(--ui-scale, 1)) !important;
+    height: calc(100dvh / var(--ui-scale, 1)) !important;
+    min-height: calc(100dvh / var(--ui-scale, 1)) !important;
+    margin: 0 !important;
+    left: 50% !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: auto !important;
+    position: fixed !important;
+    transform: translateX(-50%) scale(var(--ui-scale, 1)) !important;
+    transform-origin: top center !important;
+    zoom: 1 !important; /* use transform only — more consistent than zoom */
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-mobile="1"] .screen,
+  html[data-mobile="1"] .screen.active {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  html[data-mobile="1"] .auth-card,
+  html[data-mobile="1"] .auth-card.main-menu-mode,
+  html[data-mobile="1"] .lobby-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    border-radius: 0 !important;
+    min-height: 100dvh !important;
+    margin: 0 !important;
+  }
+
+  /* Keep existing safe-area padding on top-bar etc. */
+  html[data-mobile="1"] .top-bar,
+  html[data-mobile="1"] #screen-table.active .top-bar,
+  html[data-mobile="1"] #screen-poker.active .top-bar {
+    padding-top: max(8px, env(safe-area-inset-top, 0px)) !important;
+  }
+}
+
+/* Desktop with mobile-mode toggle ON (wide window): keep the 430px preview
+   column so designers can still test the phone layout on PC. */
+@media (min-width: 501px) {
+  html[data-mobile="1"] #app {
+    max-width: 430px !important;
+    margin: 0 auto !important;
+  }
+}
