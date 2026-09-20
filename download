@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.env
+accounts.json.tmp
+
+# Runtime/local account data (PostgreSQL is used in production)
+accounts.json
+season_meta.json

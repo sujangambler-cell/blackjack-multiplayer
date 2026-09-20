@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Casino X — Free Multiplayer Blackjack & Poker</title>
+<meta name="description" content="Casino X is a free multiplayer online casino game. Play Blackjack and Poker with friends — no real money, no downloads, just fun." />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Casino X" />
+<link rel="apple-touch-icon" href="/icon-512.svg" />
+<meta name="theme-color" content="#0f1923" />
+
+<!-- Google Search Console Verification -->
+<meta name="google-site-verification" content="JapUYZPjwsDneY521H2QCBb39EGTPF9cxUy9HMbVFbI" />
+
+<!-- Open Graph: social sharing previews (WhatsApp, Discord, Twitter etc) -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://blackjack-multiplayer-u38p.onrender.com/" />
+<meta property="og:title" content="Casino X — Free Multiplayer Blackjack & Poker" />
+<meta property="og:description" content="Play free multiplayer Blackjack and Poker online with friends. No real money, no downloads — just jump in and play." />
+<meta property="og:image" content="https://blackjack-multiplayer-u38p.onrender.com/og-image.svg" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Casino X — Free Multiplayer Blackjack & Poker" />
+<meta name="twitter:description" content="Play free multiplayer Blackjack and Poker online with friends. No real money, no downloads — just jump in and play." />
+<meta name="twitter:image" content="https://blackjack-multiplayer-u38p.onrender.com/og-image.svg" />
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WKNHNXPC42"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-WKNHNXPC42');
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="poker.css" />
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4526604443102763" crossorigin="anonymous"></script>
+</head>
+<body>
+<!-- Google Tag Manager (noscript): replace GTM-XXXXXXX with your real ID -->
+<!-- <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXXXX" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript> -->
+
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+<!-- ================================================================
+     DESKTOP SIDE AD RAILS
+     6 unique AdSense units on the LEFT
+     6 unique AdSense units on the RIGHT
+     These sit outside the 430px Mobile Mode game area.
+     ================================================================ -->
+<div id="mobile-ad-rails" aria-label="Advertisements">
+
+  <!-- ==================== LEFT AD RAIL ==================== -->
+  <aside class="mobile-ad-rail mobile-ad-rail-left" aria-label="Left advertisements">
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="6060361442"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="4765988897"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="6196444463"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="2934032471"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="4574417202"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="1948253867"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+  </aside>
+
+  <!-- ==================== RIGHT AD RAIL ==================== -->
+  <aside class="mobile-ad-rail mobile-ad-rail-right" aria-label="Right advertisements">
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="2935856303"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="7910298033"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="4823653044"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="5228294370"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="2005918013"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <div class="mobile-ad-slot">
+      <ins class="adsbygoogle"
+           style="display:inline-block;width:300px;height:250px"
+           data-ad-client="ca-pub-4526604443102763"
+           data-ad-slot="5921112297"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+  </aside>
+</div>
+
+<div id="app">
+
+  <!-- ==================== ACCOUNT SCREEN ==================== -->
+  <div id="screen-join" class="screen active">
+    <div class="auth-card">
+      <div class="auth-logo">CASINO X</div>
+      <div class="auth-sub">BLACKJACK • POKER • MORE TO COME</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login">LOGIN</button>
+        <button class="auth-tab" id="tab-signup">SIGN UP</button>
+      </div>
+      <div id="auth-form">
+        <div class="field"><label>Username</label><input id="auth-username" type="text" maxlength="16" autocomplete="username" placeholder="Your username"></div>
+        <div class="field"><label>Password</label><input id="auth-password" type="password" minlength="8" autocomplete="current-password" placeholder="Minimum 8 characters"></div>
+        <div class="field hidden" id="confirm-wrap"><label>Confirm password</label><input id="auth-confirm" type="password" minlength="8" autocomplete="new-password" placeholder="Repeat your password"></div>
+        <div class="settings-row auth-mobile-row">
+          <div><label>Mobile mode</label><small class="settings-help">Vertical phone layout — turn on for smaller screens.</small></div>
+          <div class="toggle" id="toggle-mobile-auth"><div class="toggle-knob"></div></div>
+        </div>
+        <div class="auth-error" id="join-error"></div>
+        <button class="btn auth-submit" id="btn-auth">LOGIN</button>
+        <p class="tos-notice hidden" id="tos-notice">
+          By clicking Sign Up, you agree to our
+          <a href="#" id="tos-link" class="tos-link">Terms of Service</a>
+          and confirm you are 18 years of age or older.
+        </p>
+      </div>
+
+  <!-- ==================== TERMS OF SERVICE MODAL ==================== -->
+  <div id="tos-modal" class="tos-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="tos-title">
+    <div class="tos-modal-box">
+      <div class="tos-modal-header">
+        <span class="tos-modal-logo">♠</span>
+        <h2 class="tos-modal-title" id="tos-title">Terms of Service</h2>
+        <button class="tos-close-btn" id="tos-close" aria-label="Close">✕</button>
+      </div>
+      <div class="tos-modal-body">
+
+        <div class="tos-section">
+          <h3>⚠️ Disclaimer — No Real Money</h3>
+          <p>Casino X is a <strong>free-to-play entertainment game only</strong>. No real money is ever wagered, won, or lost on this platform. All in-game chips and virtual currency are purely fictional and have <strong>absolutely no real-world monetary value</strong>. They cannot be exchanged, withdrawn, or redeemed for cash, prizes, or any goods or services. Casino X is not a gambling platform and does not offer real-money gaming of any kind.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>🔞 Age Requirement</h3>
+          <p>You must be <strong>18 years of age or older</strong> to create an account and use Casino X. By signing up, you confirm that you meet this age requirement. Casino X is not intended for use by minors.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>📋 Account Rules</h3>
+          <p>Your account is for personal use only. You agree not to cheat, exploit bugs, use bots or automated tools, harass other players, or attempt to disrupt the game or its servers. Accounts found in violation of these rules may be suspended or permanently banned without notice.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>⚙️ Our Rights</h3>
+          <p>Casino X reserves the right to modify, suspend, or discontinue the game or any of its features at any time without notice. We may also update these Terms of Service at any time. Continued use of the platform after changes constitutes your acceptance of the revised terms.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>🛡️ Limitation of Liability</h3>
+          <p>Casino X is provided "as is" without warranties of any kind. We make no guarantees regarding uptime, availability, or the persistence of account data or virtual currency balances. We are not liable for any loss of virtual items, account access, or any other damages arising from your use of the platform.</p>
+        </div>
+
+        <div class="tos-section">
+          <h3>🔒 Privacy</h3>
+          <p>Casino X only stores your username and a securely hashed password. We do not collect, sell, or share any personal information. No tracking cookies or analytics tools are used on this platform.</p>
+        </div>
+
+      </div>
+      <div class="tos-modal-footer">
+        <button class="btn auth-submit" id="tos-close-btn" onclick="document.getElementById('tos-modal').classList.add('hidden')">Got it — Close</button>
+      </div>
+    </div>
+  </div>
+      <div id="room-form" class="hidden">
+        <div class="casino-home">
+          <button type="button" class="update-log-btn" id="btn-update-log" title="Update Log" aria-label="Update Log">
+            <span class="ul-icon" aria-hidden="true">📓</span>
+            <span class="ul-badge" id="update-log-badge">1</span>
+          </button>
+          <div class="casino-brand">CASINO X</div>
+          <div class="welcome-user" id="welcome-user"></div>
+          <div class="menu-level" id="menu-level">LEVEL 1 • ROOKIE</div>
+          <div class="menu-balance" id="menu-balance">$5,000</div>
+          <div class="menu-xp" id="menu-xp">0 XP</div>
+          <div class="game-picker-title">CHOOSE YOUR GAME</div>
+          <div class="game-picker">
+            <button class="game-card game-card-featured" id="game-blackjack" type="button"><span class="game-card-icon">♠</span><span class="game-card-name">BLACKJACK</span><span class="game-card-desc">MULTIPLAYER TABLES</span><span class="game-card-action">PLAY</span></button>
+            <button class="game-card game-card-poker" id="game-poker" type="button"><span class="game-card-icon">♠</span><span class="game-card-name">POKER</span><span class="game-card-desc">MULTIPLAYER TEXAS HOLD'EM</span><span class="game-card-action">PLAY</span></button>
+            <button class="game-card game-card-disabled" id="game-coming-soon" type="button" disabled><span class="game-card-icon">✦</span><span class="game-card-name">COMING SOON</span><span class="game-card-desc">THE NEXT TABLE</span><span class="game-card-action">LOCKED</span></button>
+          </div>
+          <div class="live-presence" id="live-presence" title="Players online right now">
+            <div class="presence-glow"></div>
+            <div class="presence-row"><span class="presence-dot"></span><strong class="presence-count">0</strong><span>online</span></div>
+            <div class="presence-row sub"><strong>0</strong><span>in tables</span></div>
+          </div>
+          <div class="home-tools">
+            <button class="btn secondary" id="btn-profile">PROFILE</button>
+            <button class="btn secondary" id="btn-store">STORE</button>
+            <button class="btn secondary" id="btn-season">SEASON 2</button>
+            <button class="btn secondary" id="btn-friends">FRIENDS</button>
+            <button class="btn secondary" id="btn-rankings">HIGH ROLLERS</button>
+            <button class="btn secondary" id="btn-daily-home">DAILY</button>
+          </div>
+          <div class="home-footer"><button class="icon-btn menu-settings" id="btn-settings-menu" type="button" aria-label="Settings" title="Settings">⚙</button><button class="btn ghost-btn" id="btn-logout">LOG OUT</button></div>
+          <div class="hidden" aria-hidden="true"><button id="btn-play"></button><button id="btn-stats"></button><button id="btn-achievements"></button><button id="btn-daily"></button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TABLE LOBBY SCREEN ==================== -->
+  <div id="screen-lobby" class="screen">
+    <div class="auth-card lobby-card">
+      <div class="main-menu-title">BLACKJACK</div>
+      <div class="auth-sub">JOIN A TABLE</div>
+      <div class="lobby-divider"><span>PUBLIC TABLES</span><i></i></div>
+      <div id="public-table-list" class="public-table-list"></div>
+      <div class="lobby-or"><span>OR</span></div>
+      <div class="field compact-field"><label>PRIVATE TABLE CODE</label><input id="input-room" type="text" maxlength="12" placeholder="Enter a table code" autocomplete="off"></div>
+      <div class="auth-error" id="room-error"></div>
+      <div class="field compact-field" style="margin-top:8px">
+        <label>TABLE SIZE (PLAYERS)</label>
+        <select id="bj-max-players" class="table-size-select">
+          <option value="2">2 Players</option>
+          <option value="3">3 Players</option>
+          <option value="4">4 Players</option>
+          <option value="5" selected>5 Players</option>
+          <option value="6">6 Players</option>
+          <option value="7">7 Players</option>
+          <option value="8">8 Players</option>
+          <option value="9">9 Players</option>
+          <option value="10">10 Players</option>
+        </select>
+      </div>
+      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-create-public">CREATE PUBLIC TABLE</button><button class="btn secondary auth-submit" id="btn-join-table">JOIN PRIVATE TABLE</button><button class="btn secondary auth-submit" id="btn-spectate-table">SPECTATE</button></div>
+      <button class="btn secondary auth-submit" id="btn-back-menu">BACK TO CASINO</button>
+    </div>
+  </div>
+
+  
+  <!-- ==================== POKER LOBBY ==================== -->
+  <div id="screen-poker-lobby" class="screen">
+    <div class="auth-card lobby-card poker-lobby-card">
+      <div class="poker-mark">♠</div>
+      <div class="main-menu-title">POKER</div>
+      <div class="auth-sub">MULTIPLAYER TEXAS HOLD'EM</div>
+      <div id="poker-table-list" class="public-table-list"></div>
+      <div class="field compact-field"><label>PRIVATE TABLE CODE</label><input id="poker-room" maxlength="12" placeholder="Enter a table code" autocomplete="off"></div>
+      <div class="auth-error" id="poker-room-error"></div>
+      <div class="field compact-field" style="margin-top:8px">
+        <label>TABLE SIZE (PLAYERS)</label>
+        <select id="poker-max-players" class="table-size-select">
+          <option value="2">2 Players</option>
+          <option value="3">3 Players</option>
+          <option value="4">4 Players</option>
+          <option value="5">5 Players</option>
+          <option value="6" selected>6 Players</option>
+        </select>
+      </div>
+      <p class="muted-note" style="margin-top:8px;font-size:12px;opacity:0.75">Your full chip balance is used at the table — no separate buy-in.</p>
+      <div class="lobby-actions">
+        <button class="btn auth-submit menu-primary" id="btn-poker-create">CREATE PUBLIC TABLE</button>
+        <button class="btn secondary auth-submit" id="btn-poker-join">JOIN PRIVATE TABLE</button><button class="btn secondary auth-submit" id="btn-poker-spectate">SPECTATE</button>
+      </div>
+      <button class="btn secondary auth-submit" id="btn-poker-back">BACK TO CASINO</button>
+    </div>
+  </div>
+
+  <!-- ==================== POKER TABLE ==================== -->
+  <div id="screen-poker" class="screen">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="profile-chip"><div class="chip-avatar" id="poker-profile-avatar">?</div><span id="poker-profile-name">PLAYER</span><span class="balance-chip" id="poker-balance">$0</span></div>
+        <div class="room-chip" id="poker-room-chip">POKER</div>
+        <span class="room-chip" id="poker-player-count">0/6</span>
+        <span class="room-chip" id="poker-status">WAITING</span>
+        <span class="room-chip" id="poker-street">—</span>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="poker-help" aria-label="How to play Poker" title="How to play">?</button>
+        <button class="icon-btn hidden" id="poker-host" aria-label="Host controls">♛</button>
+        <button class="icon-btn table-admin-btn" id="poker-admin" aria-label="Admin controls">ADMIN</button>
+        <button class="icon-btn" id="poker-settings" aria-label="Settings">⚙</button>
+      </div>
+    </div>
+    <div class="spectator-panel hidden" id="poker-spectator-panel">
+      <div class="spec-title">SPECTATORS</div>
+      <div class="spec-list" id="poker-spectator-list"></div>
+      <button class="btn secondary spec-sit hidden" id="btn-poker-sit-down">TAKE SEAT</button>
+    </div>
+    <div class="poker-table-shell">
+      <div class="poker-felt" id="poker-felt">
+        <div class="poker-winners" id="poker-winners"></div>
+        <div class="poker-community" id="poker-community"></div>
+        <div class="poker-pot-area" id="poker-pot-area">
+          <div class="poker-chip-pile" id="poker-chip-pile" aria-hidden="true"></div>
+          <div class="poker-pot-display" id="poker-pot">POT $0</div>
+        </div>
+        <div class="poker-hole-row hidden" id="poker-hole"></div>
+        <div class="poker-hole-hand hidden" id="poker-hole-hand"></div>
+        <!-- Seats live inside the felt so the table itself owns the seating layout. -->
+        <div class="poker-seats-row" id="poker-seats"></div>
+      </div>
+      <div class="poker-actions" id="poker-actions">
+        <button class="btn poker-act" id="poker-fold" disabled>FOLD</button>
+        <button class="btn poker-act" id="poker-check" disabled>CHECK</button>
+        <button class="btn poker-act" id="poker-call" disabled>CALL</button>
+        <button class="btn poker-act" id="poker-bet" disabled>BET</button>
+        <button class="btn poker-act" id="poker-raise" disabled>RAISE</button>
+        <button class="btn poker-act allin" id="poker-allin" disabled>ALL-IN</button>
+      </div>
+      <div class="poker-bet-input hidden" id="poker-bet-row">
+        <input type="number" id="poker-bet-amount" min="0" step="25" placeholder="Amount">
+        <button class="btn" id="poker-bet-confirm">CONFIRM</button>
+        <button class="btn secondary" id="poker-bet-cancel">CANCEL</button>
+      </div>
+      <div class="poker-table-msg" id="poker-table-msg"></div>
+      <div class="poker-buyin-bar hidden" id="poker-buyin-bar"></div>
+      <div class="poker-table-footer">
+        <button class="btn menu-primary" id="btn-poker-start-hand">START HAND</button>
+        <button class="btn secondary" id="btn-poker-cashout">SIT OUT</button>
+        <button class="btn secondary" id="btn-poker-leave">LEAVE TABLE</button>
+      </div>
+    </div>
+  </div>
+
+<!-- ==================== TABLE SCREEN ==================== -->
+  <div id="screen-table" class="screen">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="profile-chip"><div class="chip-avatar" id="table-profile-avatar">?</div><span id="profile-name">PLAYER</span><span class="balance-chip" id="balance-chip">$0</span><button class="refresh-btn" id="btn-refresh-balance" title="Refresh balance">↻</button></div>
+        <div class="room-chip" id="room-chip">TABLE</div>
+      </div>
+      <div class="top-actions"><button class="icon-btn" id="bj-help" aria-label="How to play Blackjack" title="How to play">?</button><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn table-admin-btn" id="btn-admin-table" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
+    </div>
+
+    <div class="spectator-panel hidden" id="spectator-panel">
+      <div class="spec-title">SPECTATORS</div>
+      <div class="spec-list" id="spectator-list"></div>
+      <button class="btn secondary spec-sit hidden" id="btn-sit-down">TAKE SEAT</button>
+    </div>
+    <div class="table-wrap" id="table-wrap">
+      <canvas id="fx-canvas"></canvas>
+      <div id="flash"></div>
+
+      <div class="felt-table" id="felt-table">
+        <div class="table-rules">BLACKJACK PAYS 3:2 &nbsp;•&nbsp; DEALER STANDS ON 17</div>
+
+        <div class="shoe" id="shoe">
+          <div class="card-back"></div>
+          <div class="card-back"></div>
+          <div class="card-back"></div>
+          <div class="shoe-label">SHOE</div>
+        </div>
+
+        <div class="dealer-area">
+          <div class="seat-label">DEALER</div>
+          <div class="hand-value" id="dealer-value"></div>
+          <div class="hand" id="dealer-hand"></div>
+        </div>
+
+        <div class="seats-ring" id="seats-row"></div>
+      </div>
+
+      <div id="turn-banner-slot"></div>
+    </div>
+
+    <!-- Betting controls -->
+    <div class="control-dock" id="betting-dock">
+      <div class="bet-hint" id="bet-hint">Tap a chip to build your bet</div>
+      <div class="chip-row" id="chip-row"></div>
+      <div class="bet-row">
+        <button class="btn panel-btn" id="btn-clear">CLEAR</button>
+        <div class="bet-amount" id="bet-amount">$0</div>
+        <button class="btn secondary" id="btn-allin">ALL IN</button>
+      </div>
+      <button class="btn good" id="btn-ready">READY</button>
+    </div>
+
+    <!-- Action controls (hit/stand/double) -->
+    <div class="control-dock hidden" id="action-dock">
+      <div class="action-row">
+        <button class="btn" id="btn-hit">HIT</button>
+        <button class="btn good" id="btn-stand">STAND</button>
+        <button class="btn secondary" id="btn-double">DOUBLE</button>
+        <button class="btn" id="btn-split" disabled>SPLIT</button>
+      </div>
+    </div>
+
+    <!-- Waiting / spectating note -->
+    <div class="control-dock hidden" id="waiting-dock">
+      <div class="waiting-note" id="waiting-note">Waiting…</div>
+    </div>
+
+    <div class="chat-panel" id="chat-panel">
+      <div class="chat-head"><span>TABLE CHAT</span><div><button class="chat-close" id="btn-chat-mute" type="button">🔊</button><button class="chat-close" id="btn-chat-toggle" type="button">×</button></div></div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-emoji-bar hidden" id="chat-emoji-bar"></div>
+      <div class="chat-compose">
+        <button type="button" class="chat-emoji-btn" id="btn-chat-emoji" title="Emoji">😀</button>
+        <input id="chat-input" maxlength="280" placeholder="Message… emoji &amp; GIF links ok" autocomplete="off">
+        <button class="btn" id="btn-chat-send" type="button">SEND</button>
+      </div>
+    </div>
+
+    <button class="chat-float" id="btn-chat-open" type="button">CHAT</button>
+    <button class="admin-float hidden" id="btn-admin-float">ADMIN</button>
+  </div>
+
+  <div class="overlay" id="profile-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">PLAYER PROFILE</div>
+      <div class="profile-hero" id="profile-hero"></div>
+      <div class="section-mini-title">AVATAR</div>
+      <div class="avatar-editor">
+        <div class="avatar-preview" id="avatar-preview">?</div>
+        <div class="avatar-presets" id="avatar-presets"></div>
+        <label class="avatar-upload-btn btn secondary">
+          UPLOAD IMAGE
+          <input type="file" id="avatar-upload" accept="image/*" hidden />
+        </label>
+        <button class="btn secondary" id="btn-avatar-reset" type="button">USE INITIAL</button>
+      </div>
+      <div class="profile-stats-grid" id="profile-stats-grid"></div>
+      <div class="section-mini-title">FRIENDS</div>
+      <div id="profile-friends" class="friend-list"></div>
+      <button class="btn panel-btn" id="btn-profile-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="friends-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">FRIENDS</div>
+      <div class="friend-add"><input id="friend-username" maxlength="16" placeholder="Username"><button class="btn" id="btn-add-friend">ADD</button></div>
+      <div class="auth-error" id="friends-error"></div>
+      <div class="friends-section-title">REQUESTS</div><div id="friends-requests" class="friends-list"></div><div class="friends-section-title">FRIENDS</div><div id="friends-list" class="friend-list"></div>
+      <button class="btn panel-btn" id="btn-friends-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== PROGRESS OVERLAYS ==================== -->
+  <div class="overlay" id="stats-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">PLAYER STATS</div>
+      <div class="progress-hero" id="stats-hero"></div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <button class="btn panel-btn" id="btn-stats-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="leaderboard-overlay">
+    <div class="overlay-card progress-card leaderboard-card">
+      <div class="overlay-title">HIGH ROLLERS</div>
+      <div class="auth-sub" style="margin-bottom:10px">RICHEST PLAYERS • UPDATES EVERY 20 MIN</div>
+      <div class="rank-tabs" id="rank-tabs">
+        <button class="rank-tab active" data-rank="balance">BALANCE</button>
+        <button class="rank-tab" data-rank="wins">WINS</button>
+        <button class="rank-tab" data-rank="blackjacks">BLACKJACKS</button>
+        <button class="rank-tab" data-rank="winRate">WIN RATE</button>
+        <button class="rank-tab" data-rank="streak">STREAK</button>
+        <button class="rank-tab" data-rank="games">GAMES</button>
+      </div>
+      <div id="leaderboard-list" class="leaderboard-list"></div>
+      <div class="store-section-title" style="margin-top:14px">MOST TIME PLAYED</div>
+      <div id="playtime-board" class="playtime-board"></div>
+      <button class="btn panel-btn" id="btn-rankings-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="achievements-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">ACHIEVEMENTS</div>
+      <div id="achievement-list" class="achievement-list"></div>
+      <button class="btn panel-btn" id="btn-achievements-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="daily-overlay">
+    <div class="overlay-card progress-card">
+      <div class="overlay-title">DAILY HUB</div>
+      <div class="daily-reward-box" id="daily-reward-box"></div>
+      <div class="section-mini-title">TODAY'S CHALLENGES</div>
+      <div id="challenge-list" class="challenge-list"></div>
+      <button class="btn panel-btn" id="btn-daily-close">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="store-overlay" aria-hidden="true">
+    <div class="overlay-card progress-card store-card store-redesign">
+      <header class="store-header">
+        <div>
+          <span class="store-kicker">CASINO X • HOUSE COLLECTION</span>
+          <h2>THE STORE</h2>
+          <p>Own it forever. Equip it everywhere it belongs.</p>
+        </div>
+        <div class="store-wallet">
+          <span>YOUR CHIPS</span>
+          <strong id="store-balance">$0</strong>
+        </div>
+      </header>
+      <nav class="store-tabs" aria-label="Store categories">
+        <button class="store-tab active" data-store-tab="all">ALL</button>
+        <button class="store-tab" data-store-tab="theme">THEMES</button>
+        <button class="store-tab" data-store-tab="chip">CHIPS</button>
+        <button class="store-tab" data-store-tab="deck">BLACKJACK</button>
+        <button class="store-tab" data-store-tab="table">TABLES</button>
+        <button class="store-tab" data-store-tab="ball">CARD BACKS</button>
+        <button class="store-tab" data-store-tab="inventory">INVENTORY</button>
+      </nav>
+      <div class="store-toolbar">
+        <div>
+          <strong id="store-results-title">HOUSE COLLECTION</strong>
+          <small id="store-results-count">0 ITEMS</small>
+        </div>
+        <button class="store-owned-toggle" id="store-owned-toggle" type="button" aria-pressed="false">SHOW OWNED ONLY</button>
+      </div>
+      <div id="store-catalog" class="store-catalog" aria-live="polite"></div>
+      <div class="store-empty hidden" id="store-empty">
+        <strong>NOTHING HERE YET</strong>
+        <span>Try another category.</span>
+      </div>
+      <footer class="store-footer">
+        <div class="store-footer-note"><span>✦</span><span>Seasonal rewards stay permanently in your collection after you claim them.</span></div>
+        <button class="btn panel-btn store-close-bottom" id="btn-store-close">CLOSE STORE</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="overlay" id="season-overlay">
+    <div class="overlay-card progress-card season-card season-crimson-pass">
+      <div class="season-art season-art-crimson">
+        <div class="season-art-ornament" aria-hidden="true"></div>
+        <div class="season-art-copy">
+          <span class="season-eyebrow">SEASON 2 • RED CARPET</span>
+          <strong>CRIMSON ROYALE</strong>
+          <small>DRESS CODE ENFORCED</small>
+        </div>
+        <div class="season-countdown">
+          <span>SEASON ENDS IN</span>
+          <strong id="season-countdown">21D 00H 00M</strong>
+          <small id="season-season-status">ACTIVE</small>
+        </div>
+      </div>
+      <div class="season-pass-rail">
+        <div class="season-pass-label">SEASON PASS</div>
+        <div class="season-summary">
+          <div><span>SEASONAL XP</span><strong id="season-xp">0 XP</strong></div>
+          <div><span>THEME</span><strong>CRIMSON</strong></div>
+          <div><span>REWARDS</span><strong>10 TIERS</strong></div>
+        </div>
+        <div class="season-progress"><div id="season-progress-fill"></div></div>
+      </div>
+      <div id="season-tier-list" class="season-tier-list"></div>
+      <button class="btn panel-btn" id="btn-season-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== CLAIM OVERLAY ==================== -->
+  <div class="overlay" id="claim-overlay">
+    <div class="overlay-card claim-card">
+      <div class="overlay-title">OUT OF FUNDS</div>
+      <div class="claim-icon">💰</div>
+      <p>Your balance reached zero. Claim a starter bonus to keep playing.</p>
+      <button class="btn" id="btn-claim-100">CLAIM 100</button>
+    </div>
+  </div>
+
+  <!-- ==================== HELP: POKER ==================== -->
+  <div class="overlay" id="help-poker-overlay">
+    <div class="overlay-card help-card">
+      <div class="overlay-title">HOW TO PLAY — POKER</div>
+      <div class="help-body">
+        <h4>Goal</h4>
+        <p>Win chips by making the best 5-card hand or by making everyone else fold.</p>
+        <h4>Flow of a hand</h4>
+        <ol>
+          <li><strong>Preflop</strong> — each player gets 2 hole cards. Betting starts.</li>
+          <li><strong>Flop</strong> — 3 community cards are dealt. Another betting round.</li>
+          <li><strong>Turn</strong> — 1 more community card. Betting again.</li>
+          <li><strong>River</strong> — final community card. Last betting round.</li>
+          <li><strong>Showdown</strong> — best hand wins the pot.</li>
+        </ol>
+        <h4>Actions</h4>
+        <ul>
+          <li><strong>Fold</strong> — give up the hand.</li>
+          <li><strong>Check</strong> — pass when no bet is owed.</li>
+          <li><strong>Call</strong> — match the current bet.</li>
+          <li><strong>Bet / Raise</strong> — put more chips in; others must call or fold.</li>
+          <li><strong>All-In</strong> — bet every chip you have.</li>
+        </ul>
+        <h4>Hand rankings (best → worst)</h4>
+        <ol class="help-hands">
+          <li><strong>Royal Flush</strong> — A K Q J 10, same suit</li>
+          <li><strong>Straight Flush</strong> — five in a row, same suit</li>
+          <li><strong>Four of a Kind</strong> — four cards same rank</li>
+          <li><strong>Full House</strong> — three of a kind + a pair</li>
+          <li><strong>Flush</strong> — five cards, same suit</li>
+          <li><strong>Straight</strong> — five ranks in a row</li>
+          <li><strong>Three of a Kind</strong></li>
+          <li><strong>Two Pair</strong></li>
+          <li><strong>One Pair</strong></li>
+          <li><strong>High Card</strong></li>
+        </ol>
+        <p class="help-note">Joining mid-hand puts you in spectator mode until the round ends, then you are seated automatically if a seat is free.</p>
+      </div>
+      <button class="btn panel-btn" id="btn-help-poker-close">GOT IT</button>
+    </div>
+  </div>
+
+  <!-- ==================== HELP: BLACKJACK ==================== -->
+  <div class="overlay" id="help-bj-overlay">
+    <div class="overlay-card help-card">
+      <div class="overlay-title">HOW TO PLAY — BLACKJACK</div>
+      <div class="help-body">
+        <h4>Goal</h4>
+        <p>Get a hand total closer to 21 than the dealer without going over 21.</p>
+        <h4>Card values</h4>
+        <ul>
+          <li>Number cards = face value</li>
+          <li>J, Q, K = 10</li>
+          <li>Ace = 1 or 11 (whichever helps you)</li>
+        </ul>
+        <h4>Your actions</h4>
+        <ul>
+          <li><strong>Hit</strong> — take another card</li>
+          <li><strong>Stand</strong> — keep your current total</li>
+          <li><strong>Double</strong> — double your bet, take exactly one more card</li>
+          <li><strong>Split</strong> — if you have a pair, split into two hands (when offered)</li>
+        </ul>
+        <h4>Dealer rules</h4>
+        <p>The dealer hits on 16 or less and stands on 17 or more.</p>
+        <h4>Blackjack</h4>
+        <p>Ace + 10-value card on the first two cards pays 3:2 (when the dealer does not also have blackjack).</p>
+        <p class="help-note">If you join while a round is in progress you spectate until the next betting phase, then you can take a seat.</p>
+      </div>
+      <button class="btn panel-btn" id="btn-help-bj-close">GOT IT</button>
+    </div>
+  </div>
+
+  <!-- ==================== HOST OVERLAY ==================== -->
+  <div class="overlay" id="host-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title">HOST CONTROLS</div>
+      <div class="settings-row">
+        <div><label>Double Cash</label><small class="settings-help">All cash rewards at this table are doubled while active. Visible to all players.</small></div>
+        <div class="toggle" id="toggle-double-cash"><div class="toggle-knob"></div></div>
+      </div>
+      <div id="host-list" class="host-list"></div>
+      <button class="btn panel-btn" id="btn-host-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== ADMIN OVERLAY ==================== -->
+  <div class="overlay" id="admin-overlay">
+    <div class="overlay-card admin-card">
+      <div class="overlay-title">ADMIN PANEL</div>
+      <div id="admin-login-box">
+        <div class="field"><label>Admin password</label><input id="admin-password" type="password" placeholder="Password"></div>
+        <div class="auth-error" id="admin-error"></div>
+        <button class="btn" id="btn-admin-login">ENTER ADMIN</button>
+      </div>
+      <div id="admin-dashboard" class="hidden">
+        <div class="admin-actions"><button class="btn secondary" id="btn-admin-refresh">REFRESH</button><button class="btn secondary" id="admin-preview-toggle">DEALER PREVIEW</button></div>
+        <section class="admin-section"><h3>ECONOMY</h3><div id="admin-economy"></div></section>
+        <section class="admin-section"><h3>PLAYER CONTROLS</h3><div id="admin-users"></div></section>
+        <section class="admin-section"><h3>FUN TABLE MODIFIERS</h3>
+          <div class="admin-fun-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <button class="btn secondary" id="admin-fun-double">TOGGLE 2× CASH</button>
+            <button class="btn secondary" id="admin-fun-rain">RAIN +$500 ALL</button>
+            <button class="btn secondary" id="admin-fun-xp">+100 SEASON XP ALL</button>
+            <button class="btn secondary" id="admin-fun-refill">REFILL SHOE</button>
+            <button class="btn secondary" id="admin-fun-chaos">CHAOS BET WINDOW</button>
+            <button class="btn secondary" id="admin-fun-force0">FORCE NEXT 0</button>
+            <button class="btn secondary" id="admin-fun-force-red">BIAS RED</button>
+            <button class="btn secondary" id="admin-fun-clear-luck">CLEAR LUCK</button>
+          </div>
+          <small class="settings-help" style="display:block;margin-top:8px;opacity:.65">Affects the table you are in. Players see banners when modifiers fire.</small>
+        </section>
+        <section class="admin-section"><h3>SEASON</h3><div id="admin-season-controls"></div></section>
+        <section class="admin-section"><h3>ADMIN ITEMS</h3><div id="admin-item-controls"></div></section>
+        <div id="admin-preview"></div>
+      </div>
+      <button class="btn panel-btn" id="btn-admin-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== APPEARANCE OVERLAY ==================== -->
+  <div class="overlay" id="appearance-overlay">
+    <div class="overlay-card appearance-card">
+      <div class="overlay-title">INVENTORY &amp; EQUIP</div>
+      <div class="appearance-subtitle">Equip or unequip items you own. Defaults restore when you unequip.</div>
+      <div class="store-section-title">THEMES</div>
+      <div id="appearance-themes" class="appearance-grid"></div>
+      <div class="store-section-title">CASINO CHIPS</div><div id="appearance-chips" class="appearance-grid"></div>
+      <div class="store-section-title">BLACKJACK DECKS</div><div id="appearance-decks" class="appearance-grid"></div>
+      <div class="store-section-title">TABLE SKINS</div><div id="appearance-tables" class="appearance-grid"></div>
+      <div class="store-section-title">CARD BACKS</div><div id="appearance-balls" class="appearance-grid"></div>
+      <button class="btn secondary panel-btn" id="btn-appearance-store">BUY AT SHOP</button>
+      <button class="btn panel-btn" id="btn-appearance-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ==================== SETTINGS OVERLAY ==================== -->
+  <div class="overlay" id="settings-overlay">
+    <div class="overlay-card">
+      <div class="overlay-title">Settings</div>
+      <div class="settings-row">
+        <label>Dark mode</label>
+        <div class="toggle" id="toggle-dark"><div class="toggle-knob"></div></div>
+      </div>
+      <div class="settings-row"><label>Sound effects</label><div class="toggle on" id="toggle-sound"><div class="toggle-knob"></div></div></div>
+      <div class="settings-row"><div><label>Mobile mode</label><small class="settings-help">9:16 vertical layout for phones. Rearranges tables &amp; menus.</small></div><div class="toggle" id="toggle-mobile"><div class="toggle-knob"></div></div></div>
+      <div class="settings-row"><div><label>Fullscreen</label><small class="settings-help">Fill the whole display. Press Esc to exit.</small></div><div class="toggle" id="toggle-fullscreen"><div class="toggle-knob"></div></div></div>
+      <div class="settings-row"><div><label>Seasonal UI &amp; Theme</label><small class="settings-help">Applies the active season's full visual overhaul across Casino X.</small></div><div class="toggle on" id="toggle-seasonal-ui"><div class="toggle-knob"></div></div></div>
+      <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>SFX volume — <span id="volume-pct">60%</span></label>
+        <input type="range" id="slider-volume" min="0" max="100" value="60" />
+      </div>
+      <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>GUI scale — <span id="scale-pct">100%</span></label>
+        <input type="range" id="slider-scale" min="80" max="130" value="100" step="5" />
+      </div>
+      <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <label>Visual quality — <span id="quality-label">High</span></label>
+        <input type="range" id="slider-quality" min="0" max="2" value="2" step="1" />
+        <small class="settings-help">Live: lowers particles &amp; effects for better mobile performance.</small>
+      </div>
+      <div class="settings-divider"></div>
+      <div class="settings-inv-head">
+        <div class="overlay-title" style="margin:0;font-size:0.95rem">INVENTORY &amp; EQUIP</div>
+        <small class="settings-help">Equip owned themes, chips, decks, tables, and card backs.</small>
+      </div>
+      <div id="settings-inventory" class="settings-inventory">
+        <div class="store-section-title">THEMES</div>
+        <div id="settings-inv-themes" class="appearance-grid settings-inv-grid"></div>
+        <div class="store-section-title">CHIPS</div>
+        <div id="settings-inv-chips" class="appearance-grid settings-inv-grid"></div>
+        <div class="store-section-title">DECKS</div>
+        <div id="settings-inv-decks" class="appearance-grid settings-inv-grid"></div>
+        <div class="store-section-title">TABLES</div>
+        <div id="settings-inv-tables" class="appearance-grid settings-inv-grid"></div>
+        <div class="store-section-title">CARD BACKS</div>
+        <div id="settings-inv-balls" class="appearance-grid settings-inv-grid"></div>
+      </div>
+      <button class="btn secondary panel-btn" id="btn-settings-shop">OPEN STORE</button>
+      <button class="btn panel-btn" id="btn-leave-table">LEAVE TABLE</button>
+      <button class="btn panel-btn settings-close-bottom" id="btn-settings-close">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- (Host overlay defined earlier) -->
+
+  <!-- Update Log overlay -->
+  <div class="overlay" id="update-log-overlay">
+    <div class="overlay-card progress-card update-log-card">
+      <div class="update-log-header">
+        <div class="update-log-title-row">
+          <span class="ul-notebook" aria-hidden="true">📓</span>
+          <div>
+            <div class="overlay-title" style="margin:0">UPDATE LOG <span id="update-log-version">1</span></div>
+            <div class="auth-sub" style="margin:4px 0 0">What's new in Casino X</div>
+          </div>
+        </div>
+        <button type="button" class="icon-btn" id="btn-update-log-close" aria-label="Close">×</button>
+      </div>
+      <div class="update-log-body" id="update-log-body">
+        <!-- filled by JS -->
+      </div>
+      <button class="btn panel-btn" id="btn-update-log-gotit">GOT IT</button>
+    </div>
+  </div>
+
+  <!-- Side notification stack (friend requests, season level, invites fallback) -->
+  <div id="side-notif-stack" class="side-notif-stack" aria-live="polite"></div>
+
+  <!-- Table invite toast (bottom-right) -->
+  <div id="invite-toast" class="invite-toast hidden">
+    <div class="invite-toast-copy">
+      <strong id="invite-from">Player</strong>
+      <span>invited you to table <b id="invite-room">——</b></span>
+    </div>
+    <div class="invite-toast-actions">
+      <button class="btn good" id="invite-accept">ACCEPT</button>
+      <button class="btn secondary" id="invite-decline">DECLINE</button>
+    </div>
+  </div>
+
+  <!-- Friend boost HUD (bottom-right while at table) -->
+  <div id="friend-boost-hud" class="friend-boost-hud hidden">
+    <span class="fb-icon">🤝</span>
+    <span id="friend-boost-text">FRIEND BOOST +0%</span>
+  </div>
+
+  <!-- Discord-style avatar crop -->
+  <div id="avatar-crop-modal" class="avatar-crop-modal hidden">
+    <div class="avatar-crop-card">
+      <div class="overlay-title" style="margin:0">EDIT AVATAR</div>
+      <div class="avatar-crop-stage" id="avatar-crop-stage">
+        <img id="avatar-crop-img" alt="crop" draggable="false" />
+      </div>
+      <div class="avatar-crop-controls">
+        <label>ZOOM</label>
+        <input type="range" id="avatar-crop-zoom" min="100" max="250" value="100" />
+      </div>
+      <div class="avatar-crop-actions">
+        <button class="btn secondary" id="avatar-crop-cancel" type="button">CANCEL</button>
+        <button class="btn" id="avatar-crop-apply" type="button">APPLY</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="game.js"></script>
+<!-- PWA Service Worker Registration -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+</script>
+</body>
+</html>
