@@ -274,5 +274,161 @@
       }
     },
     "session_token": "2c1fa92a561b8314212015db6fa46b16e3fa875e3174ba3e"
+  },
+  "seasontest99": {
+    "username": "seasontest99",
+    "salt": "ce5b674f95335f268b56a772a55b407d",
+    "password": "4791dec62fd820d95cab6752e687ce5157526fd4f631f89a5fde8a6a26f0173c",
+    "money": 5500,
+    "created": 1790175875.9244556,
+    "games_played": 0,
+    "wins": 0,
+    "losses": 0,
+    "pushes": 0,
+    "blackjacks": 0,
+    "best_win_streak": 0,
+    "current_win_streak": 0,
+    "biggest_win": 0,
+    "xp": 0,
+    "achievements": [],
+    "daily_claim": "",
+    "daily_challenges": {
+      "play10": 0,
+      "win3": 0,
+      "blackjack1": 0,
+      "poker1": 0
+    },
+    "daily_challenge_date": "2026-09-23",
+    "daily_challenge_claimed": [],
+    "friends": [],
+    "friend_requests": [],
+    "friend_outgoing": [],
+    "avatar": null,
+    "avatar_color": "#f59e0b",
+    "play_seconds": 0,
+    "owned_themes": [
+      "classic"
+    ],
+    "owned_chips": [
+      "classic"
+    ],
+    "owned_decks": [
+      "classic"
+    ],
+    "owned_tables": [
+      "classic"
+    ],
+    "owned_balls": [
+      "classic"
+    ],
+    "equipped_theme": "classic",
+    "equipped_chip": "classic",
+    "equipped_deck": "classic",
+    "equipped_table": "classic",
+    "equipped_ball": "classic",
+    "season_xp": 0,
+    "season_claimed": [
+      "1"
+    ],
+    "season_title": "",
+    "season_id": 2,
+    "roulette_games": 0,
+    "roulette_wins": 0,
+    "roulette_biggest_win": 0,
+    "game_stats": {
+      "blackjack": {
+        "games": 0,
+        "wins": 0
+      },
+      "poker": {
+        "games": 0,
+        "wins": 0
+      },
+      "roulette": {
+        "games": 0,
+        "wins": 0
+      }
+    },
+    "session_token": "f6abdce67a35f1b86698e39f5e00fa90285369bb33a085e3",
+    "is_admin": true,
+    "auto_rebuy": false,
+    "auto_rebuy_amount": 1000
+  },
+  "buyin_t2": {
+    "username": "buyin_t2",
+    "salt": "be34a30e11ee4c830e38574b4aa10e10",
+    "password": "eb38af9b0470775fb0b0a5bb18f66fb0e3258510065a13d5b5bd3fc75e829e19",
+    "money": 4000,
+    "created": 1790181602.9736993,
+    "games_played": 0,
+    "wins": 0,
+    "losses": 0,
+    "pushes": 0,
+    "blackjacks": 0,
+    "best_win_streak": 0,
+    "current_win_streak": 0,
+    "biggest_win": 0,
+    "xp": 0,
+    "achievements": [],
+    "daily_claim": "",
+    "daily_challenges": {
+      "play10": 0,
+      "win3": 0,
+      "blackjack1": 0,
+      "poker1": 0
+    },
+    "daily_challenge_date": "2026-09-23",
+    "daily_challenge_claimed": [],
+    "friends": [],
+    "friend_requests": [],
+    "friend_outgoing": [],
+    "avatar": null,
+    "avatar_color": "#8b5cf6",
+    "play_seconds": 0,
+    "owned_themes": [
+      "classic"
+    ],
+    "owned_chips": [
+      "classic"
+    ],
+    "owned_decks": [
+      "classic"
+    ],
+    "owned_tables": [
+      "classic"
+    ],
+    "owned_balls": [
+      "classic"
+    ],
+    "equipped_theme": "classic",
+    "equipped_chip": "classic",
+    "equipped_deck": "classic",
+    "equipped_table": "classic",
+    "equipped_ball": "classic",
+    "season_xp": 0,
+    "season_claimed": [],
+    "season_title": "",
+    "season_id": 2,
+    "roulette_games": 0,
+    "roulette_wins": 0,
+    "roulette_biggest_win": 0,
+    "game_stats": {
+      "blackjack": {
+        "games": 0,
+        "wins": 0
+      },
+      "poker": {
+        "games": 0,
+        "wins": 0
+      },
+      "roulette": {
+        "games": 0,
+        "wins": 0
+      }
+    },
+    "session_token": "ebaf3d4f62a8fb527cee91ccfa3e9c8d6ac5c07c570602d4",
+    "is_admin": false,
+    "auto_rebuy": false,
+    "auto_rebuy_amount": 1000
   }
 }

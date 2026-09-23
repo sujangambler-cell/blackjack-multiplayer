@@ -299,7 +299,16 @@
           <option value="10">10 Players</option>
         </select>
       </div>
-      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-create-public">CREATE PUBLIC TABLE</button><button class="btn secondary auth-submit" id="btn-join-table">JOIN PRIVATE TABLE</button><button class="btn secondary auth-submit" id="btn-spectate-table">SPECTATE</button></div>
+      <div class="field compact-field" style="margin-top:8px">
+        <label>TABLE PIN (OPTIONAL — 4 DIGITS)</label>
+        <input id="bj-table-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*" placeholder="Leave blank for public" autocomplete="off" class="pin-input">
+        <small class="settings-help">Set a PIN to lock the table. Joiners must enter the same PIN.</small>
+      </div>
+      <div class="field compact-field hidden" id="bj-join-pin-wrap" style="margin-top:8px">
+        <label>ENTER TABLE PIN</label>
+        <input id="bj-join-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*" placeholder="4-digit PIN" autocomplete="off" class="pin-input">
+      </div>
+      <div class="lobby-actions"><button class="btn auth-submit menu-primary" id="btn-create-public">CREATE TABLE</button><button class="btn secondary auth-submit" id="btn-join-table">JOIN PRIVATE TABLE</button><button class="btn secondary auth-submit" id="btn-spectate-table">SPECTATE</button></div>
       <button class="btn secondary auth-submit" id="btn-back-menu">BACK TO CASINO</button>
     </div>
   </div>
@@ -324,9 +333,28 @@
           <option value="6" selected>6 Players</option>
         </select>
       </div>
-      <p class="muted-note" style="margin-top:8px;font-size:12px;opacity:0.75">Your full chip balance is used at the table — no separate buy-in.</p>
+      <div class="field compact-field" style="margin-top:8px">
+        <label>TABLE BUY-IN (HOST SETS THIS)</label>
+        <select id="poker-create-buyin" class="table-size-select">
+          <option value="500">$500</option>
+          <option value="1000" selected>$1,000</option>
+          <option value="2500">$2,500</option>
+          <option value="5000">$5,000</option>
+          <option value="10000">$10,000</option>
+          <option value="25000">$25,000</option>
+        </select>
+        <small class="settings-help">Players bring this amount of Casino X cash to the table. Bank keeps the rest. All-in only risks the table stack.</small>
+      </div>
+      <div class="field compact-field" style="margin-top:8px">
+        <label>TABLE PIN (OPTIONAL — 4 DIGITS)</label>
+        <input id="poker-table-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*" placeholder="Leave blank for public" autocomplete="off" class="pin-input">
+      </div>
+      <div class="field compact-field hidden" id="poker-join-pin-wrap" style="margin-top:8px">
+        <label>ENTER TABLE PIN</label>
+        <input id="poker-join-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]*" placeholder="4-digit PIN" autocomplete="off" class="pin-input">
+      </div>
       <div class="lobby-actions">
-        <button class="btn auth-submit menu-primary" id="btn-poker-create">CREATE PUBLIC TABLE</button>
+        <button class="btn auth-submit menu-primary" id="btn-poker-create">CREATE TABLE</button>
         <button class="btn secondary auth-submit" id="btn-poker-join">JOIN PRIVATE TABLE</button><button class="btn secondary auth-submit" id="btn-poker-spectate">SPECTATE</button>
       </div>
       <button class="btn secondary auth-submit" id="btn-poker-back">BACK TO CASINO</button>
@@ -344,8 +372,9 @@
         <span class="room-chip" id="poker-street">—</span>
       </div>
       <div class="top-actions">
-        <button class="icon-btn" id="poker-help" aria-label="How to play Poker" title="How to play">?</button>
+        <button class="icon-btn help-glow" id="poker-help" aria-label="How to play Poker" title="How to play">?</button>
         <button class="icon-btn hidden" id="poker-host" aria-label="Host controls">♛</button>
+        <button class="icon-btn hidden" id="poker-bots" aria-label="Add bots" title="Add bots">🤖</button>
         <button class="icon-btn table-admin-btn" id="poker-admin" aria-label="Admin controls">ADMIN</button>
         <button class="icon-btn" id="poker-settings" aria-label="Settings">⚙</button>
       </div>
@@ -398,7 +427,7 @@
         <div class="profile-chip"><div class="chip-avatar" id="table-profile-avatar">?</div><span id="profile-name">PLAYER</span><span class="balance-chip" id="balance-chip">$0</span><button class="refresh-btn" id="btn-refresh-balance" title="Refresh balance">↻</button></div>
         <div class="room-chip" id="room-chip">TABLE</div>
       </div>
-      <div class="top-actions"><button class="icon-btn" id="bj-help" aria-label="How to play Blackjack" title="How to play">?</button><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn table-admin-btn" id="btn-admin-table" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
+      <div class="top-actions"><button class="icon-btn help-glow" id="bj-help" aria-label="How to play Blackjack" title="How to play">?</button><button class="icon-btn hidden" id="btn-host" aria-label="Host controls">♛</button><button class="icon-btn table-admin-btn" id="btn-admin-table" aria-label="Admin controls">ADMIN</button><button class="icon-btn" id="btn-settings" aria-label="Settings">⚙</button></div>
     </div>
 
     <div class="spectator-panel hidden" id="spectator-panel">
@@ -463,6 +492,12 @@
       <div class="chat-head"><span>TABLE CHAT</span><div><button class="chat-close" id="btn-chat-mute" type="button">🔊</button><button class="chat-close" id="btn-chat-toggle" type="button">×</button></div></div>
       <div class="chat-messages" id="chat-messages"></div>
       <div class="chat-emoji-bar hidden" id="chat-emoji-bar"></div>
+      <div class="reaction-bar" id="reaction-bar" title="React to the table">
+        <button type="button" class="reaction-btn" data-emoji="👏">👏</button>
+        <button type="button" class="reaction-btn" data-emoji="🔥">🔥</button>
+        <button type="button" class="reaction-btn" data-emoji="💀">💀</button>
+        <button type="button" class="reaction-btn" data-emoji="😂">😂</button>
+      </div>
       <div class="chat-compose">
         <button type="button" class="chat-emoji-btn" id="btn-chat-emoji" title="Emoji">😀</button>
         <input id="chat-input" maxlength="280" placeholder="Message… emoji &amp; GIF links ok" autocomplete="off">
@@ -471,6 +506,15 @@
     </div>
 
     <button class="chat-float" id="btn-chat-open" type="button">CHAT</button>
+    <button class="history-float" id="btn-history-open" type="button">HISTORY</button>
+    <div class="side-pot-panel hidden" id="side-pot-panel"></div>
+    <div class="spec-bet-panel hidden" id="spec-bet-panel">
+      <div class="spec-bet-title">SPECTATOR BET</div>
+      <select id="spec-bet-target" class="admin-select"></select>
+      <input id="spec-bet-amount" type="number" min="10" max="50000" placeholder="Amount" class="admin-number">
+      <button class="btn" id="btn-spec-bet" type="button">BET 2×</button>
+    </div>
+    <div class="announce-banner hidden" id="announce-banner"></div>
     <button class="admin-float hidden" id="btn-admin-float">ADMIN</button>
   </div>
 
@@ -491,6 +535,28 @@
       <div class="profile-stats-grid" id="profile-stats-grid"></div>
       <div class="section-mini-title">FRIENDS</div>
       <div id="profile-friends" class="friend-list"></div>
+      <div class="section-mini-title">ACCOUNT</div>
+      <div class="profile-account-panel">
+        <div class="field compact-field">
+          <label>CHANGE USERNAME</label>
+          <input id="profile-new-username" maxlength="16" placeholder="New username" autocomplete="off">
+          <input id="profile-user-password" type="password" placeholder="Current password" autocomplete="current-password">
+          <button class="btn secondary" id="btn-change-username" type="button">UPDATE USERNAME</button>
+        </div>
+        <div class="field compact-field">
+          <label>CHANGE PASSWORD</label>
+          <input id="profile-cur-password" type="password" placeholder="Current password" autocomplete="current-password">
+          <input id="profile-new-password" type="password" placeholder="New password (min 8)" autocomplete="new-password">
+          <button class="btn secondary" id="btn-change-password" type="button">UPDATE PASSWORD</button>
+        </div>
+        <div class="field compact-field profile-danger">
+          <label>DELETE ACCOUNT</label>
+          <input id="profile-delete-password" type="password" placeholder="Current password to confirm" autocomplete="current-password">
+          <button class="btn" id="btn-delete-account" type="button" style="background:#8b1e2d;color:#fff">DELETE ACCOUNT</button>
+        </div>
+        <div class="auth-error" id="profile-account-error"></div>
+        <div class="auth-ok hidden" id="profile-account-ok" style="color:#6ee7b7;font-size:12px;margin-top:6px"></div>
+      </div>
       <button class="btn panel-btn" id="btn-profile-close">CLOSE</button>
     </div>
   </div>
@@ -634,41 +700,54 @@
 
   <!-- ==================== HELP: POKER ==================== -->
   <div class="overlay" id="help-poker-overlay">
-    <div class="overlay-card help-card">
-      <div class="overlay-title">HOW TO PLAY — POKER</div>
+    <div class="overlay-card help-card help-card-fancy">
+      <div class="help-hero">
+        <div class="help-card-fan" aria-hidden="true">
+          <span class="help-mini-card red">A♥</span>
+          <span class="help-mini-card">K♠</span>
+          <span class="help-mini-card red">Q♦</span>
+          <span class="help-mini-card">J♣</span>
+        </div>
+        <div class="overlay-title">HOW TO PLAY — POKER</div>
+        <p class="help-tagline">Texas Hold'em · best five · win the pot</p>
+      </div>
       <div class="help-body">
-        <h4>Goal</h4>
-        <p>Win chips by making the best 5-card hand or by making everyone else fold.</p>
+        <h4>Buy-in &amp; your bank</h4>
+        <p>The <strong>host sets the table buy-in</strong>. When you sit, that amount moves from your Casino X bank onto the table. The rest stays in your bank. <strong>All-in only risks your table stack</strong> — you stay seated; others can call, raise, or fold.</p>
+        <h4>Auto-rebuy</h4>
+        <p>Turn on <strong>Auto-rebuy</strong> in Settings. If you bust, the table buy-in is taken from your bank again (or granted if the bank is empty).</p>
+        <h4>Bots</h4>
+        <p>Hosts can tap the <strong>🤖</strong> button next to Host controls and add 1–5 bots. They use the same buy-in stack.</p>
         <h4>Flow of a hand</h4>
         <ol>
-          <li><strong>Preflop</strong> — each player gets 2 hole cards. Betting starts.</li>
-          <li><strong>Flop</strong> — 3 community cards are dealt. Another betting round.</li>
-          <li><strong>Turn</strong> — 1 more community card. Betting again.</li>
-          <li><strong>River</strong> — final community card. Last betting round.</li>
-          <li><strong>Showdown</strong> — best hand wins the pot.</li>
+          <li><strong>Preflop</strong> — 2 hole cards each. Betting starts.</li>
+          <li><strong>Flop</strong> — 3 community cards.</li>
+          <li><strong>Turn</strong> — 1 more card.</li>
+          <li><strong>River</strong> — final card. Last betting round.</li>
+          <li><strong>Showdown</strong> — best hand wins (or last player standing).</li>
         </ol>
         <h4>Actions</h4>
         <ul>
           <li><strong>Fold</strong> — give up the hand.</li>
-          <li><strong>Check</strong> — pass when no bet is owed.</li>
+          <li><strong>Check</strong> — pass when nothing is owed.</li>
           <li><strong>Call</strong> — match the current bet.</li>
-          <li><strong>Bet / Raise</strong> — put more chips in; others must call or fold.</li>
-          <li><strong>All-In</strong> — bet every chip you have.</li>
+          <li><strong>Bet / Raise</strong> — put more in; others must respond.</li>
+          <li><strong>All-In</strong> — bet your entire <em>table</em> stack. You are still in the pot.</li>
         </ul>
         <h4>Hand rankings (best → worst)</h4>
         <ol class="help-hands">
           <li><strong>Royal Flush</strong> — A K Q J 10, same suit</li>
           <li><strong>Straight Flush</strong> — five in a row, same suit</li>
-          <li><strong>Four of a Kind</strong> — four cards same rank</li>
-          <li><strong>Full House</strong> — three of a kind + a pair</li>
-          <li><strong>Flush</strong> — five cards, same suit</li>
-          <li><strong>Straight</strong> — five ranks in a row</li>
+          <li><strong>Four of a Kind</strong></li>
+          <li><strong>Full House</strong></li>
+          <li><strong>Flush</strong></li>
+          <li><strong>Straight</strong></li>
           <li><strong>Three of a Kind</strong></li>
           <li><strong>Two Pair</strong></li>
           <li><strong>One Pair</strong></li>
           <li><strong>High Card</strong></li>
         </ol>
-        <p class="help-note">Joining mid-hand puts you in spectator mode until the round ends, then you are seated automatically if a seat is free.</p>
+        <p class="help-note">Join mid-hand → spectate until the hand ends, then you can buy in if a seat is free.</p>
       </div>
       <button class="btn panel-btn" id="btn-help-poker-close">GOT IT</button>
     </div>
@@ -676,31 +755,60 @@
 
   <!-- ==================== HELP: BLACKJACK ==================== -->
   <div class="overlay" id="help-bj-overlay">
-    <div class="overlay-card help-card">
-      <div class="overlay-title">HOW TO PLAY — BLACKJACK</div>
+    <div class="overlay-card help-card help-card-fancy">
+      <div class="help-hero">
+        <div class="help-card-fan" aria-hidden="true">
+          <span class="help-mini-card">A♠</span>
+          <span class="help-mini-card red">10♥</span>
+          <span class="help-mini-card">K♣</span>
+          <span class="help-mini-card red">7♦</span>
+        </div>
+        <div class="overlay-title">HOW TO PLAY — BLACKJACK</div>
+        <p class="help-tagline">Beat the dealer · don't bust · 21 is king</p>
+      </div>
       <div class="help-body">
         <h4>Goal</h4>
-        <p>Get a hand total closer to 21 than the dealer without going over 21.</p>
+        <p>Get closer to <strong>21</strong> than the dealer without going over.</p>
         <h4>Card values</h4>
         <ul>
           <li>Number cards = face value</li>
           <li>J, Q, K = 10</li>
-          <li>Ace = 1 or 11 (whichever helps you)</li>
+          <li>Ace = 1 or 11 (whichever helps)</li>
         </ul>
         <h4>Your actions</h4>
         <ul>
           <li><strong>Hit</strong> — take another card</li>
-          <li><strong>Stand</strong> — keep your current total</li>
-          <li><strong>Double</strong> — double your bet, take exactly one more card</li>
-          <li><strong>Split</strong> — if you have a pair, split into two hands (when offered)</li>
+          <li><strong>Stand</strong> — keep your total</li>
+          <li><strong>Double</strong> — double the bet, take exactly one card</li>
+          <li><strong>Split</strong> — pair → two hands (when offered)</li>
         </ul>
-        <h4>Dealer rules</h4>
-        <p>The dealer hits on 16 or less and stands on 17 or more.</p>
+        <h4>Dealer</h4>
+        <p>Hits on 16 or less, stands on 17+.</p>
         <h4>Blackjack</h4>
-        <p>Ace + 10-value card on the first two cards pays 3:2 (when the dealer does not also have blackjack).</p>
-        <p class="help-note">If you join while a round is in progress you spectate until the next betting phase, then you can take a seat.</p>
+        <p>Ace + 10 on the first two cards pays <strong>3:2</strong> (if the dealer does not also have blackjack).</p>
+        <p class="help-note">Join mid-round → spectate until the next betting phase, then take a seat. Use the glowing <strong>?</strong> anytime for this guide.</p>
       </div>
       <button class="btn panel-btn" id="btn-help-bj-close">GOT IT</button>
+    </div>
+  </div>
+
+  <!-- ==================== BOTS OVERLAY ==================== -->
+  <div class="overlay" id="bots-overlay">
+    <div class="overlay-card bots-card">
+      <div class="overlay-title">ADD BOTS</div>
+      <p class="settings-help" style="margin:0 0 12px">Bots play with the table buy-in stack. Mid-hand they spectate, then sit when the hand ends.</p>
+      <div class="field compact-field">
+        <label>HOW MANY BOTS</label>
+        <select id="bots-count" class="table-size-select">
+          <option value="1" selected>1 Bot</option>
+          <option value="2">2 Bots</option>
+          <option value="3">3 Bots</option>
+          <option value="4">4 Bots</option>
+          <option value="5">5 Bots</option>
+        </select>
+      </div>
+      <button class="btn menu-primary" id="btn-bots-add" type="button">ADD BOTS</button>
+      <button class="btn panel-btn" id="btn-bots-close" type="button">CLOSE</button>
     </div>
   </div>
 
@@ -712,6 +820,21 @@
         <div><label>Double Cash</label><small class="settings-help">All cash rewards at this table are doubled while active. Visible to all players.</small></div>
         <div class="toggle" id="toggle-double-cash"><div class="toggle-knob"></div></div>
       </div>
+      <div class="field compact-field" id="host-poker-buyin-wrap" style="margin-top:10px">
+        <label>TABLE BUY-IN</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="host-poker-buyin" class="table-size-select" style="flex:1">
+            <option value="500">$500</option>
+            <option value="1000">$1,000</option>
+            <option value="2500">$2,500</option>
+            <option value="5000">$5,000</option>
+            <option value="10000">$10,000</option>
+            <option value="25000">$25,000</option>
+          </select>
+          <button class="btn secondary" id="btn-host-set-buyin" type="button">SET</button>
+        </div>
+        <small class="settings-help">Only applies to new buy-ins. All-in risks table stack only — never kicks you out.</small>
+      </div>
       <div id="host-list" class="host-list"></div>
       <button class="btn panel-btn" id="btn-host-close">CLOSE</button>
     </div>
@@ -719,33 +842,78 @@
 
   <!-- ==================== ADMIN OVERLAY ==================== -->
   <div class="overlay" id="admin-overlay">
-    <div class="overlay-card admin-card">
+    <div class="overlay-card admin-card admin-card-v2">
       <div class="overlay-title">ADMIN PANEL</div>
       <div id="admin-login-box">
         <div class="field"><label>Admin password</label><input id="admin-password" type="password" placeholder="Password"></div>
         <div class="auth-error" id="admin-error"></div>
         <button class="btn" id="btn-admin-login">ENTER ADMIN</button>
+        <small class="settings-help" style="display:block;margin-top:10px;opacity:.7">Entering the correct password makes this account a permanent admin (gold name + crown for everyone).</small>
       </div>
       <div id="admin-dashboard" class="hidden">
-        <div class="admin-actions"><button class="btn secondary" id="btn-admin-refresh">REFRESH</button><button class="btn secondary" id="admin-preview-toggle">DEALER PREVIEW</button></div>
-        <section class="admin-section"><h3>ECONOMY</h3><div id="admin-economy"></div></section>
-        <section class="admin-section"><h3>PLAYER CONTROLS</h3><div id="admin-users"></div></section>
-        <section class="admin-section"><h3>FUN TABLE MODIFIERS</h3>
-          <div class="admin-fun-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <button class="btn secondary" id="admin-fun-double">TOGGLE 2× CASH</button>
-            <button class="btn secondary" id="admin-fun-rain">RAIN +$500 ALL</button>
-            <button class="btn secondary" id="admin-fun-xp">+100 SEASON XP ALL</button>
-            <button class="btn secondary" id="admin-fun-refill">REFILL SHOE</button>
-            <button class="btn secondary" id="admin-fun-chaos">CHAOS BET WINDOW</button>
-            <button class="btn secondary" id="admin-fun-force0">FORCE NEXT 0</button>
-            <button class="btn secondary" id="admin-fun-force-red">BIAS RED</button>
-            <button class="btn secondary" id="admin-fun-clear-luck">CLEAR LUCK</button>
+        <div class="admin-shell">
+          <nav class="admin-sidebar">
+            <button class="admin-tab active" data-tab="players">Players</button>
+            <button class="admin-tab" data-tab="luck">Luck</button>
+            <button class="admin-tab" data-tab="cards">Cards</button>
+            <button class="admin-tab" data-tab="fun">Fun</button>
+            <button class="admin-tab" data-tab="items">Give Items</button>
+            <button class="admin-tab" data-tab="season">Season</button>
+          </nav>
+          <div class="admin-main">
+            <div class="admin-actions">
+              <button class="btn secondary" id="btn-admin-refresh">REFRESH</button>
+              <button class="btn secondary" id="admin-preview-toggle">DEALER PREVIEW</button>
+            </div>
+            <section class="admin-pane active" data-pane="players">
+              <h3>PLAYER CONTROLS</h3>
+              <div id="admin-users"></div>
+              <div id="admin-economy"></div>
+            </section>
+            <section class="admin-pane" data-pane="luck">
+              <h3>LUCK CONTROLS</h3>
+              <p class="settings-help">0 = off · 50 = 50% biased draws · 100 = always best non-bust card toward 21. Applies to Blackjack hits/deals.</p>
+              <div id="admin-luck-controls"></div>
+            </section>
+            <section class="admin-pane" data-pane="cards">
+              <h3>CARD SELECTOR</h3>
+              <p class="settings-help">Assign specific cards for the next deal (seat + dealer). First 2 cards = hole/initial; more = forced hits.</p>
+              <div id="admin-card-selector"></div>
+              <div class="admin-actions" style="margin-top:10px">
+                <button class="btn" id="admin-apply-cards">APPLY FORCED CARDS</button>
+                <button class="btn secondary" id="admin-clear-cards">CLEAR</button>
+              </div>
+              <div id="admin-preview"></div>
+            </section>
+            <section class="admin-pane" data-pane="fun">
+              <h3>FUN TABLE MODIFIERS</h3>
+              <div class="admin-fun-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button class="btn secondary" id="admin-fun-double">TOGGLE 2× CASH</button>
+                <button class="btn secondary" id="admin-fun-rain">RAIN +$500 ALL</button>
+                <button class="btn secondary" id="admin-fun-xp">+100 SEASON XP ALL</button>
+                <button class="btn secondary" id="admin-fun-refill">REFILL SHOE</button>
+                <button class="btn secondary" id="admin-fun-chaos">CHAOS BET WINDOW</button>
+                <button class="btn secondary" id="admin-fun-force0">FORCE NEXT 0</button>
+                <button class="btn secondary" id="admin-fun-force-red">BIAS RED</button>
+                <button class="btn secondary" id="admin-fun-clear-luck">CLEAR LUCK</button>
+              </div>
+              <small class="settings-help" style="display:block;margin-top:8px;opacity:.65">Affects the table you are in. Players see banners when modifiers fire.</small>
+              <div class="admin-control-row" style="margin-top:12px;flex-direction:column;align-items:stretch;">
+                <strong>ANNOUNCEMENT BANNER</strong>
+                <input id="admin-announce-text" maxlength="120" placeholder="Gold banner message…" style="width:100%;margin:6px 0;">
+                <button class="btn" id="admin-announce-send" type="button">FLASH TO TABLE</button>
+              </div>
+            </section>
+            <section class="admin-pane" data-pane="items">
+              <h3>ADMIN ITEMS</h3>
+              <div id="admin-item-controls"></div>
+            </section>
+            <section class="admin-pane" data-pane="season">
+              <h3>SEASON</h3>
+              <div id="admin-season-controls"></div>
+            </section>
           </div>
-          <small class="settings-help" style="display:block;margin-top:8px;opacity:.65">Affects the table you are in. Players see banners when modifiers fire.</small>
-        </section>
-        <section class="admin-section"><h3>SEASON</h3><div id="admin-season-controls"></div></section>
-        <section class="admin-section"><h3>ADMIN ITEMS</h3><div id="admin-item-controls"></div></section>
-        <div id="admin-preview"></div>
+        </div>
       </div>
       <button class="btn panel-btn" id="btn-admin-close">CLOSE</button>
     </div>
@@ -768,6 +936,15 @@
   </div>
 
   <!-- ==================== SETTINGS OVERLAY ==================== -->
+  <!-- Hand History -->
+  <div class="overlay" id="history-overlay">
+    <div class="overlay-card history-card">
+      <div class="overlay-title">HAND HISTORY</div>
+      <div id="history-list" class="history-list"></div>
+      <button class="btn panel-btn" id="btn-history-close">CLOSE</button>
+    </div>
+  </div>
+
   <div class="overlay" id="settings-overlay">
     <div class="overlay-card">
       <div class="overlay-title">Settings</div>
@@ -791,6 +968,15 @@
         <label>Visual quality — <span id="quality-label">High</span></label>
         <input type="range" id="slider-quality" min="0" max="2" value="2" step="1" />
         <small class="settings-help">Live: lowers particles &amp; effects for better mobile performance.</small>
+      </div>
+      <div class="settings-divider"></div>
+      <div class="settings-row">
+        <div><label>Auto-rebuy</label><small class="settings-help">When you go broke, automatically claim chips so you stay in the game.</small></div>
+        <div class="toggle" id="toggle-auto-rebuy"><div class="toggle-knob"></div></div>
+      </div>
+      <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <label>Auto-rebuy amount — <span id="auto-rebuy-amt-label">$1,000</span></label>
+        <input type="range" id="slider-auto-rebuy" min="100" max="10000" step="100" value="1000" />
       </div>
       <div class="settings-divider"></div>
       <div class="settings-inv-head">

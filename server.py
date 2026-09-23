@@ -450,10 +450,13 @@ def ensure_account_progress(account):
         "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
         "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
         "friends": [], "friend_requests": [], "friend_outgoing": [], "avatar": None, "avatar_color": None, "play_seconds": 0,
-        "owned_themes": ["classic"], "owned_chips": ["classic"], "owned_decks": ["classic"], "owned_tables": ["classic"], "owned_balls": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "equipped_deck": "classic", "equipped_table": "classic", "equipped_ball": "classic", "season_xp": 0, "season_claimed": [], "season_title": "",
+        "owned_themes": ["classic"], "owned_chips": ["classic"], "owned_decks": ["classic"], "owned_tables": ["classic"], "owned_balls": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "equipped_deck": "classic", "equipped_table": "classic", "equipped_ball": "classic", "season_xp": 0, "season_claimed": [], "season_title": "", "season_id": 0,
         "roulette_games": 0, "roulette_wins": 0, "roulette_biggest_win": 0,
         "game_stats": {"blackjack": {"games": 0, "wins": 0}, "poker": {"games": 0, "wins": 0}, "roulette": {"games": 0, "wins": 0}},
         "session_token": account.get("session_token"),
+        "is_admin": False,
+        "auto_rebuy": False,
+        "auto_rebuy_amount": 1000,
     }
     changed = False
     for k, v in defaults.items():
@@ -629,6 +632,10 @@ def profile_payload(account):
                        "deck":account.get("equipped_deck","classic"),"table":account.get("equipped_table","classic"),
                        "ball":account.get("equipped_ball","classic"),"title":account.get("season_title","")},
         "season": season_payload(account),
+        "isAdmin": bool(account.get("is_admin")),
+        "playSeconds": int(account.get("play_seconds", 0) or 0),
+        "autoRebuy": bool(account.get("auto_rebuy")),
+        "autoRebuyAmount": int(account.get("auto_rebuy_amount", 1000) or 1000),
     }
 
 def leaderboard_payload():
@@ -704,6 +711,8 @@ def get_room(code: str, public=False, game="blackjack", max_players=None) -> dic
             "dealer_hand": [],
             "active_player_id": None,
             "lucky_players": {},
+            "forced_cards": {},
+            "forced_dealer_cards": [],
             "dealer_preview_active": False,
             "dealer_preview_cards": [],
             "double_cash": False,
@@ -729,6 +738,12 @@ def get_room(code: str, public=False, game="blackjack", max_players=None) -> dic
             # asyncio task handles for cancellation
             "_ready_task": None,
             "_round_task": None,
+            # Feature extras
+            "pin": None,  # optional 4-digit PIN for private tables
+            "hand_history": [],  # last 5 hands
+            "bounties": {},  # username_key -> bounty amount
+            "spectator_bets": {},  # spectator_player_id -> {targetId, amount}
+            "announcement": None,  # {text, expires_at}
         }
     return rooms[code]
 
@@ -762,6 +777,7 @@ def public_tables_payload():
             "canJoin": len(players) < max_p,
             "canSpectate": True,
             "doubleCash": bool(room.get("double_cash")),
+            "locked": bool(room.get("pin")),
         })
     rows.sort(key=lambda r: (r["players"] >= r["maxPlayers"], -r["players"], r["code"]))
     return rows
@@ -813,6 +829,11 @@ def serialise(room) -> dict:
         "hostId": room.get("host_id"),
         "maxPlayers": int(room.get("max_players", MAX_PLAYERS_DEFAULT)),
         "doubleCash": bool(room.get("double_cash")),
+        "locked": bool(room.get("pin")),
+        "announcement": room.get("announcement"),
+        "bounties": {p.get("username"): int(room.get("bounties", {}).get(p.get("username_key"), 0) or 0)
+                     for p in room.get("players", []) if room.get("bounties", {}).get(p.get("username_key"))},
+        "handHistoryCount": len(room.get("hand_history") or []),
         "dealerHand": dealer_hand,
         "dealerDisplay": hand_display(room["dealer_hand"]) if show_dealer and room["dealer_hand"] else None,
         "players": [
@@ -836,6 +857,7 @@ def serialise(room) -> dict:
                 "avatar": p.get("avatar"),
                 "avatarColor": p.get("avatar_color"),
                 "friendBoost": int(p.get("friendBoost", 0) or 0),
+                "isAdmin": bool(p.get("is_admin")),
                 "splitUsed": bool(p.get("split_used")),
                 "hands": p.get("hands"),
                 "handBets": p.get("hand_bets"),
@@ -884,7 +906,8 @@ async def broadcast(room):
                 pass
 
 async def broadcast_public_tables():
-    payload = json.dumps({"type": "public_tables", "tables": public_tables_payload()})
+    # game:"all" so clients split BJ vs Poker lists instead of dumping everything into one lobby
+    payload = json.dumps({"type": "public_tables", "game": "all", "tables": public_tables_payload()})
     sockets = set()
     for room in rooms.values():
         for p in room.get("players", []):
@@ -897,7 +920,85 @@ async def broadcast_public_tables():
             pass
 
 async def send_public_tables(websocket):
-    await websocket.send(json.dumps({"type": "public_tables", "tables": public_tables_payload()}))
+    await websocket.send(json.dumps({"type": "public_tables", "game": "all", "tables": public_tables_payload()}))
+
+
+def push_hand_history(room, entry):
+    """Keep last 5 hands in room state."""
+    hist = room.setdefault("hand_history", [])
+    hist.append(entry)
+    if len(hist) > 5:
+        del hist[0:len(hist)-5]
+
+def compute_poker_side_pots(room):
+    """Build simple side-pot list from all-in contribution levels for UI display.
+    Returns list of {amount, eligible: [usernames]}."""
+    seated = [p for p in poker_seated(room) if p.get("poker_in_hand") or int(p.get("poker_bet", 0)) > 0]
+    # Total committed this hand = street bets are already in pot; use total contribution tracking if available
+    # Fallback: show main pot only split conceptually when multiple all-ins
+    allins = [p for p in seated if p.get("poker_status") == "allin"]
+    if len(allins) < 1:
+        room["poker_side_pots"] = []
+        return
+    # Approximate: each all-in creates a side layer at their total bet level
+    levels = sorted(set(int(p.get("poker_bet", 0)) + int(p.get("poker_chips", 0)) for p in allins if int(p.get("poker_bet", 0)) > 0))
+    # Simpler display: list each all-in player's locked amount as a side pot layer for UI
+    pots = []
+    main = int(room.get("poker_pot", 0))
+    if main > 0:
+        pots.append({"amount": main, "label": "Main", "eligible": [p.get("username") for p in seated if p.get("poker_status") != "folded"]})
+    for p in allins:
+        pots.append({
+            "amount": int(p.get("poker_bet", 0)),
+            "label": f"All-in · {p.get('username')}",
+            "eligible": [p.get("username")],
+        })
+    room["poker_side_pots"] = pots[:6]
+
+def try_auto_rebuy(player, room=None):
+    """If account has auto_rebuy and is broke at the table, top up from bank or grant.
+    On poker tables, rebuy amount = table buy-in (synced with host setting), else settings amount.
+    Table stack and bank stay separate — never wipe bank because of all-in.
+    """
+    acc = ACCOUNTS.get(player.get("username_key"))
+    if not acc or player.get("is_bot"):
+        return False
+    ensure_account_progress(acc)
+    if not acc.get("auto_rebuy"):
+        return False
+    money = int(player.get("money", 0) or 0)
+    chips = int(player.get("poker_chips", 0) or 0)
+    if room and room.get("game") == "poker":
+        # Only rebuy when table stack is empty (e.g. after bust), not mid all-in during a hand
+        phase = room.get("poker_phase") or "WAITING"
+        if phase in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN") and player.get("poker_in_hand"):
+            return False
+        if chips > 0:
+            return False
+        buyin = int(room.get("poker_buyin", 0) or acc.get("auto_rebuy_amount", 1000) or 1000)
+        buyin = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, buyin))
+        if money >= buyin:
+            player["money"] = money - buyin
+            player["poker_chips"] = buyin
+        elif money >= POKER_MIN_BUYIN:
+            player["poker_chips"] = money
+            player["money"] = 0
+        else:
+            # Bank empty — grant settings amount into bank then buy in
+            grant = max(100, min(50000, int(acc.get("auto_rebuy_amount", 1000) or 1000)))
+            player["money"] = max(0, grant - buyin)
+            player["poker_chips"] = min(buyin, grant)
+        player["spectator"] = False
+        player["poker_status"] = "waiting"
+        persist_player_money(player)
+        return True
+    # Blackjack / general: top up bank when total broke
+    if money > 0:
+        return False
+    amount = max(100, min(50000, int(acc.get("auto_rebuy_amount", 1000) or 1000)))
+    player["money"] = amount
+    persist_player_money(player)
+    return True
 
 def chat_clean(text):
     # Keep emoji / unicode; only collapse whitespace and cap length
@@ -921,7 +1022,9 @@ def admin_payload(room):
         table_players = [{
             "id": p["id"], "username": p["username"], "money": int(p["money"]),
             "lucky": bool(room.get("lucky_players", {}).get(p.get("username_key"), 0)),
-            "luckStrength": int(room.get("roulette_player_luck", {}).get(p.get("username_key"), 0)),
+            "luckStrength": int(room.get("lucky_players", {}).get(p.get("username_key"), 0) or room.get("roulette_player_luck", {}).get(p.get("username_key"), 0) or 0),
+            "isAdmin": bool(p.get("is_admin")),
+            "bounty": int(room.get("bounties", {}).get(p.get("username_key"), 0) or 0),
             "connected": p.get("connected", False),
         } for p in room.get("players", [])]
     preview = None
@@ -936,9 +1039,21 @@ def admin_payload(room):
 
 
 def is_authorized_admin(websocket, room, player):
-    return websocket in ADMIN_SOCKETS and room is not None and player is not None and any(
-        p is player and p.get("connected") for p in room.get("players", [])
-    )
+    if room is None or player is None:
+        return False
+    if not any(p is player and p.get("connected") for p in room.get("players", [])):
+        return False
+    if websocket in ADMIN_SOCKETS:
+        return True
+    # Permanent account-level admin
+    if player.get("is_admin"):
+        return True
+    acc = ACCOUNTS.get(player.get("username_key"))
+    if acc and acc.get("is_admin"):
+        player["is_admin"] = True
+        ADMIN_SOCKETS.add(websocket)
+        return True
+    return False
 
 async def send_admin_data(websocket, room):
     if websocket in ADMIN_SOCKETS and room is not None:
@@ -977,12 +1092,34 @@ def _player_has_admin_luck(player):
     return cos.get("theme") == "admin_star" or cos.get("chip") == "admin_chip"
 
 def lucky_card(room, player, hand):
+    """Draw a card, optionally biased by admin luck strength (0-100).
+    At 100%: always pick the card that gets closest to 21 without busting.
+    At 50%: 50% chance of biased draw. At 0%: pure random.
+    Also honors forced_cards queue for this player if set by admin card selector.
+    """
+    # Forced card from admin card selector (specific assigned cards)
+    forced_map = room.get("forced_cards") or {}
+    pid = player.get("id")
+    if pid and forced_map.get(pid):
+        queue = forced_map[pid]
+        if queue:
+            forced_c = queue.pop(0)
+            # remove matching card from shoe if present
+            for i, c in enumerate(room["deck"]):
+                if c.get("rank") == forced_c.get("rank") and c.get("suit") == forced_c.get("suit"):
+                    room["deck"].pop(i)
+                    break
+            return {"rank": forced_c["rank"], "suit": forced_c["suit"]}
+
     admin_luck = _player_has_admin_luck(player)
-    forced = bool(room.get("lucky_players", {}).get(player.get("username_key"), 0))
-    if not forced and not admin_luck:
+    strength = int(room.get("lucky_players", {}).get(player.get("username_key"), 0) or 0)
+    if strength <= 0 and not admin_luck:
         return draw_card(room)
-    # Admin-only mild luck: 35% chance to bias; full lucky mode always biases
-    if not forced and admin_luck and random.random() > 0.35:
+    # Cosmetic admin mild luck if no explicit strength
+    if strength <= 0 and admin_luck:
+        strength = 35
+    # strength% chance to bias
+    if random.random() * 100 > strength:
         return draw_card(room)
     candidates = [c for c in room["deck"] if hand_value(hand + [{**c, "faceUp": True}]) <= 21]
     if not candidates:
@@ -1059,7 +1196,15 @@ async def deal_round(room):
             card = lucky_card(room, p, p["hand"])
             card["faceUp"] = True
             p["hand"].append(card)
-        if room.get("dealer_preview_cards"):
+        forced_dealer = room.get("forced_dealer_cards") or []
+        if forced_dealer and round_num < len(forced_dealer):
+            fc = forced_dealer[round_num]
+            dealer_card = {"rank": fc["rank"], "suit": fc["suit"]}
+            for i, c in enumerate(room["deck"]):
+                if c.get("rank") == fc.get("rank") and c.get("suit") == fc.get("suit"):
+                    room["deck"].pop(i)
+                    break
+        elif room.get("dealer_preview_cards") and round_num < len(room["dealer_preview_cards"]):
             dealer_card = room["dealer_preview_cards"][round_num]
         else:
             dealer_card = draw_card(room)
@@ -1067,6 +1212,7 @@ async def deal_round(room):
         room["dealer_hand"].append(dealer_card)
     room["dealer_preview_cards"] = []
     room["dealer_preview_active"] = False
+    room["forced_dealer_cards"] = []
 
     for p in room["players"]:
         if p not in players:
@@ -1276,6 +1422,79 @@ async def finish_round(room):
 
     room["phase"] = "ROUND_OVER"
     room["active_player_id"] = None
+
+    # Hand history entry
+    try:
+        entry = {
+            "game": "blackjack",
+            "ts": int(time.time()),
+            "dealer": hand_display(room.get("dealer_hand") or []) if room.get("dealer_hand") else "—",
+            "players": [
+                {"username": p.get("username"), "result": p.get("result"), "bet": int(p.get("bet") or 0),
+                 "hand": hand_display(p.get("hand") or []) if p.get("hand") else "—"}
+                for p in room.get("players", []) if not p.get("spectator") and p.get("result")
+            ],
+        }
+        push_hand_history(room, entry)
+    except Exception:
+        pass
+
+    # Settle spectator bets: 2x if target won/blackjack, else lose stake
+    sbets = room.pop("spectator_bets", {}) or {}
+    for sid, bet in sbets.items():
+        spec = find_player(room, sid)
+        target = find_player(room, bet.get("targetId"))
+        if not spec:
+            continue
+        amt = int(bet.get("amount", 0))
+        won = target and target.get("result") in ("win", "blackjack")
+        if won:
+            spec["money"] = int(spec.get("money", 0)) + amt * 2
+            persist_player_money(spec)
+            if spec.get("ws"):
+                try:
+                    await spec["ws"].send(json.dumps({"type":"info","message":f"Spectator bet won +${amt} on {target.get('username')}!"}))
+                except Exception:
+                    pass
+        else:
+            if spec.get("ws"):
+                try:
+                    await spec["ws"].send(json.dumps({"type":"info","message":f"Spectator bet lost (${amt})."}))
+                except Exception:
+                    pass
+
+    # Bounties: anyone who beat a bounty target in BJ gets the bounty
+    bmap = room.get("bounties") or {}
+    for p in room.get("players", []):
+        if p.get("spectator") or p.get("result") not in ("win", "blackjack"):
+            continue
+        # pay bounty if any loser had bounty? simpler: if this player had opponents lose with bounty on them
+        for other in room.get("players", []):
+            if other is p or other.get("spectator"):
+                continue
+            if other.get("result") in ("lose", "bust") and bmap.get(other.get("username_key")):
+                bounty = int(bmap.get(other.get("username_key"), 0))
+                if bounty > 0:
+                    p["money"] = int(p.get("money", 0)) + bounty
+                    persist_player_money(p)
+                    bmap[other.get("username_key")] = 0
+                    if p.get("ws"):
+                        try:
+                            await p["ws"].send(json.dumps({"type":"info","message":f"Bounty claimed! +${bounty} for beating {other.get('username')}."}))
+                        except Exception:
+                            pass
+
+    # Auto-rebuy broke players
+    for p in room.get("players", []):
+        if try_auto_rebuy(p, room) and p.get("ws"):
+            try:
+                await p["ws"].send(json.dumps({"type":"info","message":f"Auto-rebuy: +${p.get('money')} chips."}))
+                acc = ACCOUNTS.get(p.get("username_key"))
+                if acc:
+                    await p["ws"].send(json.dumps({"type":"profile","profile":profile_payload(acc)}))
+            except Exception:
+                pass
+
     await broadcast(room)
     for p in active_players(room):
         account = ACCOUNTS.get(p.get("username_key"))
@@ -1370,18 +1589,53 @@ def poker_hand_name(score):
     return HAND_NAMES.get(score[0] if score else 0, "High Card")
 
 def poker_sync_balance(player):
-    """Universal chips: table stack IS the player's site money (no separate buy-in)."""
-    chips = max(0, int(player.get("poker_chips", 0)))
-    player["poker_chips"] = chips
-    player["money"] = chips
-    if not player.get("is_bot"):
-        persist_player_money(player)
+    """Persist bank balance only. Table stack (poker_chips) is separate from bank (money).
+    NEVER set money = poker_chips — that was the all-in "left the table" bug.
+    """
+    if player.get("is_bot"):
+        return
+    player["poker_chips"] = max(0, int(player.get("poker_chips", 0) or 0))
+    player["money"] = max(0, int(player.get("money", 0) or 0))
+    persist_player_money(player)
+
+def poker_seat_with_buyin(player, room):
+    """Bring table buy-in amount from bank (money) into poker_chips. Returns (ok, err)."""
+    if player.get("is_bot"):
+        player["spectator"] = False
+        player["status"] = "waiting"
+        player["poker_status"] = "waiting"
+        player["poker_in_hand"] = False
+        player["pending_seat"] = False
+        return True, "ok"
+    buyin = int(room.get("poker_buyin", POKER_DEFAULT_BUYIN) or POKER_DEFAULT_BUYIN)
+    buyin = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, buyin))
+    money = max(0, int(player.get("money", 0) or 0))
+    # Already seated with chips — top-up not here
+    if not player.get("spectator") and int(player.get("poker_chips", 0) or 0) > 0:
+        return True, "ok"
+    if money < POKER_MIN_BUYIN:
+        return False, f"Need at least ${POKER_MIN_BUYIN} in your bank to buy in."
+    amount = min(buyin, money)  # short-stack allowed if under table buy-in
+    player["money"] = money - amount
+    player["poker_chips"] = int(player.get("poker_chips", 0) or 0) + amount
+    player["spectator"] = False
+    player["status"] = "waiting"
+    player["poker_status"] = "waiting"
+    player["poker_in_hand"] = False
+    player["pending_seat"] = False
+    player["pending_buyin"] = 0
+    persist_player_money(player)
+    return True, "ok"
 
 def poker_seat_with_balance(player):
-    """Sit a player using their full account balance as table chips."""
-    money = max(0, int(player.get("money", 0)))
-    player["poker_chips"] = money
-    player["money"] = money
+    """Legacy alias — seats with room buy-in when room is unknown; prefers existing chips."""
+    # Without room context, sit with whatever is already in poker_chips or a default slice
+    money = max(0, int(player.get("money", 0) or 0))
+    chips = max(0, int(player.get("poker_chips", 0) or 0))
+    if chips <= 0 and money > 0:
+        amount = min(POKER_DEFAULT_BUYIN, money)
+        player["money"] = money - amount
+        player["poker_chips"] = amount
     player["spectator"] = False
     player["status"] = "waiting"
     player["poker_status"] = "waiting"
@@ -1391,8 +1645,34 @@ def poker_seat_with_balance(player):
     if not player.get("is_bot"):
         persist_player_money(player)
 
+def poker_cashout_to_bank(player):
+    """Move table stack back to bank. Player may stay seated with 0 or sit out."""
+    chips = max(0, int(player.get("poker_chips", 0) or 0))
+    player["money"] = max(0, int(player.get("money", 0) or 0)) + chips
+    player["poker_chips"] = 0
+    if not player.get("is_bot"):
+        persist_player_money(player)
+
 def poker_seated(room):
-    return [p for p in room.get("players", []) if p.get("connected") and not p.get("spectator") and int(p.get("poker_chips", 0)) > 0]
+    """Players at the table. Includes all-in (0 chips) while still in the current hand."""
+    phase = room.get("poker_phase") or "WAITING"
+    mid_hand = phase in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN")
+    out = []
+    for p in room.get("players", []):
+        if not p.get("connected") or p.get("spectator"):
+            continue
+        chips = int(p.get("poker_chips", 0) or 0)
+        if chips > 0:
+            out.append(p)
+        elif mid_hand and p.get("poker_in_hand") and p.get("poker_status") in ("allin", "active", "folded"):
+            # Still at the table for this hand — all-in is NOT leave/sit-out
+            out.append(p)
+    return out
+
+def poker_with_chips(room):
+    """Players who can start the next hand (must have table chips)."""
+    return [p for p in room.get("players", [])
+            if p.get("connected") and not p.get("spectator") and int(p.get("poker_chips", 0) or 0) > 0]
 
 def poker_in_hand(room):
     return [p for p in poker_seated(room) if p.get("poker_status") not in ("folded", "sitting_out") and p.get("poker_in_hand")]
@@ -1470,12 +1750,15 @@ async def promote_pending_poker_players(room):
             p["pending_seat"] = False
             seated += 1
             continue
-        # Humans: full balance becomes table chips (no buy-in deduction)
+        # Humans: buy in from bank into table stack
         if int(p.get("money", 0)) <= 0 and int(p.get("poker_chips", 0)) <= 0:
             p["pending_seat"] = False
             continue
-        poker_seat_with_balance(p)
-        seated += 1
+        ok, _ = poker_seat_with_buyin(p, room)
+        if ok:
+            seated += 1
+        else:
+            p["pending_seat"] = False
 
 def poker_bot_decide(room, player):
     """Simple tight-aggressive-ish bot decision. Returns (action, amount)."""
@@ -1608,8 +1891,10 @@ def poker_serialise(room, viewer_id=None):
             continue
         show_cards = False
         if phase in ("SHOWDOWN", "HAND_OVER"):
-            show_cards = p.get("poker_in_hand") and p.get("poker_status") != "folded"
+            show_cards = (p.get("poker_in_hand") and p.get("poker_status") != "folded") or bool(p.get("poker_show_hole"))
         elif viewer_id and p["id"] == viewer_id:
+            show_cards = True
+        elif p.get("poker_show_hole"):
             show_cards = True
         hole = p.get("poker_hole", []) or []
         active_street = phase in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN", "HAND_OVER")
@@ -1642,6 +1927,8 @@ def poker_serialise(room, viewer_id=None):
             "avatarColor": p.get("avatar_color"),
             "money": int(p.get("money", 0)),
             "isBot": bool(p.get("is_bot")),
+            "isAdmin": bool(p.get("is_admin")),
+            "showHole": bool(p.get("poker_show_hole")),
         })
     return {
         "code": room["code"],
@@ -1649,6 +1936,12 @@ def poker_serialise(room, viewer_id=None):
         "phase": phase,
         "community": [{"rank": c["rank"], "suit": c["suit"]} for c in community],
         "pot": int(room.get("poker_pot", 0)),
+        "sidePots": list(room.get("poker_side_pots") or []),
+        "locked": bool(room.get("pin")),
+        "announcement": room.get("announcement"),
+        "bounties": {p.get("username"): int(room.get("bounties", {}).get(p.get("username_key"), 0) or 0)
+                     for p in room.get("players", []) if room.get("bounties", {}).get(p.get("username_key"))},
+        "handHistoryCount": len(room.get("hand_history") or []),
         "currentBet": int(room.get("poker_current_bet", 0)),
         "minRaise": int(room.get("poker_min_raise", room.get("poker_big_blind", POKER_BIG_BLIND))),
         "activePlayerId": room.get("active_player_id"),
@@ -1699,7 +1992,7 @@ async def _poker_autostart(room):
     return
 
 async def poker_start_hand(room):
-    players = poker_seated(room)
+    players = poker_with_chips(room)
     if len(players) < POKER_MIN_PLAYERS:
         room["poker_phase"] = "WAITING"
         room["active_player_id"] = None
@@ -1916,6 +2209,73 @@ async def poker_showdown(room):
     room["poker_winners"] = winner_info
     room["poker_phase"] = "HAND_OVER"
     save_accounts()
+
+    # Hand history
+    try:
+        push_hand_history(room, {
+            "game": "poker",
+            "ts": int(time.time()),
+            "pot": sum(w.get("amount", 0) for w in winner_info),
+            "community": [{"rank": c["rank"], "suit": c["suit"]} for c in community],
+            "winners": [{"username": w.get("username"), "amount": w.get("amount"), "hand": w.get("handName")} for w in winner_info],
+            "players": [
+                {"username": p.get("username"), "status": p.get("poker_status"),
+                 "hole": [{"rank": c["rank"], "suit": c["suit"]} for c in (p.get("poker_hole") or [])] if p.get("poker_status") != "folded" else []}
+                for p in poker_seated(room) if p.get("poker_in_hand")
+            ],
+        })
+    except Exception:
+        pass
+
+    # Bounty: winners who knocked out (zeroed) a bounty target
+    bmap = room.get("bounties") or {}
+    for w in winners:
+        for other in contenders:
+            if other in winners:
+                continue
+            bkey = other.get("username_key")
+            bounty = int(bmap.get(bkey, 0) or 0)
+            if bounty > 0 and int(other.get("poker_chips", 0)) == 0:
+                w["poker_chips"] = int(w.get("poker_chips", 0)) + bounty
+                poker_sync_balance(w)
+                bmap[bkey] = 0
+                if w.get("ws"):
+                    try:
+                        await w["ws"].send(json.dumps({"type":"info","message":f"Bounty claimed! +${bounty} for knocking out {other.get('username')}."}))
+                    except Exception:
+                        pass
+
+    # Spectator bets on poker winner
+    sbets = room.pop("spectator_bets", {}) or {}
+    winner_ids = {w["id"] for w in winners}
+    for sid, bet in sbets.items():
+        spec = find_player(room, sid)
+        if not spec:
+            continue
+        amt = int(bet.get("amount", 0))
+        if bet.get("targetId") in winner_ids:
+            spec["money"] = int(spec.get("money", 0)) + amt * 2
+            persist_player_money(spec)
+            if spec.get("ws"):
+                try:
+                    await spec["ws"].send(json.dumps({"type":"info","message":f"Spectator bet won +${amt}!"}))
+                except Exception:
+                    pass
+        else:
+            if spec.get("ws"):
+                try:
+                    await spec["ws"].send(json.dumps({"type":"info","message":f"Spectator bet lost (${amt})."}))
+                except Exception:
+                    pass
+
+    for p in room.get("players", []):
+        if try_auto_rebuy(p, room) and p.get("ws"):
+            try:
+                await p["ws"].send(json.dumps({"type":"info","message":f"Auto-rebuy: +${p.get('money')} chips."}))
+            except Exception:
+                pass
+
+    room["poker_side_pots"] = []
     await poker_broadcast(room)
     # Interval after each hand — host must click START HAND for the next round
     await asyncio.sleep(POKER_BETWEEN_HANDS_S)
@@ -2078,6 +2438,10 @@ async def poker_handle_action(room, player, action, amount=0):
             await broadcast_public_tables()
         return True, "ok"
 
+    try:
+        compute_poker_side_pots(room)
+    except Exception:
+        pass
     if poker_betting_complete(room):
         # if all remaining are all-in or only one can act, run out
         can_act = [p for p in active if p.get("poker_status") != "allin"]
@@ -2212,7 +2576,17 @@ async def ws_handler(websocket):
             game = str(msg.get("game", "blackjack")).lower()
             if game not in ("blackjack", "poker"): game = "blackjack"
             max_players = msg.get("maxPlayers", POKER_MAX_PLAYERS if game == "poker" else MAX_PLAYERS_DEFAULT)
-            room = get_room(code, public=True, game=game, max_players=max_players)
+            # Optional 4-digit PIN — if set, table is private (not listed) and join requires pin
+            pin_raw = str(msg.get("pin") or msg.get("password") or "").strip()
+            pin = None
+            if pin_raw:
+                if not (pin_raw.isdigit() and len(pin_raw) == 4):
+                    await websocket.send(json.dumps({"type":"error","message":"Table PIN must be exactly 4 digits."}))
+                    continue
+                pin = pin_raw
+            is_public = not bool(pin)
+            room = get_room(code, public=is_public, game=game, max_players=max_players)
+            room["pin"] = pin
             if game == "poker":
                 try:
                     buyin = int(msg.get("buyIn", POKER_DEFAULT_BUYIN))
@@ -2221,7 +2595,10 @@ async def ws_handler(websocket):
                 room["poker_buyin"] = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, buyin))
                 room["poker_phase"] = "WAITING"
                 room["phase"] = "WAITING"
-            await websocket.send(json.dumps({"type":"public_created","code":code,"game":game,"maxPlayers":rooms[code].get("max_players", MAX_PLAYERS_DEFAULT),"buyIn":room.get("poker_buyin")}))
+            created_msg = {"type":"public_created","code":code,"game":game,"maxPlayers":rooms[code].get("max_players", MAX_PLAYERS_DEFAULT),"locked":bool(pin),"pin":pin if pin else None}
+            if game == "poker":
+                created_msg["buyIn"] = room.get("poker_buyin")
+            await websocket.send(json.dumps(created_msg))
             await send_public_tables(websocket)
             continue
 
@@ -2405,6 +2782,128 @@ async def ws_handler(websocket):
                     await websocket.send(json.dumps({"type":"error","scope":"chat","message":"That message isn't allowed."}))
             continue
 
+
+        if kind == "reaction":
+            # Quick emoji float above a seat — zero persistent load
+            if room is None or player is None:
+                continue
+            emoji = str(msg.get("emoji") or "")[:4]
+            allowed = {"👏", "🔥", "💀", "😂", "❤️", "😮", "👍", "🎉"}
+            if emoji not in allowed:
+                continue
+            target_id = msg.get("targetId") or player["id"]
+            payload = json.dumps({
+                "type": "reaction",
+                "emoji": emoji,
+                "fromId": player["id"],
+                "fromName": player.get("username"),
+                "targetId": target_id,
+                "ts": int(time.time() * 1000),
+            })
+            for rp in room.get("players", []):
+                if rp.get("ws"):
+                    try:
+                        await rp["ws"].send(payload)
+                    except Exception:
+                        pass
+            continue
+
+        if kind == "hand_history":
+            if room is None:
+                continue
+            await websocket.send(json.dumps({
+                "type": "hand_history",
+                "history": list(room.get("hand_history") or []),
+            }))
+            continue
+
+        if kind == "set_auto_rebuy":
+            key = TOKENS.get(msg.get("token")) or (player.get("username_key") if player else None)
+            if key not in ACCOUNTS:
+                continue
+            acc = ACCOUNTS[key]
+            ensure_account_progress(acc)
+            acc["auto_rebuy"] = bool(msg.get("enabled"))
+            try:
+                amt = int(msg.get("amount", acc.get("auto_rebuy_amount", 1000)))
+            except (TypeError, ValueError):
+                amt = 1000
+            acc["auto_rebuy_amount"] = max(100, min(50000, amt))
+            save_accounts()
+            await websocket.send(json.dumps({"type": "profile", "profile": profile_payload(acc)}))
+            await websocket.send(json.dumps({"type": "info", "message": f"Auto-rebuy {'ON' if acc['auto_rebuy'] else 'OFF'} (${acc['auto_rebuy_amount']})."}))
+            continue
+
+        if kind == "admin_announce":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            text_msg = " ".join(str(msg.get("text") or "").split())[:120]
+            if not text_msg:
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Announcement text required."}))
+                continue
+            room["announcement"] = {"text": text_msg, "expires_at": time.time() + 8, "from": player.get("username")}
+            payload = json.dumps({"type": "announcement", "text": text_msg, "from": player.get("username")})
+            for rp in room.get("players", []):
+                if rp.get("ws"):
+                    try:
+                        await rp["ws"].send(payload)
+                    except Exception:
+                        pass
+            await websocket.send(json.dumps({"type":"admin_ok","message":"Announcement sent."}))
+            continue
+
+        if kind == "admin_set_bounty":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            target = find_player(room, msg.get("targetId"))
+            try:
+                amount = int(msg.get("amount", 0))
+            except (TypeError, ValueError):
+                amount = 0
+            if not target or amount < 0 or amount > 1_000_000:
+                continue
+            key = target.get("username_key")
+            bmap = room.setdefault("bounties", {})
+            if amount == 0:
+                bmap.pop(key, None)
+            else:
+                bmap[key] = amount
+            if room.get("game") == "poker":
+                await poker_broadcast(room)
+            else:
+                await broadcast(room)
+            await websocket.send(json.dumps({"type":"admin_ok","message":f"Bounty on {target.get('username')}: ${amount}."}))
+            await send_admin_data(websocket, room)
+            continue
+
+        if kind == "spectator_bet":
+            if room is None or player is None:
+                continue
+            if not player.get("spectator"):
+                await websocket.send(json.dumps({"type":"error","message":"Only spectators can place spectator bets."}))
+                continue
+            target = find_player(room, msg.get("targetId"))
+            try:
+                amount = int(msg.get("amount", 0))
+            except (TypeError, ValueError):
+                amount = 0
+            if not target or target.get("spectator") or amount < 10 or amount > 50000:
+                await websocket.send(json.dumps({"type":"error","message":"Invalid spectator bet."}))
+                continue
+            if int(player.get("money", 0)) < amount:
+                await websocket.send(json.dumps({"type":"error","message":"Not enough chips."}))
+                continue
+            # one open bet per spectator
+            sbet = room.setdefault("spectator_bets", {})
+            if player["id"] in sbet:
+                await websocket.send(json.dumps({"type":"error","message":"You already have a spectator bet this round."}))
+                continue
+            player["money"] = int(player["money"]) - amount
+            persist_player_money(player)
+            sbet[player["id"]] = {"targetId": target["id"], "amount": amount, "spectatorId": player["id"]}
+            await websocket.send(json.dumps({"type":"info","message":f"Spectator bet ${amount} on {target.get('username')}."}))
+            continue
+
         if kind == "profile":
             key = TOKENS.get(msg.get("token"))
             if key: bump_play_time(key)
@@ -2505,8 +3004,12 @@ async def ws_handler(websocket):
             key = TOKENS.get(msg.get("token")); account = ACCOUNTS.get(key)
             tier_id = str(msg.get("tier"))
             if account is not None:
+                ensure_account_progress(account)
+                # Keep season_id aligned so payload does not wipe XP mid-claim
+                if int(account.get("season_id", 0) or 0) != int(SEASON["id"]):
+                    account["season_id"] = int(SEASON["id"])
                 match = next((t for t in SEASON["tiers"] if str(t["tier"])==tier_id), None)
-                claimed=set(account.get("season_claimed",[]))
+                claimed=set(str(x) for x in account.get("season_claimed",[]))
                 if not season_active() or not match or tier_id in claimed or int(account.get("season_xp",0)) < int(match["xp"]):
                     await websocket.send(json.dumps({"type":"error","scope":"season","message":"That reward is not available."}))
                 else:
@@ -2518,7 +3021,7 @@ async def ws_handler(websocket):
                     elif r["type"]=="table": account["owned_tables"] = sorted(set(account.get("owned_tables",[])) | {r["id"]})
                     elif r["type"]=="ball": account["owned_balls"] = sorted(set(account.get("owned_balls",[])) | {r["id"]})
                     elif r["type"]=="title": account["season_title"] = r["name"]
-                    claimed.add(tier_id); account["season_claimed"]=sorted(claimed); save_accounts()
+                    claimed.add(tier_id); account["season_claimed"]=sorted(claimed, key=lambda x: int(x) if str(x).isdigit() else 0); save_accounts()
                     await websocket.send(json.dumps({"type":"season","season":season_payload(account),"profile":profile_payload(account),"claimedTier":int(tier_id)}))
             continue
 
@@ -2537,9 +3040,26 @@ async def ws_handler(websocket):
                 await websocket.send(json.dumps({"type":"error","message":"That table does not exist."}))
                 room = None
                 continue
+            # Existing locked table: validate PIN before creating empty room via get_room
+            if code in rooms and rooms[code].get("pin"):
+                supplied = str(msg.get("pin") or msg.get("password") or "").strip()
+                if not hmac.compare_digest(supplied, str(rooms[code]["pin"])):
+                    await websocket.send(json.dumps({"type":"error","scope":"table","message":"Incorrect table PIN.","code":"bad_pin"}))
+                    room = None
+                    continue
             room = get_room(code, game=game)
             if room.get("game") != game:
                 await websocket.send(json.dumps({"type":"error","scope":"table","message":"That table belongs to another game."})); room=None; continue
+            # PIN check again for rooms that just got created without pin in msg (join private by code)
+            if room.get("pin"):
+                supplied = str(msg.get("pin") or msg.get("password") or "").strip()
+                if not hmac.compare_digest(supplied, str(room["pin"])):
+                    await websocket.send(json.dumps({"type":"error","scope":"table","message":"Incorrect table PIN.","code":"bad_pin"}))
+                    # if we just created an empty room by mistake, drop it
+                    if not room.get("players"):
+                        rooms.pop(code, None)
+                    room = None
+                    continue
             if spectate and not room.get("players"):
                 await websocket.send(json.dumps({"type":"error","message":"There is nobody to spectate yet."}))
                 room = None
@@ -2611,6 +3131,7 @@ async def ws_handler(websocket):
                 "username": account["username"],
                 "username_key": account_key,
                 "money": int(account.get("money", STARTING_MONEY)),
+                "is_admin": bool(account.get("is_admin")),
                 "bet": 0,
                 "hand": [],
                 "status": "betting",
@@ -2652,9 +3173,12 @@ async def ws_handler(websocket):
                     player["spectator"] = True
                     player["status"] = "spectating"
                     player["pending_seat"] = True
-                elif int(player.get("money", 0)) > 0:
-                    # Full balance is table chips — no separate buy-in
-                    poker_seat_with_balance(player)
+                elif int(player.get("money", 0)) >= POKER_MIN_BUYIN:
+                    ok, _ = poker_seat_with_buyin(player, room)
+                    if not ok:
+                        player["spectator"] = True
+                        player["status"] = "spectating"
+                        player["pending_seat"] = True
                 else:
                     player["spectator"] = True
                     player["status"] = "spectating"
@@ -2724,6 +3248,99 @@ async def ws_handler(websocket):
                     pass
             continue
 
+
+        if kind == "change_password":
+            key = TOKENS.get(msg.get("token"))
+            account = ACCOUNTS.get(key)
+            if not account:
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "Not logged in."}))
+                continue
+            current = str(msg.get("currentPassword") or "")
+            new_pass = str(msg.get("newPassword") or "")
+            if not verify_password(current, account["salt"], account["password"]):
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "Current password is incorrect."}))
+                continue
+            if len(new_pass) < 8:
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "New password must be at least 8 characters."}))
+                continue
+            salt, digest = hash_password(new_pass)
+            account["salt"] = salt
+            account["password"] = digest
+            save_accounts()
+            await websocket.send(json.dumps({"type": "profile_ok", "message": "Password updated."}))
+            continue
+
+        if kind == "change_username":
+            key = TOKENS.get(msg.get("token"))
+            account = ACCOUNTS.get(key)
+            if not account:
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "Not logged in."}))
+                continue
+            current = str(msg.get("password") or "")
+            new_name = (msg.get("newUsername") or "").strip()
+            if not verify_password(current, account["salt"], account["password"]):
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "Password is incorrect."}))
+                continue
+            if len(new_name) < 3 or len(new_name) > 16 or not new_name.replace("_","").isalnum():
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "Username must be 3–16 letters, numbers, or underscores."}))
+                continue
+            new_key = new_name.lower()
+            if new_key != key and new_key in ACCOUNTS:
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "That username is taken."}))
+                continue
+            old_user = account.get("username")
+            account["username"] = new_name
+            if new_key != key:
+                # migrate account key
+                ACCOUNTS[new_key] = account
+                del ACCOUNTS[key]
+                # re-map tokens
+                for tok, k in list(TOKENS.items()):
+                    if k == key:
+                        TOKENS[tok] = new_key
+                # update in rooms
+                for r in rooms.values():
+                    for p in r.get("players", []):
+                        if p.get("username_key") == key:
+                            p["username_key"] = new_key
+                            p["username"] = new_name
+                            p["name"] = new_name
+            else:
+                for r in rooms.values():
+                    for p in r.get("players", []):
+                        if p.get("username_key") == key:
+                            p["username"] = new_name
+                            p["name"] = new_name
+            save_accounts()
+            await websocket.send(json.dumps({
+                "type": "profile_ok",
+                "message": "Username changed.",
+                "username": new_name,
+                "profile": profile_payload(ACCOUNTS[new_key if new_key in ACCOUNTS else key]),
+            }))
+            continue
+
+        if kind == "delete_account":
+            key = TOKENS.get(msg.get("token"))
+            account = ACCOUNTS.get(key)
+            if not account:
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "Not logged in."}))
+                continue
+            current = str(msg.get("password") or "")
+            if not verify_password(current, account["salt"], account["password"]):
+                await websocket.send(json.dumps({"type": "error", "scope": "profile", "message": "Password is incorrect."}))
+                continue
+            # remove from rooms
+            for code, r in list(rooms.items()):
+                r["players"] = [p for p in r.get("players", []) if p.get("username_key") != key]
+            for tok, k in list(TOKENS.items()):
+                if k == key:
+                    TOKENS.pop(tok, None)
+            ACCOUNTS.pop(key, None)
+            save_accounts()
+            await websocket.send(json.dumps({"type": "account_deleted", "message": "Account deleted."}))
+            continue
+
         if kind == "admin_login":
             password = msg.get("password") or ""
             if not room or not player:
@@ -2731,8 +3348,26 @@ async def ws_handler(websocket):
                 continue
             if ADMIN_PASSWORD and hmac.compare_digest(password, ADMIN_PASSWORD):
                 ADMIN_SOCKETS.add(websocket)
-                await websocket.send(json.dumps({"type": "admin_ok"}))
+                # Permanent admin flag on account
+                acc = ACCOUNTS.get(player.get("username_key"))
+                if acc is not None:
+                    ensure_account_progress(acc)
+                    acc["is_admin"] = True
+                    player["is_admin"] = True
+                    save_accounts()
+                await websocket.send(json.dumps({"type": "admin_ok", "isAdmin": True}))
+                # refresh profile so client sees permanent flag
+                if acc is not None:
+                    try:
+                        await websocket.send(json.dumps({"type": "profile", "profile": profile_payload(acc)}))
+                    except Exception:
+                        pass
                 await send_admin_data(websocket, room)
+                # broadcast so others see gold name
+                if room.get("game") == "poker":
+                    await poker_broadcast(room)
+                else:
+                    await broadcast(room)
             else:
                 await websocket.send(json.dumps({"type": "error", "scope": "admin", "message": "Incorrect admin password."}))
             continue
@@ -2756,33 +3391,41 @@ async def ws_handler(websocket):
             if room.get("host_id") != player.get("id"):
                 await websocket.send(json.dumps({"type": "error", "message": "Only the host can add bots."}))
                 continue
-            max_p = int(room.get("max_players", POKER_MAX_PLAYERS))
-            seated = sum(1 for p in room["players"] if p.get("connected") and not p.get("spectator"))
-            total = sum(1 for p in room["players"] if p.get("connected"))
-            if seated >= max_p and room.get("poker_phase") in ("WAITING", "HAND_OVER", "LOBBY", None):
-                await websocket.send(json.dumps({"type": "error", "message": "Table is full — no open seats."}))
-                continue
-            if total >= max_p + 4:
-                await websocket.send(json.dumps({"type": "error", "message": "Too many spectators already."}))
-                continue
-            bot = create_poker_bot(room)
-            phase = room.get("poker_phase") or "WAITING"
-            mid_hand = phase in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN")
-            if mid_hand or seated >= max_p:
-                bot["spectator"] = True
-                bot["status"] = "spectating"
-                bot["pending_seat"] = True
-                bot["poker_chips"] = 0
-                bot["money"] = 0
+            try:
+                count = int(msg.get("count", 1))
+            except (TypeError, ValueError):
+                count = 1
+            count = max(1, min(5, count))
+            added = 0
+            for _ in range(count):
+                max_p = int(room.get("max_players", POKER_MAX_PLAYERS))
+                seated = sum(1 for p in room["players"] if p.get("connected") and not p.get("spectator"))
+                total = sum(1 for p in room["players"] if p.get("connected"))
+                if total >= max_p + 4:
+                    break
+                bot = create_poker_bot(room)
+                # Bots use table buy-in as their stack
+                buyin = int(room.get("poker_buyin", POKER_DEFAULT_BUYIN) or POKER_DEFAULT_BUYIN)
+                bot["poker_chips"] = buyin
+                bot["money"] = buyin
+                phase = room.get("poker_phase") or "WAITING"
+                mid_hand = phase in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN")
+                if mid_hand or seated >= max_p:
+                    bot["spectator"] = True
+                    bot["status"] = "spectating"
+                    bot["pending_seat"] = True
+                else:
+                    bot["spectator"] = False
+                    bot["status"] = "waiting"
+                    bot["poker_status"] = "waiting"
+                room["players"].append(bot)
+                added += 1
+            if added:
+                await poker_broadcast(room)
+                await broadcast_public_tables()
+                await websocket.send(json.dumps({"type": "info", "message": f"Added {added} bot{'s' if added != 1 else ''}."}))
             else:
-                bot["spectator"] = False
-                bot["status"] = "waiting"
-                bot["poker_status"] = "waiting"
-                # create_poker_bot already sets poker_chips + money
-            room["players"].append(bot)
-            await poker_broadcast(room)
-            await broadcast_public_tables()
-            # Host must click START HAND — no auto-start
+                await websocket.send(json.dumps({"type": "error", "message": "No room for more bots."}))
             continue
 
         if kind == "poker_action":
@@ -2808,7 +3451,7 @@ async def ws_handler(websocket):
             if phase not in ("WAITING", "HAND_OVER", "LOBBY"):
                 await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": f"Hand already in progress ({phase})."}))
                 continue
-            seated = poker_seated(room)
+            seated = poker_with_chips(room)
             if len(seated) < POKER_MIN_PLAYERS:
                 await websocket.send(json.dumps({
                     "type": "error",
@@ -2821,14 +3464,10 @@ async def ws_handler(websocket):
             continue
 
         if kind == "poker_buyin":
-            # Buy-in removed — full balance is always used. Treat as sit with balance.
             if not room or not player or room.get("game") != "poker":
                 continue
-            if room.get("poker_phase") in ("PREFLOP", "FLOP", "TURN", "RIVER"):
+            if room.get("poker_phase") in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN"):
                 await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": "Wait for the current hand to finish."}))
-                continue
-            if int(player.get("money", 0)) <= 0 and int(player.get("poker_chips", 0)) <= 0:
-                await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": "No chips to play with."}))
                 continue
             if player.get("spectator"):
                 seated_now = sum(1 for p in room["players"] if p.get("connected") and not p.get("spectator"))
@@ -2836,18 +3475,45 @@ async def ws_handler(websocket):
                 if seated_now >= max_p:
                     await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": "No open seats."}))
                     continue
-            poker_seat_with_balance(player)
+            ok, err = poker_seat_with_buyin(player, room)
+            if not ok:
+                await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": err}))
+                continue
             await poker_broadcast(room)
+            await websocket.send(json.dumps({"type": "info", "message": f"Bought in for ${int(player.get('poker_chips', 0))} (bank ${int(player.get('money', 0))})."}))
+            continue
+
+        if kind == "poker_set_buyin":
+            if not room or not player or room.get("game") != "poker":
+                continue
+            if room.get("host_id") != player.get("id"):
+                await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": "Only the host can set the buy-in."}))
+                continue
+            try:
+                amount = int(msg.get("amount", room.get("poker_buyin", POKER_DEFAULT_BUYIN)))
+            except (TypeError, ValueError):
+                amount = POKER_DEFAULT_BUYIN
+            amount = max(POKER_MIN_BUYIN, min(POKER_MAX_BUYIN, amount))
+            room["poker_buyin"] = amount
+            await poker_broadcast(room)
+            await websocket.send(json.dumps({"type": "info", "message": f"Table buy-in set to ${amount}."}))
+            await broadcast_public_tables()
             continue
 
         if kind == "poker_cashout":
-            # Balance is already universal — cash out means sit out (keep money)
             if not room or not player or room.get("game") != "poker":
                 continue
-            if room.get("poker_phase") in ("PREFLOP", "FLOP", "TURN", "RIVER") and player.get("poker_in_hand") and player.get("poker_status") != "folded":
-                await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": "Cannot leave during a hand."}))
+            if room.get("poker_phase") in ("PREFLOP", "FLOP", "TURN", "RIVER") and player.get("poker_in_hand") and player.get("poker_status") not in ("folded", "allin"):
+                # All-in players are already done acting — allow cashout only after hand
+                if player.get("poker_status") != "allin":
+                    await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": "Cannot sit out during a hand."}))
+                    continue
+                await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": "Wait for the hand to finish."}))
                 continue
-            poker_sync_balance(player)
+            if room.get("poker_phase") in ("PREFLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN") and player.get("poker_in_hand"):
+                await websocket.send(json.dumps({"type": "error", "scope": "poker", "message": "Wait for the hand to finish."}))
+                continue
+            poker_cashout_to_bank(player)
             player["poker_status"] = "sitting_out"
             player["poker_in_hand"] = False
             player["spectator"] = True
@@ -2872,10 +3538,13 @@ async def ws_handler(websocket):
                 if int(player.get("money", 0)) <= 0 and int(player.get("poker_chips", 0)) <= 0:
                     await websocket.send(json.dumps({"type":"error","scope":"poker","message":"No chips to play with."}))
                     continue
-                if room.get("poker_phase") in ("PREFLOP","FLOP","TURN","RIVER"):
+                if room.get("poker_phase") in ("PREFLOP","FLOP","TURN","RIVER","SHOWDOWN"):
                     await websocket.send(json.dumps({"type":"error","scope":"poker","message":"Wait for the current hand to finish."}))
                     continue
-                poker_seat_with_balance(player)
+                ok, err = poker_seat_with_buyin(player, room)
+                if not ok:
+                    await websocket.send(json.dumps({"type":"error","scope":"poker","message":err}))
+                    continue
                 await poker_broadcast(room)
                 # Host must click START HAND — no auto-start
             else:
@@ -2892,10 +3561,8 @@ async def ws_handler(websocket):
             continue
 
         if kind == "leave_table":
-            # Balance is already universal (poker_chips == money)
             if room and player and room.get("game") == "poker":
-                poker_sync_balance(player)
-                player["poker_chips"] = int(player.get("money", 0))
+                poker_cashout_to_bank(player)
             ADMIN_SOCKETS.discard(websocket)
             leave_balance = None
             leave_key = None
@@ -3233,16 +3900,152 @@ async def ws_handler(websocket):
             if not target:
                 continue
             enabled = bool(msg.get("enabled"))
+            try:
+                strength = int(msg.get("strength", 50 if enabled else 0))
+            except (TypeError, ValueError):
+                strength = 50 if enabled else 0
+            strength = max(0, min(100, strength))
             key = target.get("username_key")
             luck_map = room.setdefault("lucky_players", {})
-            if enabled:
-                luck_map[key] = 50
-                pass  # poker has no player luck
+            if enabled and strength > 0:
+                luck_map[key] = strength
             else:
                 luck_map.pop(key, None)
-                pass
-            await broadcast(room)
+            if room.get("game") == "poker":
+                await poker_broadcast(room)
+            else:
+                await broadcast(room)
             await send_admin_data(websocket, room)
+
+        elif kind == "admin_set_player_luck":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            target = find_player(room, msg.get("targetId"))
+            if not target:
+                continue
+            try:
+                strength = int(msg.get("strength", 0))
+            except (TypeError, ValueError):
+                strength = -1
+            if strength < 0 or strength > 100:
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Luck strength must be 0–100."}))
+                continue
+            key = target.get("username_key")
+            luck_map = room.setdefault("lucky_players", {})
+            if strength > 0:
+                luck_map[key] = strength
+            else:
+                luck_map.pop(key, None)
+            # also keep roulette map in sync when relevant
+            room.setdefault("roulette_player_luck", {})[key] = strength
+            if room.get("game") == "poker":
+                await poker_broadcast(room)
+            else:
+                await broadcast(room)
+            await send_admin_data(websocket, room)
+
+        elif kind == "admin_set_forced_cards":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            # payload: { assignments: { playerId: [{rank,suit}, ...], "dealer": [...] } }
+            assignments = msg.get("assignments") or {}
+            forced = room.setdefault("forced_cards", {})
+            dealer_list = assignments.get("dealer") or assignments.get("__dealer__") or []
+            clean_dealer = []
+            for c in dealer_list:
+                if isinstance(c, dict) and c.get("rank") and c.get("suit"):
+                    clean_dealer.append({"rank": str(c["rank"]).upper(), "suit": str(c["suit"]).upper()[0]})
+            room["forced_dealer_cards"] = clean_dealer
+            for pid, cards in assignments.items():
+                if pid in ("dealer", "__dealer__"):
+                    continue
+                if not isinstance(cards, list):
+                    continue
+                clean = []
+                for c in cards:
+                    if isinstance(c, dict) and c.get("rank") and c.get("suit"):
+                        clean.append({"rank": str(c["rank"]).upper(), "suit": str(c["suit"]).upper()[0]})
+                if clean:
+                    forced[pid] = clean
+                elif pid in forced:
+                    forced.pop(pid, None)
+            await websocket.send(json.dumps({"type":"admin_ok","message":"Forced cards set for next deal."}))
+            await send_admin_data(websocket, room)
+
+        elif kind == "admin_clear_forced_cards":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            room["forced_cards"] = {}
+            room["forced_dealer_cards"] = []
+            await websocket.send(json.dumps({"type":"admin_ok","message":"Forced cards cleared."}))
+            await send_admin_data(websocket, room)
+
+        elif kind == "player_profile_peek":
+            # Public stats peek for any seated player
+            target = None
+            tid = msg.get("playerId") or msg.get("targetId")
+            if room and tid:
+                target = find_player(room, tid)
+            if not target:
+                await websocket.send(json.dumps({"type":"error","message":"Player not found."}))
+                continue
+            acc = ACCOUNTS.get(target.get("username_key"))
+            if not acc:
+                # bot or missing
+                payload = {
+                    "id": target["id"],
+                    "username": target.get("username") or target.get("name"),
+                    "level": 1,
+                    "levelTitle": "Rookie",
+                    "winRate": 0,
+                    "biggestWin": 0,
+                    "playSeconds": 0,
+                    "gamesPlayed": 0,
+                    "isAdmin": bool(target.get("is_admin")),
+                    "avatar": target.get("avatar"),
+                    "avatarColor": target.get("avatar_color"),
+                    "isBot": bool(target.get("is_bot")),
+                }
+            else:
+                ensure_account_progress(acc)
+                level, title = account_level(int(acc.get("xp", 0)))
+                games = int(acc.get("games_played", 0))
+                wins = int(acc.get("wins", 0))
+                payload = {
+                    "id": target["id"],
+                    "username": acc.get("username"),
+                    "level": level,
+                    "levelTitle": title,
+                    "winRate": round((wins / games * 100), 1) if games else 0,
+                    "biggestWin": int(acc.get("biggest_win", 0)),
+                    "playSeconds": int(acc.get("play_seconds", 0) or 0),
+                    "gamesPlayed": games,
+                    "isAdmin": bool(acc.get("is_admin")),
+                    "avatar": acc.get("avatar") or target.get("avatar"),
+                    "avatarColor": acc.get("avatar_color") or target.get("avatar_color"),
+                    "isBot": False,
+                }
+            # Extra fields for admins viewing
+            if is_authorized_admin(websocket, room, player) or (player and ACCOUNTS.get(player.get("username_key"), {}).get("is_admin")):
+                payload["money"] = int(target.get("money", 0))
+                payload["lucky"] = bool(room.get("lucky_players", {}).get(target.get("username_key"), 0)) if room else False
+                payload["luckStrength"] = int(room.get("lucky_players", {}).get(target.get("username_key"), 0) or 0) if room else 0
+                payload["adminView"] = True
+            else:
+                payload["adminView"] = False
+            await websocket.send(json.dumps({"type": "player_profile_peek", "profile": payload}))
+            continue
+
+        elif kind == "poker_show_cards":
+            if not room or not player or room.get("game") != "poker":
+                continue
+            phase = room.get("poker_phase", "WAITING")
+            if phase not in ("SHOWDOWN", "HAND_OVER"):
+                await websocket.send(json.dumps({"type":"error","scope":"poker","message":"Can only show cards during showdown."}))
+                continue
+            player["poker_show_hole"] = True
+            await poker_broadcast(room)
+            continue
 
         elif kind == "admin_toggle_preview":
             if not is_authorized_admin(websocket, room, player):
