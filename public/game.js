@@ -2153,6 +2153,274 @@ function showAnnouncementBanner(text, from) {
   ban._t = setTimeout(() => { ban.classList.remove("show"); ban.classList.add("hidden"); }, 8000);
 }
 
+
+function renderAdminUsers(users, tablePlayers, dealerPreviewActive, dealerPreview, tableLuck, adminCatalog, developer) {
+  try {
+    window.__adminCatalog = adminCatalog || [];
+    window.__adminUsers = users || [];
+    const seated = Array.isArray(tablePlayers) ? tablePlayers : [];
+    const allUsers = Array.isArray(users) ? users : [];
+
+    // --- Players tab ---
+    const usersBox = document.getElementById("admin-users");
+    if (usersBox) {
+      if (!seated.length) {
+        usersBox.innerHTML = '<div class="admin-empty">No players seated at this table. Join or wait for players.</div>';
+      } else {
+        usersBox.innerHTML = seated.map(p => {
+          const id = escapeAttr(String(p.id || ""));
+          const name = escapeHtml(p.username || "Player");
+          const money = Number(p.money || 0).toLocaleString();
+          const luck = Number(p.luckStrength || 0);
+          const lucky = luck > 0 || p.lucky;
+          return `<div class="admin-player-row" data-id="${id}">
+            <div class="admin-player-main">
+              <strong>${name}</strong>
+              <span>$${money}${p.isAdmin ? " · ADMIN" : ""}${p.connected === false ? " · OFFLINE" : ""}</span>
+            </div>
+            <div class="admin-player-actions">
+              <button type="button" class="btn secondary admin-give-btn" data-id="${id}" data-amount="500">+$500</button>
+              <button type="button" class="btn secondary admin-give-btn" data-id="${id}" data-amount="5000">+$5K</button>
+              <button type="button" class="btn secondary admin-give-btn" data-id="${id}" data-amount="50000">+$50K</button>
+              <button type="button" class="btn ${lucky ? "on" : "secondary"} admin-luck-toggle" data-id="${id}" data-enabled="${lucky ? "0" : "1"}">${lucky ? "LUCK ON (" + luck + ")" : "LUCK OFF"}</button>
+            </div>
+            <div class="admin-player-luck">
+              <label>Luck 0–100 <input type="range" min="0" max="100" value="${luck}" class="admin-luck-range" data-id="${id}"></label>
+              <button type="button" class="btn secondary admin-luck-apply" data-id="${id}">SET LUCK</button>
+            </div>
+          </div>`;
+        }).join("");
+      }
+    }
+
+    // Economy / global money (all accounts)
+    const eco = document.getElementById("admin-economy");
+    if (eco) {
+      const top = allUsers.slice().sort((a,b) => Number(b.money||0) - Number(a.money||0)).slice(0, 12);
+      eco.innerHTML = `<div class="admin-section-title">GLOBAL BALANCES</div>` + (top.length ? top.map(u => {
+        const un = escapeAttr(u.username || "");
+        return `<div class="admin-player-row">
+          <div class="admin-player-main"><strong>${escapeHtml(u.username||"")}</strong><span>$${Number(u.money||0).toLocaleString()} · NW $${Number(u.netWorth||0).toLocaleString()}</span></div>
+          <div class="admin-player-actions">
+            <button type="button" class="btn secondary admin-global-add" data-user="${un}" data-amount="10000">+$10K</button>
+            <button type="button" class="btn secondary admin-global-set" data-user="${un}" data-amount="5000">SET $5K</button>
+            <button type="button" class="btn secondary admin-global-reset" data-user="${un}">RESET</button>
+          </div>
+        </div>`;
+      }).join("") : '<div class="admin-empty">No accounts loaded.</div>');
+    }
+
+    // --- Luck tab ---
+    const luckBox = document.getElementById("admin-luck-controls");
+    if (luckBox) {
+      const tl = tableLuck || {};
+      const tStrength = Number(tl.strength || 0);
+      const tActive = !!tl.active;
+      luckBox.innerHTML = `
+        <div class="admin-section-title">TABLE LUCK (ROULETTE)</div>
+        <p class="settings-help">0 = off · higher = stronger bias. Applies to table-level roulette luck.</p>
+        <div class="admin-control-row">
+          <label>Strength <input type="range" id="admin-table-luck-range" min="0" max="100" value="${tStrength}"></label>
+          <span id="admin-table-luck-val">${tStrength}${tActive ? " · ACTIVE" : ""}</span>
+          <button type="button" class="btn" id="admin-table-luck-apply">APPLY TABLE LUCK</button>
+          <button type="button" class="btn secondary" id="admin-table-luck-clear">CLEAR</button>
+        </div>
+        <div class="admin-section-title" style="margin-top:14px">PER-PLAYER LUCK</div>
+        ${seated.length ? seated.map(p => {
+          const id = escapeAttr(String(p.id||""));
+          const luck = Number(p.luckStrength||0);
+          return `<div class="admin-player-row"><div class="admin-player-main"><strong>${escapeHtml(p.username||"")}</strong><span>Luck ${luck}</span></div>
+            <div class="admin-player-luck">
+              <input type="range" min="0" max="100" value="${luck}" class="admin-luck-range" data-id="${id}">
+              <button type="button" class="btn secondary admin-luck-apply" data-id="${id}">SET</button>
+            </div></div>`;
+        }).join("") : '<div class="admin-empty">No seated players.</div>'}`;
+    }
+
+    // --- Cards tab ---
+    const cardBox = document.getElementById("admin-card-selector");
+    if (cardBox) {
+      const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+      const suits = ["♠","♥","♦","♣"];
+      const suitCodes = ["S","H","D","C"];
+      if (!window.__adminForcedAssignments) window.__adminForcedAssignments = {};
+      const targets = [{id:"dealer", label:"DEALER"}].concat(seated.map(p => ({id:String(p.id), label:p.username||p.id})));
+      cardBox.innerHTML = targets.map(t => {
+        const key = t.id;
+        const cur = (window.__adminForcedAssignments[key] || []).map(c => `${c.rank}${c.suit}`).join(" ");
+        return `<div class="admin-card-target" data-target="${escapeAttr(key)}">
+          <strong>${escapeHtml(t.label)}</strong>
+          <div class="admin-card-picks" data-target="${escapeAttr(key)}">${cur ? escapeHtml(cur) : "<span class='settings-help'>No forced cards</span>"}</div>
+          <div class="admin-card-buttons">
+            ${ranks.map(r => suits.map((s,i) => `<button type="button" class="btn secondary admin-card-pick" data-target="${escapeAttr(key)}" data-rank="${r}" data-suit="${suitCodes[i]}">${r}${s}</button>`).join("")).join("")}
+            <button type="button" class="btn secondary admin-card-clear-one" data-target="${escapeAttr(key)}">CLEAR</button>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    // Dealer preview status
+    const prev = document.getElementById("admin-preview");
+    if (prev) {
+      const on = !!dealerPreviewActive;
+      const cards = Array.isArray(dealerPreview) ? dealerPreview : [];
+      $("#admin-preview-toggle")?.classList.toggle("on", on);
+      prev.innerHTML = on
+        ? `<div class="settings-help">Preview ON · ${cards.map(c => escapeHtml((c.rank||"")+(c.suit||""))).join(" ") || "waiting for cards"}</div>`
+        : `<div class="settings-help">Dealer preview is off.</div>`;
+    }
+
+    // Items / VIP tab shell (static controls may already exist in HTML — fill dynamic list)
+    const itemsBox = document.getElementById("admin-item-controls");
+    if (itemsBox && !itemsBox.dataset.ready) {
+      const opts = (adminCatalog||[]).map(x => `<option value="${escapeAttr(x.category+':'+x.id)}">${escapeHtml(x.name)} (${escapeHtml(x.category)}) $${Number(x.price||0).toLocaleString()}</option>`).join("");
+      itemsBox.innerHTML = `
+        <div class="admin-global-gift">
+          <label>PLAYER USERNAME <input id="admin-gift-user" maxlength="16" placeholder="username"></label>
+          <label>ITEM <select id="admin-gift-item">${opts}</select></label>
+          <button type="button" class="btn" id="admin-gift-send">GIVE ITEM</button>
+        </div>
+        <div class="admin-global-gift vip-gift-box">
+          <label>GRANT VIP TO <input id="admin-vip-user" maxlength="16" placeholder="username"></label>
+          <label>DAYS <select id="admin-vip-days"><option value="30">30</option><option value="90">90</option><option value="365">365</option></select></label>
+          <button type="button" class="btn vip-admin-btn" id="admin-vip-send">GRANT VIP</button>
+        </div>`;
+      itemsBox.dataset.ready = "1";
+    }
+
+    // Season tab
+    const seasonBox = document.getElementById("admin-season-controls");
+    if (seasonBox) {
+      const opts = seated.map(p => `<option value="${escapeAttr(String(p.id))}">${escapeHtml(p.username||p.id)}</option>`).join("");
+      seasonBox.innerHTML = `
+        <p class="settings-help">Give season XP to a seated player at this table.</p>
+        <div class="admin-control-row">
+          <select id="admin-season-target">${opts || '<option value="">No players</option>'}</select>
+          <input id="admin-season-xp" type="number" min="1" value="100" style="width:100px">
+          <button type="button" class="btn" id="admin-season-give">GIVE SEASON XP</button>
+        </div>`;
+    }
+
+    // Developer tab
+    if (developer) {
+      try { renderDeveloperControls(developer, adminCatalog || []); } catch (e) { console.warn(e); }
+    }
+
+    // Wire dynamic buttons (event delegation once)
+    if (!window.__adminDelegatesBound) {
+      window.__adminDelegatesBound = true;
+      document.addEventListener("click", (ev) => {
+        const t = ev.target.closest("button");
+        if (!t) return;
+        if (t.classList.contains("admin-give-btn")) {
+          send({ type: "admin_give_table_money", targetId: t.dataset.id, amount: Number(t.dataset.amount || 0) });
+        } else if (t.classList.contains("admin-luck-toggle")) {
+          send({ type: "admin_toggle_lucky", targetId: t.dataset.id, enabled: t.dataset.enabled === "1", strength: 50 });
+        } else if (t.classList.contains("admin-luck-apply")) {
+          const row = t.closest(".admin-player-row, .admin-player-luck") || t.parentElement;
+          const range = row?.querySelector?.(".admin-luck-range") || document.querySelector(`.admin-luck-range[data-id="${t.dataset.id}"]`);
+          const strength = Number(range?.value || 0);
+          send({ type: "admin_set_player_luck", targetId: t.dataset.id, strength });
+        } else if (t.classList.contains("admin-global-add")) {
+          send({ type: "admin_add_money", username: t.dataset.user, amount: Number(t.dataset.amount || 0) });
+        } else if (t.classList.contains("admin-global-set")) {
+          send({ type: "admin_set_money", username: t.dataset.user, amount: Number(t.dataset.amount || 0) });
+        } else if (t.classList.contains("admin-global-reset")) {
+          send({ type: "admin_reset_money", username: t.dataset.user });
+        } else if (t.classList.contains("admin-card-pick")) {
+          const key = t.dataset.target;
+          if (!window.__adminForcedAssignments[key]) window.__adminForcedAssignments[key] = [];
+          window.__adminForcedAssignments[key].push({ rank: t.dataset.rank, suit: t.dataset.suit });
+          // refresh picks label
+          const box = document.querySelector(`.admin-card-picks[data-target="${key}"]`);
+          if (box) box.textContent = window.__adminForcedAssignments[key].map(c => c.rank + c.suit).join(" ");
+        } else if (t.classList.contains("admin-card-clear-one")) {
+          const key = t.dataset.target;
+          window.__adminForcedAssignments[key] = [];
+          const box = document.querySelector(`.admin-card-picks[data-target="${key}"]`);
+          if (box) box.innerHTML = "<span class='settings-help'>No forced cards</span>";
+        } else if (t.id === "admin-table-luck-apply") {
+          const strength = Number(document.getElementById("admin-table-luck-range")?.value || 0);
+          send({ type: "admin_set_table_luck", strength, duration: 300 });
+        } else if (t.id === "admin-table-luck-clear") {
+          send({ type: "admin_set_table_luck", strength: 0, duration: 0 });
+        } else if (t.id === "admin-gift-send") {
+          const user = document.getElementById("admin-gift-user")?.value?.trim();
+          const raw = document.getElementById("admin-gift-item")?.value || "";
+          const [category, itemId] = raw.split(":");
+          if (user && category && itemId) send({ type: "admin_give_item", targetUsername: user, category, itemId });
+        } else if (t.id === "admin-vip-send") {
+          const user = document.getElementById("admin-vip-user")?.value?.trim();
+          const days = Number(document.getElementById("admin-vip-days")?.value || 30);
+          if (user) send({ type: "admin_grant_vip", targetUsername: user, days });
+        } else if (t.id === "admin-season-give") {
+          const targetId = document.getElementById("admin-season-target")?.value;
+          const xp = Number(document.getElementById("admin-season-xp")?.value || 100);
+          if (targetId) send({ type: "admin_give_season_xp", targetId, amount: xp });
+        }
+      });
+    }
+  } catch (err) {
+    console.error("renderAdminUsers error", err);
+  }
+}
+
+function showPlayerProfilePopup(profile) {
+  if (!profile) return;
+  let pop = document.getElementById("player-profile-popup");
+  if (!pop) {
+    pop = document.createElement("div");
+    pop.id = "player-profile-popup";
+    pop.className = "player-profile-popup";
+    pop.innerHTML = `<div class="ppp-card"><button type="button" class="icon-btn ppp-close" id="ppp-close" aria-label="Close">×</button><div id="ppp-body"></div></div>`;
+    document.body.appendChild(pop);
+    pop.addEventListener("click", (e) => {
+      if (e.target === pop || e.target.id === "ppp-close" || e.target.classList.contains("ppp-close")) {
+        pop.classList.remove("open");
+      }
+    });
+  }
+  const body = pop.querySelector("#ppp-body");
+  const name = escapeHtml(profile.username || "Player");
+  const title = escapeHtml(profile.levelTitle || profile.cosmetics?.title || "Rookie");
+  const level = Number(profile.level || 1);
+  const wealth = profile.wealth || {};
+  const vip = profile.vip || {};
+  const av = escapeHtml((profile.avatar || (profile.username || "?").slice(0,1)).toString().slice(0,2).toUpperCase());
+  const color = escapeAttr(profile.avatarColor || "#c9a227");
+  body.innerHTML = `
+    <div class="ppp-header">
+      <div class="ppp-avatar-wrap" style="background:linear-gradient(135deg,${color},#222)"><div class="ppp-avatar">${av}</div></div>
+      <div class="ppp-name-wrap">
+        <strong>${name}</strong>
+        <span class="ppp-rank">Lv ${level} · ${title}${vip.active ? " · VIP" : ""}${profile.isAdmin ? " · ADMIN" : ""}</span>
+      </div>
+    </div>
+    <div class="ppp-wealth">
+      <span>NET WORTH</span>
+      <strong>$${Number(wealth.netWorth != null ? wealth.netWorth : profile.money || 0).toLocaleString()}</strong>
+      <small>${escapeHtml(wealth.rank || "")}</small>
+    </div>
+    <div class="ppp-showcase-grid">
+      <div><b>${Number(profile.gamesPlayed || 0)}</b><span>Games</span></div>
+      <div><b>${Number(profile.winRate || 0)}%</b><span>Win rate</span></div>
+      <div><b>$${Number(profile.biggestWin || 0).toLocaleString()}</b><span>Biggest</span></div>
+      <div><b>${Number(profile.collectionCount || 0)}</b><span>Collection</span></div>
+    </div>
+    <div class="ppp-actions">
+      <button type="button" class="btn secondary" id="ppp-close-btn">CLOSE</button>
+      ${profile.isSelf ? "" : `<button type="button" class="btn" id="ppp-add-friend" data-user="${escapeAttr(profile.username||"")}">ADD FRIEND</button>`}
+    </div>`;
+  body.querySelector("#ppp-close-btn")?.addEventListener("click", () => pop.classList.remove("open"));
+  body.querySelector("#ppp-add-friend")?.addEventListener("click", (e) => {
+    const u = e.currentTarget.dataset.user;
+    if (u) send({ type: "friend_request", username: u });
+    pop.classList.remove("open");
+  });
+  pop.classList.add("open");
+}
+
+
 function renderHandHistory(history) {
   const list = $("#history-list");
   if (!list) return;
@@ -3439,7 +3707,15 @@ function initJoin() {
     });
   });
   // History
-  wireButton($("#btn-history-open"), () => send({ type: "hand_history" }));
+  wireButton($("#btn-history-open"), () => {
+    if (!currentRoom) {
+      const list = $("#history-list");
+      if (list) list.innerHTML = '<div class="admin-empty">Join a table to see hand history.</div>';
+      $("#history-overlay")?.classList.add("open");
+      return;
+    }
+    send({ type: "hand_history" });
+  });
   wireButton($("#btn-history-close"), () => $("#history-overlay")?.classList.remove("open"));
   // Admin announce
   wireButton($("#admin-announce-send"), () => {

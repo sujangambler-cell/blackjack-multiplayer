@@ -10221,3 +10221,21 @@ html[data-mobile="1"] .dev-inline-2,
 html[data-mobile="1"] .dev-inline-3 {
   grid-template-columns: 1fr !important;
 }
+
+
+/* Admin panel dynamic rows */
+.admin-player-row{display:flex;flex-direction:column;gap:8px;padding:12px;margin:0 0 10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.admin-player-main{display:flex;flex-direction:column;gap:2px}
+.admin-player-main strong{font:900 13px var(--font-display);letter-spacing:.04em}
+.admin-player-main span{font-size:11px;opacity:.65}
+.admin-player-actions{display:flex;flex-wrap:wrap;gap:6px}
+.admin-player-actions .btn{min-height:34px;font-size:10px;padding:6px 10px}
+.admin-player-luck{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.admin-player-luck input[type=range]{flex:1;min-width:120px}
+.admin-card-buttons{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.admin-card-buttons .btn{min-height:28px;padding:4px 6px;font-size:9px}
+.admin-card-picks{font-size:12px;opacity:.8;margin:4px 0}
+.player-profile-popup{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}
+.player-profile-popup.open{display:flex}
+.player-profile-popup .ppp-card{position:relative;max-width:min(92vw,360px);width:100%}
+.player-profile-popup .ppp-close{position:absolute;top:8px;right:8px}

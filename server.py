@@ -200,19 +200,28 @@ def _db_active():
     return bool(DB_ACTIVE)
 
 def _db_connect(retries=3, delay=1.0):
-    """Connect to Postgres with short retries (Render cold starts / brief network blips)."""
+    """Connect to Postgres with short retries (Render cold starts / brief network blips).
+
+    Passwords, balances, inventory, VIP, etc. are stored in PostgreSQL when this
+    succeeds. JSON is only a temporary fallback if the DB is unreachable.
+    """
     if not _db_enabled():
         raise RuntimeError("DATABASE_URL is not configured")
     if psycopg is None:
         raise RuntimeError("psycopg is not installed")
+    # Render managed Postgres requires SSL. External URLs need it; internal usually too.
+    connect_kwargs = {
+        "row_factory": dict_row,
+        "connect_timeout": 15,
+    }
+    # Prefer requiring SSL when not explicitly set in the URL
+    url = DATABASE_URL
+    if "sslmode=" not in url.lower():
+        connect_kwargs["sslmode"] = "require"
     last_err = None
     for attempt in range(1, max(1, retries) + 1):
         try:
-            return psycopg.connect(
-                DATABASE_URL,
-                row_factory=dict_row,
-                connect_timeout=10,
-            )
+            return psycopg.connect(url, **connect_kwargs)
         except Exception as exc:
             last_err = exc
             print(f"PostgreSQL connect attempt {attempt}/{retries} failed: {exc}")
@@ -414,8 +423,18 @@ def load_accounts():
             print("=" * 60)
             print("WARNING: PostgreSQL is configured (DATABASE_URL) but unavailable:")
             print(f"  {exc}")
-            print("Falling back to local JSON account storage so the site can start.")
-            print("Fix the Render Postgres connection (or unset DATABASE_URL) for persistent DB.")
+            strict = os.environ.get("STRICT_DB", "").strip().lower() in ("1", "true", "yes")
+            if strict:
+                print("STRICT_DB=1 is set — refusing to start without PostgreSQL.")
+                print("=" * 60)
+                raise RuntimeError(
+                    "Database is configured but unavailable. Refusing to start in incomplete DB mode."
+                ) from exc
+            print("Falling back to local JSON so the HTTP server can start (temporary).")
+            print("Passwords & accounts WILL use PostgreSQL again as soon as the DB connects.")
+            print("On Render: open the Postgres service, copy Internal Database URL into")
+            print("  Web Service → Environment → DATABASE_URL, then redeploy.")
+            print("Set STRICT_DB=1 if you prefer a hard fail instead of JSON fallback.")
             print("=" * 60)
 
     try:
