@@ -10286,3 +10286,69 @@ html[data-mobile="1"] .player-profile-popup.open{display:flex!important}
   width: 100% !important;
   min-height: 40px !important;
 }
+
+
+/* ===== Casino room types — visible differences per equipped room ===== */
+.casino-room-v2-scene .casino-table-prop {
+  background: radial-gradient(ellipse at center, var(--casino-table, #1a4a32) 0%, color-mix(in srgb, var(--casino-table, #1a4a32) 70%, #000) 100%) !important;
+  border-color: var(--casino-table-edge, #5c4030) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,.55), 0 0 0 3px color-mix(in srgb, var(--casino-table-edge, #5c4030) 40%, transparent) !important;
+}
+.casino-room-v2-scene .city-sky {
+  background: radial-gradient(circle at 68% 24%, color-mix(in srgb, var(--casino-accent, #c9a86c) 25%, transparent), transparent 18%),
+    linear-gradient(180deg, color-mix(in srgb, var(--casino-sky, #0d2436) 80%, #1d1730) 0, var(--casino-sky, #0d2436) 58%, #051017 100%) !important;
+}
+.casino-room-v2-scene .room-art-deco-sign {
+  border-color: color-mix(in srgb, var(--casino-accent, #c9a86c) 55%, transparent) !important;
+  color: var(--casino-accent, #e7c977) !important;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--casino-accent, #c9a86c) 25%, transparent) !important;
+}
+.casino-room-v2-scene .room-couch {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--casino-wall-a, #1a2428) 70%, #222), var(--casino-wall-b, #070b0e)) !important;
+  border-color: color-mix(in srgb, var(--casino-accent, #c9a86c) 30%, transparent) !important;
+}
+.casino-room-v2-scene .room-rug {
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--casino-floor-a, #1c1814) 80%, var(--casino-accent, #c9a86c)), var(--casino-floor-b, #0a0806)) !important;
+  border-color: color-mix(in srgb, var(--casino-accent, #c9a86c) 25%, transparent) !important;
+}
+.casino-room-v2-scene .room-ceiling-glow {
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--casino-accent, #c9a86c) 35%, transparent), transparent 70%) !important;
+}
+.casino-room-v2-scene .room-feature-empty {
+  color: var(--casino-accent, #e7c977) !important;
+  border-color: color-mix(in srgb, var(--casino-accent, #c9a86c) 40%, transparent) !important;
+  background: color-mix(in srgb, var(--casino-wall-b, #070b0e) 80%, transparent) !important;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid;
+}
+/* VIP rooms — extra gold intensity */
+.casino-room-v2-scene.room-room_vip,
+.casino-room-v2-scene.room-room_vip_private {
+  background: linear-gradient(180deg, #1a1006 0 55%, #2a1808 55% 100%) !important;
+}
+.casino-room-v2-scene.room-room_vip_private:before {
+  border-color: rgba(212, 175, 55, 0.85) !important;
+  box-shadow: 0 20px 50px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255, 217, 120, 0.35), 0 0 40px rgba(212, 175, 55, 0.15) !important;
+}
+.casino-room-v2-scene.room-room_vip_private .room-art-deco-sign {
+  background: linear-gradient(90deg, rgba(80,50,10,.9), rgba(40,25,5,.95)) !important;
+}
+.casino-room-v2-scene.room-room_suite {
+  background: linear-gradient(180deg, #140a18 0 55%, #1e1020 55% 100%) !important;
+}
+.casino-room-v2-scene.room-room_penthouse {
+  background: linear-gradient(180deg, #050b13 0 55%, #0a1520 55% 100%) !important;
+}
+.casino-room-v2-scene.room-room_royal {
+  background: linear-gradient(180deg, #120c04 0 55%, #1a1408 55% 100%) !important;
+}
+.casino-view-card[data-room="room_vip_private"] .casino-view-top h2,
+.casino-view-card[data-room="room_vip"] .casino-view-top h2 {
+  color: #f0d78c !important;
+  text-shadow: 0 0 18px rgba(240, 215, 140, 0.35);
+}

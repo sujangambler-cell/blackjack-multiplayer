@@ -1700,14 +1700,46 @@ function renderFlexProfile(){const p=myProfile;if(!p)return;const wealth=p.wealt
 function openCasinoViewer(profile,own=false){
   const ov=$("#casino-viewer-overlay"),view=$("#casino-viewer"); if(!ov||!view||!profile)return;
   const eq=profile.casino?.equipped||{}, wealth=profile.wealth||{};
-  const room=eq.room||"room_lounge", floor=eq.floor||"classic_floor", wall=eq.wall||"classic_wall", feature=eq.feature||"feature_none";
-  const items=storeData?.casinoItems||[]; const item=id=>items.find(x=>x.id===id);
+  let room=eq.room||"room_lounge", floor=eq.floor||"classic_floor", wall=eq.wall||"classic_wall", feature=eq.feature||"feature_none";
+  const items=storeData?.casinoItems||storeData?.casino||[];
+  const item=id=> (Array.isArray(items)?items:[]).find(x=>x.id===id) || null;
   const roomItem=item(room), featureItem=item(feature);
-  const roomName=roomItem?.name||"Casino Lounge";
-  const floorStyle=previewCosmetic("casino",floor).split(","), wallStyle=previewCosmetic("casino",wall).split(",");
+  const roomName=roomItem?.name||String(room).replace(/_/g," ");
+  // Room palettes drive the whole scene so equipping a room is visibly different
+  const ROOM_LOOK = {
+    room_lounge: {
+      wall:["#1a2428","#070b0e"], floor:["#1c1814","#0a0806"],
+      table:"#1a4a32", tableEdge:"#5c4030", sky:"#0d2436", badge:"STARTER ROOM", tableLabel:"HOUSE TABLE", accent:"#c9a86c"
+    },
+    room_suite: {
+      wall:["#3a2840","#120914"], floor:["#2a1a28","#0c070c"],
+      table:"#3d2a4a", tableEdge:"#8a6a9a", sky:"#2a1535", badge:"SUITE", tableLabel:"SUITE TABLE", accent:"#d4a0e8"
+    },
+    room_vip: {
+      wall:["#4a3218","#120c06"], floor:["#3a2810","#100a04"],
+      table:"#6b4a18", tableEdge:"#d4af37", sky:"#2a1808", badge:"VIP LOUNGE", tableLabel:"VIP TABLE", accent:"#f0d78c"
+    },
+    room_vip_private: {
+      wall:["#5c3a12","#1a0e04"], floor:["#4a2e0c","#140a02"],
+      table:"#7a5210", tableEdge:"#ffd978", sky:"#3a2008", badge:"VIP PRIVATE", tableLabel:"PRIVATE VIP TABLE", accent:"#ffe29a"
+    },
+    room_penthouse: {
+      wall:["#152838","#050b13"], floor:["#0e1a28","#040810"],
+      table:"#1a3a55", tableEdge:"#6a9ab8", sky:"#0a2038", badge:"PENTHOUSE", tableLabel:"SKYLINE TABLE", accent:"#8ec8f0"
+    },
+    room_royal: {
+      wall:["#4a3810","#100b04"], floor:["#3a2a0c","#0c0802"],
+      table:"#5a4010", tableEdge:"#e8c860", sky:"#2a1c06", badge:"ROYAL CASINO", tableLabel:"ROYAL TABLE", accent:"#f5e0a0"
+    }
+  };
+  const look = ROOM_LOOK[room] || ROOM_LOOK.room_lounge;
+  // Custom floor/wall override room defaults when player bought them
+  const floorStyle = (floor && floor !== "classic_floor") ? previewCosmetic("casino", floor).split(",") : look.floor;
+  const wallStyle = (wall && wall !== "classic_wall") ? previewCosmetic("casino", wall).split(",") : look.wall;
   const ownedCount=profile.casino?.owned?.length||1;
   const featureClass=feature.replace(/[^a-z0-9_-]/gi,"");
-  view.innerHTML=`<div class="casino-view-card casino-room-v2" style="--casino-wall-a:${wallStyle[0]};--casino-wall-b:${wallStyle[1]};--casino-floor-a:${floorStyle[0]};--casino-floor-b:${floorStyle[1]}">
+  const emptyBadge = feature === "feature_none" ? look.badge : "";
+  view.innerHTML=`<div class="casino-view-card casino-room-v2" data-room="${escapeAttr(room)}" style="--casino-wall-a:${wallStyle[0]};--casino-wall-b:${wallStyle[1]};--casino-floor-a:${floorStyle[0]};--casino-floor-b:${floorStyle[1]};--casino-table:${look.table};--casino-table-edge:${look.tableEdge};--casino-sky:${look.sky};--casino-accent:${look.accent}">
     <div class="casino-view-top">
       <div><span class="store-kicker">CASINO X • PRIVATE PROPERTY</span><h2>${escapeHtml(profile.username||"PLAYER")}’S CASINO</h2><small>${escapeHtml(roomName)} • ${escapeHtml(wealth.rank||"ROOKIE")} • NET WORTH ${formatMoney(wealth.netWorth||0)}</small></div>
       <button class="icon-btn" id="btn-casino-view-close" aria-label="Close">×</button>
@@ -1719,18 +1751,19 @@ function openCasinoViewer(profile,own=false){
       <div class="room-plant left"><i></i><b></b></div><div class="room-plant right"><i></i><b></b></div>
       <div class="room-couch couch-left"></div><div class="room-couch couch-right"></div>
       <div class="room-coffee-table"><span>♠</span></div>
-      <div class="casino-table-prop"><span>HOUSE TABLE</span></div>
+      <div class="casino-table-prop"><span>${escapeHtml(look.tableLabel)}</span></div>
       <div class="room-rug"></div>
-      <div class="room-feature feature-${escapeAttr(featureClass)}">${feature==="feature_chandelier"?"<div class=\"room-chandelier\"><i></i><b></b><em></em></div>":feature==="feature_statue"?"<div class=\"room-statue\">♛</div>":feature==="feature_bar"?"<div class=\"room-bar\"><i></i><b>DIAMOND BAR</b></div>":feature==="feature_blackjack"?"<div class=\"room-private-table\">PRIVATE<br>BLACKJACK</div>":"<div class=\"room-feature-empty\">STARTER ROOM</div>"}</div>
+      <div class="room-feature feature-${escapeAttr(featureClass)}">${feature==="feature_chandelier"?"<div class=\"room-chandelier\"><i></i><b></b><em></em></div>":feature==="feature_statue"?"<div class=\"room-statue\">♛</div>":feature==="feature_bar"?"<div class=\"room-bar\"><i></i><b>DIAMOND BAR</b></div>":feature==="feature_blackjack"?"<div class=\"room-private-table\">PRIVATE<br>BLACKJACK</div>":`<div class="room-feature-empty">${escapeHtml(emptyBadge)}</div>`}</div>
       <div class="room-floor-label">${escapeHtml(roomName)} • ${ownedCount} ITEMS OWNED</div>
     </div>
-    <div class="casino-room-footer"><div><span class="casino-footer-kicker">PROPERTY SHOWCASE</span><strong>${escapeHtml(featureItem?.name||"Starter Showcase")}</strong></div><div class="casino-room-stats"><span>${escapeHtml(wealth.rank||"ROOKIE")}</span><b>${formatMoney(wealth.netWorth||0)}</b></div></div>
+    <div class="casino-room-footer"><div><span class="casino-footer-kicker">PROPERTY SHOWCASE</span><strong>${escapeHtml(featureItem?.name||roomName||"Showcase")}</strong></div><div class="casino-room-stats"><span>${escapeHtml(wealth.rank||"ROOKIE")}</span><b>${formatMoney(wealth.netWorth||0)}</b></div></div>
     ${own?'<button class="btn casino-edit-btn" id="btn-casino-edit">EDIT CASINO</button>':''}
   </div>`;
   ov.classList.add("open");
   wireButton($("#btn-casino-view-close"),()=>ov.classList.remove("open"));
   wireButton($("#btn-casino-edit"),()=>{ov.classList.remove("open");closeProgress("#profile-overlay");window.storeTab="casino";window.storeOwnedOnly=false;openProgress("#store-overlay");send({type:"store",token:authToken});});
 }
+
 // ---------------------------------------------------------------------------
 // Developer controls + server-driven safe UI layout
 // ---------------------------------------------------------------------------
@@ -1981,7 +2014,7 @@ function applySeasonalUI(enabled){
   localStorage.setItem("bj_seasonal_ui", enabled ? "1" : "0");
   applySeasonTheme();
 }
-function previewCosmetic(cat,id){const maps={theme:{classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",emerald:"#0d3d28,#06140e",royal:"#6a326c,#160916",neon:"#16877f,#060f12",crimson:"#8b1e2d,#1a0508",golden:"#d7b56d,#3c2413",celestial:"#66cfff,#030711",casino1927:"#d7b56d,#183b2a",crimson_royale:"#8b1e2d,#12060a",admin_star:"#f472b6,#1a0510",admin_blackout:"#222,#000",founder:"#d4af37,#1a1005"},chip:{classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",emerald_chip:"#2f6d4b,#0c281b",gold:"#e5c56d,#6c4c13",diamond:"#1a1a1a,#444",royal_vault:"#d4af37,#1a1008",casino1927:"#d7b56d,#3c2413",crimson_velvet:"#8b1e2d,#f3ede2",admin_chip:"#f472b6,#1a0510"},deck:{classic:"#f7f0df,#2b2a29",midnight:"#252a35,#050609",emerald_deck:"#0d3d28,#c8e6c9",crimson_deck:"#8b1e2d,#f3ede2",celestial_deck:"#0a1628,#66cfff",casino1927:"#d7b56d,#173d2a",crimson_royale_deck:"#8b1e2d,#f3ede2"},table:{classic:"#2f6d4b,#0c281b",royal:"#496c35,#1c2b16",casino1927:"#6d5130,#123a28",crimson_table:"#8b1e2d,#f3ede2"},ball:{classic:"#f4f4f4,#777",brass1927:"#f1d28a,#8f5c1a",crimson_back:"#8b1e2d,#d4b87a"},profile_frame:{classic:"#3a3d44,#111",silver:"#c8cdd5,#343942",gold:"#f0cf72,#6d4b13",diamond:"#9fe6ff,#315c82",crimson:"#ff4b5e,#4b0710",royal:"#f3d47a,#5a3410","1927":"#f4d88b,#173d2d"},profile_background:{classic:"#17191d,#050506",velvet:"#452a40,#0a0710",neon:"#16877f,#071014",crimson:"#8b1e2d,#170609",vault:"#363b45,#0a0b0e","1927":"#6d5130,#143d2b"},profile_title:{rookie:"#444,#111",card_shark:"#4d6d9e,#151d2c",high_roller:"#9f641d,#211508",vip:"#6f4aa8,#14091c",whale:"#b57cf5,#1a0824",casino_royalty:"#f1c95f,#3a2107"},casino:{classic_floor:"#2e302f,#0c0d0d",classic_wall:"#24262b,#090a0d",feature_none:"#222,#090909",room_lounge:"#244c3c,#07130e",room_suite:"#4d334a,#120914",room_vip:"#6f4b24,#17100a",room_penthouse:"#1e3c5a,#050b13",room_royal:"#654b20,#100b04",floor_marble:"#4b4d52,#16171a",floor_ruby:"#6e1c2b,#180509",floor_gold:"#8f6724,#2d1b06",wall_1927:"#6d5130,#173d2b",wall_velvet:"#692430,#16070a",wall_vault:"#343a44,#0b0d10",feature_blackjack:"#244a35,#07120d",feature_chandelier:"#b99a58,#30220d",feature_statue:"#d0a52c,#4a2d05",feature_bar:"#74d9ff,#0b1c24"}};return (maps[cat]&&maps[cat][id])||maps[cat]?.classic||"#17191d,#050506";}
+function previewCosmetic(cat,id){const maps={theme:{classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",emerald:"#0d3d28,#06140e",royal:"#6a326c,#160916",neon:"#16877f,#060f12",crimson:"#8b1e2d,#1a0508",golden:"#d7b56d,#3c2413",celestial:"#66cfff,#030711",casino1927:"#d7b56d,#183b2a",crimson_royale:"#8b1e2d,#12060a",admin_star:"#f472b6,#1a0510",admin_blackout:"#222,#000",founder:"#d4af37,#1a1005"},chip:{classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",emerald_chip:"#2f6d4b,#0c281b",gold:"#e5c56d,#6c4c13",diamond:"#1a1a1a,#444",royal_vault:"#d4af37,#1a1008",casino1927:"#d7b56d,#3c2413",crimson_velvet:"#8b1e2d,#f3ede2",admin_chip:"#f472b6,#1a0510"},deck:{classic:"#f7f0df,#2b2a29",midnight:"#252a35,#050609",emerald_deck:"#0d3d28,#c8e6c9",crimson_deck:"#8b1e2d,#f3ede2",celestial_deck:"#0a1628,#66cfff",casino1927:"#d7b56d,#173d2a",crimson_royale_deck:"#8b1e2d,#f3ede2"},table:{classic:"#2f6d4b,#0c281b",royal:"#496c35,#1c2b16",casino1927:"#6d5130,#123a28",crimson_table:"#8b1e2d,#f3ede2"},ball:{classic:"#f4f4f4,#777",brass1927:"#f1d28a,#8f5c1a",crimson_back:"#8b1e2d,#d4b87a"},profile_frame:{classic:"#3a3d44,#111",silver:"#c8cdd5,#343942",gold:"#f0cf72,#6d4b13",diamond:"#9fe6ff,#315c82",crimson:"#ff4b5e,#4b0710",royal:"#f3d47a,#5a3410","1927":"#f4d88b,#173d2d"},profile_background:{classic:"#17191d,#050506",velvet:"#452a40,#0a0710",neon:"#16877f,#071014",crimson:"#8b1e2d,#170609",vault:"#363b45,#0a0b0e","1927":"#6d5130,#143d2b"},profile_title:{rookie:"#444,#111",card_shark:"#4d6d9e,#151d2c",high_roller:"#9f641d,#211508",vip:"#6f4aa8,#14091c",whale:"#b57cf5,#1a0824",casino_royalty:"#f1c95f,#3a2107"},casino:{classic_floor:"#2e302f,#0c0d0d",classic_wall:"#24262b,#090a0d",feature_none:"#222,#090909",room_lounge:"#244c3c,#07130e",room_suite:"#4d334a,#120914",room_vip:"#8a6420,#1a1008",room_vip_private:"#c9a227,#1a0e06",room_penthouse:"#1e3c5a,#050b13",room_royal:"#654b20,#100b04",floor_marble:"#4b4d52,#16171a",floor_ruby:"#6e1c2b,#180509",floor_gold:"#8f6724,#2d1b06",wall_1927:"#6d5130,#173d2b",wall_velvet:"#692430,#16070a",wall_vault:"#343a44,#0b0d10",feature_blackjack:"#244a35,#07120d",feature_chandelier:"#b99a58,#30220d",feature_statue:"#d0a52c,#4a2d05",feature_bar:"#74d9ff,#0b1c24"}};return (maps[cat]&&maps[cat][id])||maps[cat]?.classic||"#17191d,#050506";}
 function renderAppearance(){
   const cats={
     theme:[...(storeData?.themes||[]),...(storeData?.adminThemes||[])],
