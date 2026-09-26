@@ -188,15 +188,37 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
 
+# True only after a successful Postgres handshake this process.
+# DATABASE_URL alone is not enough — Render often has the env var set while
+# the DB is still provisioning or temporarily unreachable.
+DB_ACTIVE = False
+
 def _db_enabled():
     return bool(DATABASE_URL)
 
-def _db_connect():
+def _db_active():
+    return bool(DB_ACTIVE)
+
+def _db_connect(retries=3, delay=1.0):
+    """Connect to Postgres with short retries (Render cold starts / brief network blips)."""
     if not _db_enabled():
         raise RuntimeError("DATABASE_URL is not configured")
     if psycopg is None:
         raise RuntimeError("psycopg is not installed")
-    return psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=10)
+    last_err = None
+    for attempt in range(1, max(1, retries) + 1):
+        try:
+            return psycopg.connect(
+                DATABASE_URL,
+                row_factory=dict_row,
+                connect_timeout=10,
+            )
+        except Exception as exc:
+            last_err = exc
+            print(f"PostgreSQL connect attempt {attempt}/{retries} failed: {exc}")
+            if attempt < retries:
+                time.sleep(delay * attempt)
+    raise RuntimeError(f"PostgreSQL connection failed after {retries} attempts: {last_err}")
 
 def _ensure_db():
     with _db_connect() as conn:
@@ -265,15 +287,18 @@ SEASON_META_FILE = pathlib.Path(__file__).parent / "season_meta.json"
 
 def _load_or_create_season_start():
     global SEASON_START_TS
-    if _db_enabled():
-        with _db_connect() as conn:
-            row = conn.execute("SELECT setting_value FROM app_settings WHERE setting_key=%s", ("season_1_start",)).fetchone()
-            if row:
-                SEASON_START_TS = float(row["setting_value"])
-            else:
-                SEASON_START_TS = time.time()
-                conn.execute("INSERT INTO app_settings (setting_key, setting_value) VALUES (%s, %s)", ("season_1_start", str(SEASON_START_TS)))
-        return
+    if _db_active():
+        try:
+            with _db_connect(retries=2, delay=0.5) as conn:
+                row = conn.execute("SELECT setting_value FROM app_settings WHERE setting_key=%s", ("season_1_start",)).fetchone()
+                if row:
+                    SEASON_START_TS = float(row["setting_value"])
+                else:
+                    SEASON_START_TS = time.time()
+                    conn.execute("INSERT INTO app_settings (setting_key, setting_value) VALUES (%s, %s)", ("season_1_start", str(SEASON_START_TS)))
+            return
+        except Exception as exc:
+            print(f"WARNING: season start DB read failed, using local file: {exc}")
     try:
         if SEASON_META_FILE.exists():
             raw=json.loads(SEASON_META_FILE.read_text(encoding="utf-8"))
@@ -366,7 +391,13 @@ def apply_all_catalog_overrides():
         apply_catalog_override(category, item_id, patch)
 
 def load_accounts():
-    global ACCOUNTS, TOKENS
+    """Load accounts from Postgres when DATABASE_URL is set, else local JSON.
+
+    IMPORTANT (Render): if DATABASE_URL is present but Postgres is unreachable,
+    we fall back to local JSON so the HTTP/WebSocket server still starts.
+    A hard crash here is what caused HTTP 503 ("can't currently handle this request").
+    """
+    global ACCOUNTS, TOKENS, DB_ACTIVE
     if _db_enabled():
         try:
             _ensure_db()
@@ -375,11 +406,17 @@ def load_accounts():
             if not ACCOUNTS:
                 _migrate_json_accounts_to_db()
                 _load_accounts_from_db()
+            DB_ACTIVE = True
             print(f"PostgreSQL account storage enabled ({len(ACCOUNTS)} account(s)).")
             return
         except Exception as exc:
-            print("FATAL: PostgreSQL is configured but unavailable:", exc)
-            raise
+            DB_ACTIVE = False
+            print("=" * 60)
+            print("WARNING: PostgreSQL is configured (DATABASE_URL) but unavailable:")
+            print(f"  {exc}")
+            print("Falling back to local JSON account storage so the site can start.")
+            print("Fix the Render Postgres connection (or unset DATABASE_URL) for persistent DB.")
+            print("=" * 60)
 
     try:
         _load_or_create_season_start()
@@ -397,20 +434,24 @@ def load_accounts():
         TOKENS = {}
 
 def save_accounts():
-    if _db_enabled():
-        with _db_connect() as conn:
-            for key, account in ACCOUNTS.items():
-                conn.execute("""
-                    INSERT INTO accounts (username_key, username, salt, password, data, updated_at)
-                    VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
-                    ON CONFLICT (username_key) DO UPDATE SET
-                        username = EXCLUDED.username,
-                        salt = EXCLUDED.salt,
-                        password = EXCLUDED.password,
-                        data = EXCLUDED.data,
-                        updated_at = NOW()
-                """, (key, account.get("username", key), account.get("salt", ""), account.get("password", ""), json.dumps(account)))
-        return
+    if _db_active():
+        try:
+            with _db_connect(retries=2, delay=0.5) as conn:
+                for key, account in ACCOUNTS.items():
+                    conn.execute("""
+                        INSERT INTO accounts (username_key, username, salt, password, data, updated_at)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
+                        ON CONFLICT (username_key) DO UPDATE SET
+                            username = EXCLUDED.username,
+                            salt = EXCLUDED.salt,
+                            password = EXCLUDED.password,
+                            data = EXCLUDED.data,
+                            updated_at = NOW()
+                    """, (key, account.get("username", key), account.get("salt", ""), account.get("password", ""), json.dumps(account)))
+            return
+        except Exception as exc:
+            print("WARNING: PostgreSQL save failed, writing JSON fallback:", exc)
+            # continue into JSON fallback below
     try:
         tmp = ACCOUNTS_FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps(ACCOUNTS, indent=2), encoding="utf-8")

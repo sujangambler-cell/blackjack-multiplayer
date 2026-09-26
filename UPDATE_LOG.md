@@ -44,3 +44,8 @@ Matching `@media (max-width: 700px)` rules mirror the data-mobile layout for rea
 - JavaScript syntax (`node --check public/game.js`): passed
 - HTML IDs unique: passed
 - Server start + `/` 200 + `/health` ok + WebSocket connect: passed
+
+## V26.2.1 — Render HTTP 503 fix
+- Root cause: when `DATABASE_URL` was set but Postgres was unreachable, `load_accounts()` raised and the process never bound the port → Render returned **HTTP 503**.
+- Fix: fall back to local JSON storage with a clear warning instead of crashing.
+- Added short Postgres connect retries and a `DB_ACTIVE` flag so season/save paths do not keep hitting a dead DB after fallback.
