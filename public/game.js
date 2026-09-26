@@ -1112,6 +1112,14 @@ function connect() {
         myProfile.cosmetics.deck = msg.store.decks?.find(x => x.equipped)?.id || myProfile.cosmetics.deck || "classic";
         myProfile.cosmetics.table = msg.store.tables?.find(x => x.equipped)?.id || myProfile.cosmetics.table || "classic";
         myProfile.cosmetics.ball = msg.store.balls?.find(x => x.equipped)?.id || myProfile.cosmetics.ball || "classic";
+        myProfile.cosmetics.profileFrame = (msg.store.profileFrames||msg.store.profile_frames||[]).find?.(x=>x.equipped)?.id || myProfile.cosmetics.profileFrame || "classic";
+        myProfile.cosmetics.profileBackground = (msg.store.profileBackgrounds||msg.store.profile_backgrounds||[]).find?.(x=>x.equipped)?.id || myProfile.cosmetics.profileBackground || "classic";
+        myProfile.cosmetics.title = (msg.store.profileTitles||msg.store.profile_titles||[]).find?.(x=>x.equipped)?.id || myProfile.cosmetics.title || "rookie";
+        if (msg.store.casino) {
+          myProfile.casino = myProfile.casino || {};
+          myProfile.casino.equipped = msg.store.casino.equipped || myProfile.casino.equipped;
+          myProfile.casino.owned = msg.store.casino.owned || myProfile.casino.owned;
+        }
         applyCosmeticTheme(myProfile.cosmetics.theme);
         applyGameCosmetics(myProfile.cosmetics);
       }
@@ -1807,6 +1815,12 @@ function setMenuBalance(amount) {
 function updateProfileUI(profile) {
   if (!profile) return;
   myProfile = profile;
+  // Always apply equipped cosmetics so shop purchases are visible in-game
+  try {
+    const cos = profile.cosmetics || {};
+    applyCosmeticTheme(cos.theme || "classic");
+    applyGameCosmetics(cos);
+  } catch (e) { console.warn("cosmetic apply", e); }
   if (profile.isAdmin) {
     isAdmin = true;
     $("#btn-admin-float")?.classList.remove("hidden");
@@ -2408,14 +2422,36 @@ function showPlayerProfilePopup(profile) {
       <div><b>${Number(profile.collectionCount || 0)}</b><span>Collection</span></div>
     </div>
     <div class="ppp-actions">
+      <button type="button" class="btn" id="ppp-visit-casino">${profile.isSelf ? "VISIT MY CASINO" : "VISIT CASINO"}</button>
+      ${profile.isSelf ? `<button type="button" class="btn secondary" id="ppp-edit-casino">EDIT CASINO</button>` : `<button type="button" class="btn secondary" id="ppp-add-friend" data-user="${escapeAttr(profile.username||"")}">ADD FRIEND</button>`}
       <button type="button" class="btn secondary" id="ppp-close-btn">CLOSE</button>
-      ${profile.isSelf ? "" : `<button type="button" class="btn" id="ppp-add-friend" data-user="${escapeAttr(profile.username||"")}">ADD FRIEND</button>`}
     </div>`;
   body.querySelector("#ppp-close-btn")?.addEventListener("click", () => pop.classList.remove("open"));
   body.querySelector("#ppp-add-friend")?.addEventListener("click", (e) => {
     const u = e.currentTarget.dataset.user;
     if (u) send({ type: "friend_request", username: u });
     pop.classList.remove("open");
+  });
+  body.querySelector("#ppp-visit-casino")?.addEventListener("click", () => {
+    pop.classList.remove("open");
+    try {
+      // Prefer full profile for self so equipped casino loads correctly
+      const src = profile.isSelf && myProfile ? { ...myProfile, ...profile, casino: profile.casino || myProfile.casino } : profile;
+      openCasinoViewer(src, !!profile.isSelf);
+    } catch (err) {
+      console.warn("openCasinoViewer", err);
+    }
+  });
+  body.querySelector("#ppp-edit-casino")?.addEventListener("click", () => {
+    pop.classList.remove("open");
+    try {
+      window.storeTab = "casino";
+      window.storeOwnedOnly = false;
+      openProgress("#store-overlay");
+      send({ type: "store", token: authToken });
+    } catch (err) {
+      console.warn("edit casino", err);
+    }
   });
   pop.classList.add("open");
 }

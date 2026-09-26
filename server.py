@@ -3355,10 +3355,27 @@ async def ws_handler(websocket):
                 else:
                     account["money"] = int(account.get("money",0)) - int(item.get("price",0))
                     owned.add(item_id); account[owned_key]=sorted(owned)
+                    # Auto-equip on purchase so the item is immediately visible in-game
+                    if category == "casino":
+                        slot = catalog[item_id].get("slot", "feature")
+                        equipped = dict(account.get(equipped_key, {}) or {})
+                        equipped[slot] = item_id
+                        account[equipped_key] = equipped
+                    else:
+                        account[equipped_key] = item_id
                     save_accounts()
-                    await websocket.send(json.dumps({"type":"store","store":store_payload(account),"purchased":item_id}))
+                    # Sync cosmetics onto any active table seats for this player
+                    for r in rooms.values():
+                        for p in r.get("players", []):
+                            if p.get("username_key") == key:
+                                p.setdefault("cosmetics", {})[category] = item_id
+                                p["money"] = int(account.get("money", 0))
+                    await websocket.send(json.dumps({"type":"store","store":store_payload(account),"purchased":item_id,"equipped":item_id}))
                     await websocket.send(json.dumps({"type":"profile","profile":profile_payload(account)}))
                     await websocket.send(json.dumps({"type":"balance","balance":int(account.get("money",0))}))
+                    for r in rooms.values():
+                        if any(p.get("username_key")==key for p in r.get("players",[])):
+                            await (poker_broadcast(r) if r.get("game")=="poker" else broadcast(r))
             continue
 
         if kind == "equip_cosmetic":
