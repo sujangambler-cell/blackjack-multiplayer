@@ -286,11 +286,12 @@ def _load_or_create_season_start():
 
 def save_developer_settings():
     try:
+        payload = json.dumps(DEVELOPER_SETTINGS, indent=2)
         tmp = DEVELOPER_SETTINGS_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(DEVELOPER_SETTINGS, indent=2), encoding="utf-8")
+        tmp.write_text(payload, encoding="utf-8")
         tmp.replace(DEVELOPER_SETTINGS_FILE)
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"Warning: could not save developer settings: {exc}")
 
 def load_developer_settings():
     global DEVELOPER_SETTINGS
@@ -4822,7 +4823,12 @@ async def process_http_request(connection, request):
     # A WebSocket handshake is still an HTTP request at this stage. Never serve
     # index.html (or any static file) for an upgrade request. Returning None
     # hands the request back to websockets for the WebSocket handshake.
-    if request.headers.get("Upgrade", "").lower() == "websocket":
+    upgrade = ""
+    try:
+        upgrade = request.headers.get("Upgrade") or request.headers.get("upgrade") or ""
+    except Exception:
+        upgrade = ""
+    if str(upgrade).lower() == "websocket":
         return None
 
     path = request.path.split("?", 1)[0]

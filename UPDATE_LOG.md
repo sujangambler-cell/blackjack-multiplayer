@@ -1,30 +1,46 @@
-# CASINO X — V26.2 VISUAL FIX
+# CASINO X — V26.2.1 MOBILE + RENDER FIX
 
-## Store 3.1 — rebuilt to the reference direction
-- The Store is now a proper premium showroom rather than a small generic overlay.
-- Desktop uses a left navigation rail, large hero banner, large product art and clean product cards.
-- Mobile Mode uses a compact horizontal category rail and a two-column catalogue designed to avoid overflow.
-- Product cards keep the price hidden; tapping BUY opens the purchase screen with price, rarity and a large in-game preview.
-- VIP stays as a dedicated high-value in-game-chip deal.
+## Root cause: Store / Casino mobile CSS was corrupted
+- The trailing "V6 WEALTH / FLEX SYSTEM" block in `public/style.css` contained **literal `\n` sequences** instead of real newlines.
+- Large sections of Store 3.x, VIP, purchase overlay, casino room, and mobile overrides were therefore not applied correctly by the browser.
+- That block has been expanded into valid CSS.
 
-## Private Casino 2.0 — rebuilt as a real room
-- Replaced the small “starter showcase” presentation with a large room scene.
-- Added a glass window wall with a night skyline and individual illuminated buildings outside.
-- Added interior ceiling glow, art-deco Casino X sign, sofas, plants, coffee table, rug and a large casino table.
-- The equipped room/floor/wall/feature still controls the cosmetic state and feature prop.
-- Mobile Mode uses the full screen for the property and keeps the main room objects large/readable.
+## Mobile Mode layout (Store + Personal Casino)
+Mobile Mode uses `html[data-mobile="1"]` with a ~430px app column **inside a desktop viewport**.
+`@media (max-width: …)` alone does **not** run in that situation.
 
-## Developer Controls
-- Existing Store item editing and VIP pricing controls remain.
-- Added more standard UI targets for common Store/table/mobile controls.
-- Added safe custom #id/.class positioning with separate PC/Mobile X, Y and scale.
-- Added local PREVIEW and server-side SAVE for custom positions.
-- RESET ALL UI clears both standard and custom positioning.
+### Store (mobile)
+- Full-width phone shell (no half-screen desktop sidebar)
+- Category nav becomes a compact **horizontal scroll rail**
+- Side promo ("HIGH ROLLER?") hidden on mobile
+- Hero banner stacks and fits the phone width
+- Product grid forced to **2 columns**, `min-width: 0`, no horizontal page scroll
+- Product names wrap; BUY buttons stay inside cards
+- VIP membership card is a single-column, content-sized card (no giant clipped block)
+- Footer is compact; note text hidden; CLOSE STORE full-width
+- Content scrolls inside the store shell; safe-area padding supported
 
-## Compatibility / validation
-- Existing accounts, balances, inventories and VIP data are preserved.
-- HTML ID uniqueness check: passed.
-- Python compile check: passed.
-- JavaScript syntax check: passed.
-- Store/casino server smoke test: passed.
-- No Blackjack/Poker gameplay logic was intentionally changed in this visual update.
+### Personal Casino (mobile)
+- Full-screen property shell
+- Room uses aspect-ratio + viewport-based sizing instead of fixed desktop dimensions
+- Window, skyline, table, furniture, plants kept readable with percentage positioning
+- Close / Edit controls remain accessible
+- No horizontal overflow
+
+### Narrow real phones
+Matching `@media (max-width: 700px)` rules mirror the data-mobile layout for real mobile viewports.
+
+## Server / Render
+- `python -m py_compile server.py` passes
+- HTTP `/` and `/health` serve successfully
+- WebSocket handshake initializes
+- Developer settings save logs write failures instead of failing silently
+- WebSocket upgrade header read is more defensive
+- `requirements.txt` allows `websockets>=14,<18` for broader Render compatibility
+- Existing accounts, inventory, VIP, multiplayer, and Developer Controls preserved
+
+## Validation
+- Python compile: passed
+- JavaScript syntax (`node --check public/game.js`): passed
+- HTML IDs unique: passed
+- Server start + `/` 200 + `/health` ok + WebSocket connect: passed
