@@ -39,6 +39,31 @@ STARTING_MONEY = 5000
 ZERO_CLAIM = 100
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 ACCOUNTS_FILE = pathlib.Path(__file__).parent / "accounts.json"
+DEVELOPER_SETTINGS_FILE = pathlib.Path(__file__).parent / "developer_settings.json"
+DEV_UI_TARGETS = {
+    "updateLog": "#btn-update-log",
+    "storeButton": "#btn-store",
+    "settingsButton": "#btn-settings",
+    "hostButton": "#btn-host",
+    "adminTableButton": "#btn-admin-table",
+    "adminFloatButton": "#btn-admin-float",
+    "pokerAdminButton": "#poker-admin",
+    "shoe": "#shoe",
+    "mobileModeToggle": "#toggle-mobile",
+    "chatButton": "#btn-chat-open",
+    "historyButton": "#btn-history-open",
+    "storeHeroBrowse": "#store-hero-browse-main",
+    "storeOwnedToggle": "#store-owned-toggle",
+}
+DEFAULT_DEVELOPER_SETTINGS = {
+    "catalog_overrides": {},
+    "vip_price": 250_000_000,
+    "ui_layout": {k: {"desktop": {"x": 0, "y": 0, "scale": 1.0}, "mobile": {"x": 0, "y": 0, "scale": 1.0}} for k in DEV_UI_TARGETS},
+    "feature_flags": {"store_redesign": True, "store_purchase_preview": True, "developer_controls": True},
+    "custom_ui": {},
+}
+DEVELOPER_SETTINGS = {}
+
 MAX_PLAYERS_DEFAULT = 5
 MAX_PLAYERS_HARD_CAP = 10
 READY_GRACE_S = 0.8      # small pause after last player hits ready before dealing
@@ -259,6 +284,86 @@ def _load_or_create_season_start():
     except Exception:
         SEASON_START_TS=time.time()
 
+def save_developer_settings():
+    try:
+        tmp = DEVELOPER_SETTINGS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(DEVELOPER_SETTINGS, indent=2), encoding="utf-8")
+        tmp.replace(DEVELOPER_SETTINGS_FILE)
+    except Exception:
+        pass
+
+def load_developer_settings():
+    global DEVELOPER_SETTINGS
+    data = {}
+    try:
+        if DEVELOPER_SETTINGS_FILE.exists():
+            data = json.loads(DEVELOPER_SETTINGS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+    merged = json.loads(json.dumps(DEFAULT_DEVELOPER_SETTINGS))
+    if isinstance(data, dict):
+        merged.update({k:v for k,v in data.items() if k in merged})
+        merged["catalog_overrides"] = data.get("catalog_overrides", {}) if isinstance(data.get("catalog_overrides", {}), dict) else {}
+        merged["ui_layout"] = data.get("ui_layout", {}) if isinstance(data.get("ui_layout", {}), dict) else {}
+        merged["feature_flags"] = {**DEFAULT_DEVELOPER_SETTINGS["feature_flags"], **(data.get("feature_flags", {}) if isinstance(data.get("feature_flags", {}), dict) else {})}
+        merged["custom_ui"] = data.get("custom_ui", {}) if isinstance(data.get("custom_ui", {}), dict) else {}
+    for key, default in DEFAULT_DEVELOPER_SETTINGS["ui_layout"].items():
+        cur = merged["ui_layout"].get(key, {}) if isinstance(merged["ui_layout"].get(key, {}), dict) else {}
+        for mode in ("desktop", "mobile"):
+            cur.setdefault(mode, dict(default[mode]))
+            for fld, dv in default[mode].items():
+                try: cur[mode][fld] = float(cur[mode].get(fld, dv))
+                except Exception: cur[mode][fld] = dv
+        merged["ui_layout"][key] = cur
+    try: merged["vip_price"] = max(1_000_000, int(merged.get("vip_price", VIP_PRICE)))
+    except Exception: merged["vip_price"] = VIP_PRICE
+    DEVELOPER_SETTINGS = merged
+
+def developer_public_payload():
+    return {
+        "uiLayout": DEVELOPER_SETTINGS.get("ui_layout", {}),
+        "featureFlags": DEVELOPER_SETTINGS.get("feature_flags", {}),
+        "vipPrice": int(DEVELOPER_SETTINGS.get("vip_price", VIP_PRICE)),
+        "customUi": DEVELOPER_SETTINGS.get("custom_ui", {}),
+    }
+
+def developer_admin_payload():
+    return {
+        **developer_public_payload(),
+        "uiTargets": DEV_UI_TARGETS,
+        "catalogOverrides": DEVELOPER_SETTINGS.get("catalog_overrides", {}),
+    }
+
+def apply_catalog_override(category, item_id, patch):
+    meta = STORE_CATALOGS.get(category)
+    if not meta: return False
+    catalog = meta[0]
+    if item_id not in catalog: return False
+    item = catalog[item_id]
+    allowed = {"name", "price", "desc", "rarity", "admin_only", "vip_only", "limited", "season"}
+    for k, v in (patch or {}).items():
+        if k not in allowed: continue
+        if k == "price":
+            try: v = max(0, int(v))
+            except Exception: continue
+        elif k in {"admin_only", "vip_only", "limited"}:
+            v = bool(v)
+        elif k == "season":
+            try: v = None if v in (None, "", "null") else int(v)
+            except Exception: continue
+        elif k == "rarity":
+            v = str(v).upper()[:24]
+        elif k in {"name", "desc"}:
+            v = str(v)[:120]
+        item[k] = v
+    return True
+
+def apply_all_catalog_overrides():
+    for key, patch in DEVELOPER_SETTINGS.get("catalog_overrides", {}).items():
+        if not isinstance(patch, dict) or ":" not in key: continue
+        category, item_id = key.split(":", 1)
+        apply_catalog_override(category, item_id, patch)
+
 def load_accounts():
     global ACCOUNTS, TOKENS
     if _db_enabled():
@@ -394,6 +499,121 @@ COSMETIC_BALLS = {
     "brass1927":{"name":"1927 Brass Card Back","price":0,"rarity":"LEGENDARY","desc":"1927 brass card back.","season":1,"limited":True,"scope":"GLOBAL"},
     "crimson_back":{"name":"Crimson Seal Card Back","price":0,"rarity":"LEGENDARY","desc":"Crimson seal seasonal card back.","season":2,"limited":True,"scope":"GLOBAL"},
 }
+# Money-focused social/profile cosmetics. Prices are intentionally high so cash has a long-term sink.
+PROFILE_FRAMES = {
+    "classic": {"name":"Classic Frame","price":0,"rarity":"COMMON","desc":"The standard Casino X frame."},
+    "silver": {"name":"Silver Edge Frame","price":10000,"rarity":"COMMON","desc":"Clean silver profile ring."},
+    "gold": {"name":"Gold Crest Frame","price":50000,"rarity":"RARE","desc":"A polished high-roller crest."},
+    "diamond": {"name":"Diamond Frame","price":250000,"rarity":"EPIC","desc":"Diamond-cut profile ring."},
+    "crimson": {"name":"Crimson Royale Frame","price":1000000,"rarity":"LEGENDARY","desc":"Seasoned in crimson and gold."},
+    "royal": {"name":"Royal Vault Frame","price":5000000,"rarity":"LEGENDARY","desc":"Made for the richest rooms."},
+    "1927": {"name":"1927 Founder Frame","price":10000000,"rarity":"ULTRA","desc":"Art-deco brass for serious collectors."},
+    "vip_crown": {"name":"VIP Crown Frame","price":0,"rarity":"VIP","desc":"Animated gold crown frame for VIP members.","vip_only":True},
+}
+PROFILE_BACKGROUNDS = {
+    "classic": {"name":"Classic Noir Background","price":0,"rarity":"COMMON","desc":"The original dark Casino X profile."},
+    "velvet": {"name":"Midnight Velvet Background","price":25000,"rarity":"UNCOMMON","desc":"Deep velvet with a soft casino glow."},
+    "neon": {"name":"Neon Afterdark Background","price":75000,"rarity":"RARE","desc":"Electric city lights behind your profile."},
+    "crimson": {"name":"Crimson Royale Background","price":250000,"rarity":"EPIC","desc":"Red carpet, dark glass, gold trim."},
+    "vault": {"name":"Private Vault Background","price":1500000,"rarity":"LEGENDARY","desc":"Cold steel, gold and locked-room luxury."},
+    "1927": {"name":"1927 Grand Lobby Background","price":5000000,"rarity":"LEGENDARY","desc":"Classic art-deco grandeur."},
+    "vip_private": {"name":"VIP Private Lounge Background","price":0,"rarity":"VIP","desc":"A private velvet lounge reserved for VIP members.","vip_only":True},
+}
+PROFILE_TITLES = {
+    "rookie": {"name":"ROOKIE","price":0,"rarity":"COMMON","desc":"The house welcomes you."},
+    "card_shark": {"name":"CARD SHARK","price":50000,"rarity":"RARE","desc":"You know your way around the deck."},
+    "high_roller": {"name":"HIGH ROLLER","price":250000,"rarity":"EPIC","desc":"The table notices when you arrive."},
+    "vip": {"name":"VIP","price":1000000,"rarity":"LEGENDARY","desc":"Priority treatment. Big-money energy."},
+    "whale": {"name":"WHALE","price":10000000,"rarity":"ULTRA","desc":"You play at a different scale."},
+    "casino_royalty": {"name":"CASINO ROYALTY","price":100000000,"rarity":"ULTRA","desc":"The house knows your name."},
+    "vip_member": {"name":"VIP MEMBER","price":0,"rarity":"VIP","desc":"Exclusive title unlocked by active VIP membership.","vip_only":True},
+}
+CASINO_ITEMS = {
+    "classic_floor": {"name":"Classic Floor","price":0,"rarity":"COMMON","slot":"floor","desc":"The standard Casino X floor."},
+    "classic_wall": {"name":"Classic Walls","price":0,"rarity":"COMMON","slot":"wall","desc":"The standard Casino X walls."},
+    "feature_none": {"name":"No Feature","price":0,"rarity":"COMMON","slot":"feature","desc":"Keep the room clean and simple."},
+    "room_lounge": {"name":"Casino Lounge","price":0,"rarity":"COMMON","slot":"room","desc":"A compact starter room."},
+    "room_suite": {"name":"Casino Suite","price":100000,"rarity":"UNCOMMON","slot":"room","desc":"A larger private room."},
+    "room_vip": {"name":"VIP Lounge","price":500000,"rarity":"RARE","slot":"room","desc":"Velvet, gold and a view."},
+    "room_penthouse": {"name":"Skyline Penthouse","price":2500000,"rarity":"EPIC","slot":"room","desc":"A proper high-roller penthouse."},
+    "room_royal": {"name":"Royal Casino","price":10000000,"rarity":"LEGENDARY","slot":"room","desc":"Your own private casino."},
+    "floor_marble": {"name":"Black Marble Floor","price":250000,"rarity":"RARE","slot":"floor","desc":"Polished dark marble."},
+    "floor_ruby": {"name":"Ruby Carpet","price":1000000,"rarity":"EPIC","slot":"floor","desc":"Crimson carpet with a royal glow."},
+    "floor_gold": {"name":"Gold Inlay Floor","price":5000000,"rarity":"LEGENDARY","slot":"floor","desc":"Gold details across the entire room."},
+    "wall_1927": {"name":"1927 Art Deco Walls","price":500000,"rarity":"RARE","slot":"wall","desc":"Brass, geometry and old-house style."},
+    "wall_velvet": {"name":"Crimson Velvet Walls","price":1000000,"rarity":"EPIC","slot":"wall","desc":"Deep velvet panels and gold trim."},
+    "wall_vault": {"name":"Private Vault Walls","price":2500000,"rarity":"LEGENDARY","slot":"wall","desc":"Heavy steel and luxury lighting."},
+    "feature_blackjack": {"name":"Private Blackjack Table","price":1000000,"rarity":"EPIC","slot":"feature","desc":"Your room gets its own table."},
+    "feature_chandelier": {"name":"Crystal Chandelier","price":5000000,"rarity":"LEGENDARY","slot":"feature","desc":"A massive crystal centerpiece."},
+    "feature_statue": {"name":"Golden House Statue","price":10000000,"rarity":"ULTRA","slot":"feature","desc":"A gold statement piece."},
+    "feature_bar": {"name":"Diamond Bar","price":25000000,"rarity":"ULTRA","slot":"feature","desc":"Pure flex. No practical reason."},
+    "room_vip_private": {"name":"VIP Private Lounge","price":0,"rarity":"VIP","slot":"room","desc":"An exclusive lounge for active VIP members.","vip_only":True},
+}
+
+VIP_PRICE = 250_000_000          # in-game chips; 30-day membership
+VIP_DURATION_DAYS = 30
+VIP_DAILY_BONUS = 10_000_000     # extra in-game chips from the daily claim while VIP is active
+VIP_XP_MULTIPLIER = 1.25
+
+def vip_active(account):
+    return float(account.get("vip_until", 0) or 0) > time.time()
+
+def vip_payload(account):
+    until = float(account.get("vip_until", 0) or 0)
+    active = until > time.time()
+    days_left = max(0, int((until - time.time() + 86399) // 86400)) if active else 0
+    return {
+        "active": active, "price": current_vip_price(), "durationDays": VIP_DURATION_DAYS,
+        "until": until if active else 0, "daysLeft": days_left,
+        "dailyBonus": VIP_DAILY_BONUS, "xpMultiplier": VIP_XP_MULTIPLIER,
+    }
+
+WEALTH_RANKS = [
+    (0, "ROOKIE"), (10000, "REGULAR"), (100000, "HIGH ROLLER"),
+    (1000000, "VIP"), (10000000, "WHALE"), (100000000, "CASINO ROYALTY"),
+]
+
+STORE_CATALOGS = {
+    "theme": (COSMETIC_THEMES, "owned_themes", "equipped_theme"),
+    "chip": (COSMETIC_CHIPS, "owned_chips", "equipped_chip"),
+    "deck": (COSMETIC_DECKS, "owned_decks", "equipped_deck"),
+    "table": (COSMETIC_TABLES, "owned_tables", "equipped_table"),
+    "ball": (COSMETIC_BALLS, "owned_balls", "equipped_ball"),
+    "profile_frame": (PROFILE_FRAMES, "owned_profile_frames", "equipped_profile_frame"),
+    "profile_background": (PROFILE_BACKGROUNDS, "owned_profile_backgrounds", "equipped_profile_background"),
+    "profile_title": (PROFILE_TITLES, "owned_profile_titles", "equipped_profile_title"),
+    "casino": (CASINO_ITEMS, "owned_casino_items", "equipped_casino_items"),
+}
+
+load_developer_settings()
+apply_all_catalog_overrides()
+
+def current_vip_price():
+    try: return max(1_000_000, int(DEVELOPER_SETTINGS.get("vip_price", VIP_PRICE)))
+    except Exception: return VIP_PRICE
+
+def catalog_collection_value(account):
+    total = 0
+    for category, (catalog, owned_key, _) in STORE_CATALOGS.items():
+        owned = set(account.get(owned_key, [])) if category != "casino" else set(account.get(owned_key, []))
+        total += sum(int(catalog.get(item_id, {}).get("price", 0) or 0) for item_id in owned)
+    return total
+
+def wealth_payload(account):
+    cash = int(account.get("money", 0) or 0)
+    collection = catalog_collection_value(account)
+    net = cash + collection
+    rank = WEALTH_RANKS[0][1]
+    next_threshold = None
+    for i, (threshold, label) in enumerate(WEALTH_RANKS):
+        if net >= threshold:
+            rank = label
+            if i + 1 < len(WEALTH_RANKS): next_threshold = WEALTH_RANKS[i+1][0]
+    return {
+        "cash": cash, "collectionValue": collection, "netWorth": net, "rank": rank,
+        "nextThreshold": next_threshold, "ownedItems": sum(len(set(account.get(k, []))) for _, (_, k, _) in STORE_CATALOGS.items())
+    }
+
 SEASON = {
     "id":2,"name":"CASINO X: CRIMSON ROYALE","subtitle":"DRESS CODE ENFORCED","duration":"21 DAYS","theme":"crimson_royale",
     "tiers":[
@@ -426,22 +646,39 @@ def season_payload(account):
     tiers=[{**t,"claimed":str(t["tier"]) in claimed,"unlocked":xp>=t["xp"] and season_active()} for t in SEASON["tiers"]]
     return {"season":{**SEASON,"startAt":start_ts,"endAt":end_ts,"active":season_active(),"remainingSeconds":remaining},"xp":xp,"claimed":sorted(claimed),"tiers":tiers}
 
-def _catalog_payload(catalog,owned,equipped):
-    return [{"id":k,**v,"owned":k in owned,"equipped":equipped==k} for k,v in catalog.items() if not v.get("admin_only")]
+def _catalog_payload(catalog,owned,equipped,account=None):
+    vip = bool(account and vip_active(account))
+    return [{"id":k,**v,"owned":k in owned,
+             "equipped":(equipped.get(v.get("slot"))==k if isinstance(equipped,dict) else equipped==k)}
+            for k,v in catalog.items()
+            if not v.get("admin_only") and (not v.get("vip_only") or vip or k in owned)]
 
 def store_payload(account):
-    ot=set(account.get("owned_themes",["classic"])); oc=set(account.get("owned_chips",["classic"]))
-    od=set(account.get("owned_decks",["classic"])); osk=set(account.get("owned_tables",["classic"])); ob=set(account.get("owned_balls",["classic"]))
-    return {
-        "themes":_catalog_payload(COSMETIC_THEMES,ot,account.get("equipped_theme","classic")),
-        "chips":_catalog_payload(COSMETIC_CHIPS,oc,account.get("equipped_chip","classic")),
-        "decks":_catalog_payload(COSMETIC_DECKS,od,account.get("equipped_deck","classic")),
-        "tables":_catalog_payload(COSMETIC_TABLES,osk,account.get("equipped_table","classic")),
-        "balls":_catalog_payload(COSMETIC_BALLS,ob,account.get("equipped_ball","classic")),
-        "balance":int(account.get("money",0)),"season":season_payload(account),
-        "adminThemes":[{"id":k,**v,"owned":k in ot,"equipped":account.get("equipped_theme","classic")==k} for k,v in COSMETIC_THEMES.items() if v.get("admin_only") and k in ot],
-        "adminChips":[{"id":k,**v,"owned":k in oc,"equipped":account.get("equipped_chip","classic")==k} for k,v in COSMETIC_CHIPS.items() if v.get("admin_only") and k in oc]
+    ensure_account_progress(account)
+    ensure_wealth_progress(account)
+    result = {
+        "balance": int(account.get("money",0)),
+        "wealth": wealth_payload(account),
+        "season": season_payload(account),
     }
+    for category, (catalog, owned_key, equipped_key) in STORE_CATALOGS.items():
+        owned = set(account.get(owned_key, []))
+        equipped = account.get(equipped_key, {}) if category == "casino" else account.get(equipped_key, "classic")
+        result[category] = _catalog_payload(catalog, owned, equipped, account)
+    # Backward-compatible names used by the current settings appearance UI.
+    result["themes"] = result["theme"]
+    result["chips"] = result["chip"]
+    result["decks"] = result["deck"]
+    result["tables"] = result["table"]
+    result["balls"] = result["ball"]
+    result["profileFrames"] = result["profile_frame"]
+    result["profileBackgrounds"] = result["profile_background"]
+    result["profileTitles"] = result["profile_title"]
+    result["casinoItems"] = result["casino"]
+    result["adminThemes"] = [{"id":k,**v,"owned":k in set(account.get("owned_themes",[])),"equipped":account.get("equipped_theme","classic")==k} for k,v in COSMETIC_THEMES.items() if v.get("admin_only") and k in set(account.get("owned_themes",[]))]
+    result["adminChips"] = [{"id":k,**v,"owned":k in set(account.get("owned_chips",[])),"equipped":account.get("equipped_chip","classic")==k} for k,v in COSMETIC_CHIPS.items() if v.get("admin_only") and k in set(account.get("owned_chips",[]))]
+    result["vip"] = vip_payload(account)
+    return result
 
 def ensure_account_progress(account):
     defaults = {
@@ -450,11 +687,14 @@ def ensure_account_progress(account):
         "biggest_win": 0, "xp": 0, "achievements": [], "daily_claim": "",
         "daily_challenges": {}, "daily_challenge_date": "", "daily_challenge_claimed": [],
         "friends": [], "friend_requests": [], "friend_outgoing": [], "avatar": None, "avatar_color": None, "play_seconds": 0,
-        "owned_themes": ["classic"], "owned_chips": ["classic"], "owned_decks": ["classic"], "owned_tables": ["classic"], "owned_balls": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "equipped_deck": "classic", "equipped_table": "classic", "equipped_ball": "classic", "season_xp": 0, "season_claimed": [], "season_title": "", "season_id": 0,
+        "owned_themes": ["classic"], "owned_chips": ["classic"], "owned_decks": ["classic"], "owned_tables": ["classic"], "owned_balls": ["classic"], "equipped_theme": "classic", "equipped_chip": "classic", "equipped_deck": "classic", "equipped_table": "classic", "equipped_ball": "classic", "owned_profile_frames": ["classic"], "owned_profile_backgrounds": ["classic"], "owned_profile_titles": ["rookie"], "owned_casino_items": ["room_lounge"], "equipped_profile_frame": "classic", "equipped_profile_background": "classic", "equipped_profile_title": "rookie", "equipped_casino_items": {"room":"room_lounge","floor":"classic_floor","wall":"classic_wall","feature":"feature_none"}, "season_xp": 0, "season_claimed": [], "season_title": "", "season_id": 0,
         "roulette_games": 0, "roulette_wins": 0, "roulette_biggest_win": 0,
         "game_stats": {"blackjack": {"games": 0, "wins": 0}, "poker": {"games": 0, "wins": 0}, "roulette": {"games": 0, "wins": 0}},
         "session_token": account.get("session_token"),
         "is_admin": False,
+        "vip_until": 0,
+        "vip_purchases": 0,
+        "vip_daily_claim": "",
         "auto_rebuy": False,
         "auto_rebuy_amount": 1000,
     }
@@ -474,6 +714,28 @@ def ensure_account_progress(account):
 # Database loading is intentionally performed only after all account helper
 # functions are defined. This prevents startup-time NameError during migration.
 load_accounts()
+
+def ensure_wealth_progress(account):
+    # Older accounts receive the new economy fields without losing anything.
+    account.setdefault("owned_profile_frames", ["classic"])
+    account.setdefault("owned_profile_backgrounds", ["classic"])
+    account.setdefault("owned_profile_titles", ["rookie"])
+    owned_casino=set(account.get("owned_casino_items", []))
+    owned_casino.update({"room_lounge","classic_floor","classic_wall","feature_none"})
+    account["owned_casino_items"]=sorted(owned_casino)
+    account.setdefault("vip_until", 0)
+    account.setdefault("vip_purchases", 0)
+    account.setdefault("vip_daily_claim", "")
+    account.setdefault("equipped_profile_frame", "classic")
+    account.setdefault("equipped_profile_background", "classic")
+    account.setdefault("equipped_profile_title", "rookie")
+    equipped = account.get("equipped_casino_items")
+    if not isinstance(equipped, dict): equipped = {}
+    equipped.setdefault("room", "room_lounge")
+    equipped.setdefault("floor", "classic_floor")
+    equipped.setdefault("wall", "classic_wall")
+    equipped.setdefault("feature", "feature_none")
+    account["equipped_casino_items"] = equipped
 
 def account_level(xp):
     level = 1
@@ -599,6 +861,7 @@ def friend_outgoing_payload(account):
 
 def profile_payload(account):
     ensure_account_progress(account)
+    ensure_wealth_progress(account)
     ensure_daily(account)
     level, title = account_level(int(account.get("xp", 0)))
     games = int(account.get("games_played", 0))
@@ -630,7 +893,12 @@ def profile_payload(account):
         "dailyChallenges": account.get("daily_challenges", {}),
         "cosmetics": {"theme":account.get("equipped_theme","classic"),"chip":account.get("equipped_chip","classic"),
                        "deck":account.get("equipped_deck","classic"),"table":account.get("equipped_table","classic"),
-                       "ball":account.get("equipped_ball","classic"),"title":account.get("season_title","")},
+                       "ball":account.get("equipped_ball","classic"),"title":account.get("equipped_profile_title",account.get("season_title","")),
+                       "profileFrame":account.get("equipped_profile_frame","classic"),
+                       "profileBackground":account.get("equipped_profile_background","classic")},
+        "wealth": wealth_payload(account),
+        "vip": vip_payload(account),
+        "casino": {"equipped": dict(account.get("equipped_casino_items", {})), "owned": list(account.get("owned_casino_items", []))},
         "season": season_payload(account),
         "isAdmin": bool(account.get("is_admin")),
         "playSeconds": int(account.get("play_seconds", 0) or 0),
@@ -642,16 +910,17 @@ def leaderboard_payload():
     rows = []
     for a in ACCOUNTS.values():
         ensure_account_progress(a)
+        ensure_wealth_progress(a)
         level, title = account_level(int(a.get("xp", 0)))
         total_games = int(a.get("games_played", 0))
         total_wins = int(a.get("wins", 0))
-        rows.append({"username": a["username"], "balance": int(a.get("money", 0)),
+        rows.append({"username": a["username"], "balance": int(a.get("money", 0)), "netWorth": wealth_payload(a)["netWorth"],
                      "wins": total_wins, "blackjacks": int(a.get("blackjacks", 0)), "rouletteWins": int(a.get("roulette_wins", 0)),
                      "winRate": round((total_wins / total_games * 100), 1) if total_games else 0,
                      "streak": int(a.get("best_win_streak", 0)), "games": total_games,
                      "level": level, "levelTitle": title})
     def top(key): return sorted(rows, key=lambda x: (x[key], x["username"].lower()), reverse=True)[:20]
-    return {"balance": top("balance"), "wins": top("wins"), "blackjacks": top("blackjacks"),
+    return {"balance": top("balance"), "netWorth": top("netWorth"), "wins": top("wins"), "blackjacks": top("blackjacks"),
             "winRate": top("winRate"), "streak": top("streak"), "games": top("games")}
 
 def challenge_defs():
@@ -686,7 +955,10 @@ def update_daily_progress(account, result):
 
 def add_xp(account, amount):
     ensure_account_progress(account)
-    account["xp"] = max(0, int(account.get("xp", 0)) + int(amount))
+    raw = int(amount)
+    if raw > 0 and vip_active(account):
+        raw = int(round(raw * VIP_XP_MULTIPLIER))
+    account["xp"] = max(0, int(account.get("xp", 0)) + raw)
 
 
 def get_room(code: str, public=False, game="blackjack", max_players=None) -> dict:
@@ -1015,8 +1287,16 @@ def chat_clean(text):
 # Admin helpers
 # ---------------------------------------------------------------------------
 def admin_payload(room):
-    users = [{"username": a["username"], "money": int(a.get("money", 0))}
+    users = [{"username": a["username"], "money": int(a.get("money", 0)),
+              "netWorth": int(wealth_payload(a)["netWorth"]), "isAdmin": bool(a.get("is_admin")),
+              "vip": vip_payload(a)}
              for a in ACCOUNTS.values()]
+    admin_catalog = []
+    for category, (catalog, _, _) in STORE_CATALOGS.items():
+        for item_id, item in catalog.items():
+            admin_catalog.append({"id":item_id,"category":category,"name":item.get("name",item_id),
+                                  "price":int(item.get("price",0) or 0),"rarity":item.get("rarity","COMMON"),
+                                  "vipOnly":bool(item.get("vip_only")),"adminOnly":bool(item.get("admin_only"))})
     table_players = []
     if room:
         table_players = [{
@@ -1033,8 +1313,9 @@ def admin_payload(room):
                    for c in room["dealer_preview_cards"]]
     table_luck = room.get("roulette_table_luck", {}) if room else {}
     table_luck_active = bool(table_luck.get("strength", 0) and table_luck.get("expires_at", 0) > time.time())
-    return {"users": users, "tablePlayers": table_players, "dealerPreviewActive": bool(room and room.get("dealer_preview_active")), "dealerPreview": preview,
-            "tableLuck": {"strength": int(table_luck.get("strength", 0)), "active": table_luck_active}}
+    return {"users": users, "adminCatalog": admin_catalog, "tablePlayers": table_players, "dealerPreviewActive": bool(room and room.get("dealer_preview_active")), "dealerPreview": preview,
+            "tableLuck": {"strength": int(table_luck.get("strength", 0)), "active": table_luck_active},
+            "developer": developer_admin_payload()}
 
 
 
@@ -1500,7 +1781,7 @@ async def finish_round(room):
         account = ACCOUNTS.get(p.get("username_key"))
         if account and p.get("ws"):
             try:
-                await p["ws"].send(json.dumps({"type":"profile", "profile": profile_payload(account)}))
+                await p["ws"].send(json.dumps({"type":"profile", "profile": profile_payload(account), "developer": developer_public_payload()}))
             except Exception:
                 pass
 
@@ -2515,7 +2796,7 @@ async def ws_handler(websocket):
             except Exception:
                 pass
             save_accounts()
-            await websocket.send(json.dumps({"type": "auth_ok", "mode": "signup", "username": username, "balance": STARTING_MONEY, "token": token, "profile": profile_payload(ACCOUNTS[key])}))
+            await websocket.send(json.dumps({"type": "auth_ok", "mode": "signup", "username": username, "balance": STARTING_MONEY, "token": token, "profile": profile_payload(ACCOUNTS[key]), "developer": developer_public_payload()}))
             continue
 
         if kind == "login":
@@ -2535,7 +2816,7 @@ async def ws_handler(websocket):
             account["session_token"] = token
             USER_SOCKETS[key] = websocket
             save_accounts()
-            await websocket.send(json.dumps({"type": "auth_ok", "mode": "login", "username": account["username"], "balance": account["money"], "token": token, "profile": profile_payload(account)}))
+            await websocket.send(json.dumps({"type": "auth_ok", "mode": "login", "username": account["username"], "balance": account["money"], "token": token, "profile": profile_payload(account), "developer": developer_public_payload()}))
             continue
 
         if kind == "resume":
@@ -2545,7 +2826,7 @@ async def ws_handler(websocket):
                 account = ACCOUNTS[key]
                 ensure_account_progress(account)
                 USER_SOCKETS[key] = websocket
-                await websocket.send(json.dumps({"type": "auth_ok", "mode": "resume", "username": account["username"], "balance": account.get("money",0), "token": token, "profile": profile_payload(account)}))
+                await websocket.send(json.dumps({"type": "auth_ok", "mode": "resume", "username": account["username"], "balance": account.get("money",0), "token": token, "profile": profile_payload(account), "developer": developer_public_payload()}))
             else:
                 await websocket.send(json.dumps({"type": "session_invalid"}))
             continue
@@ -2943,12 +3224,15 @@ async def ws_handler(websocket):
                 account = ACCOUNTS[key]
                 ensure_daily(account)
                 if account.get("daily_claim") != today_key():
-                    account["money"] = int(account.get("money", 0)) + 250
+                    base_reward = 250
+                    vip_bonus = VIP_DAILY_BONUS if vip_active(account) else 0
+                    total_reward = base_reward + vip_bonus
+                    account["money"] = int(account.get("money", 0)) + total_reward
                     account["daily_claim"] = today_key()
                     add_xp(account, 25)
                     unlock_achievements(account)
                     save_accounts()
-                    await websocket.send(json.dumps({"type":"daily_claimed", "amount":250, "profile":profile_payload(account)}))
+                    await websocket.send(json.dumps({"type":"daily_claimed", "amount":total_reward, "vipBonus":vip_bonus, "profile":profile_payload(account)}))
                 else:
                     await websocket.send(json.dumps({"type":"error", "scope":"daily", "message":"Today's reward has already been claimed."}))
             continue
@@ -2965,19 +3249,52 @@ async def ws_handler(websocket):
                 await websocket.send(json.dumps({"type":"season", "season":season_payload(ACCOUNTS[key])}))
             continue
 
+        if kind == "buy_vip":
+            key=TOKENS.get(msg.get("token")); account=ACCOUNTS.get(key)
+            if account is None:
+                continue
+            ensure_account_progress(account); ensure_wealth_progress(account)
+            price = current_vip_price()
+            if int(account.get("money", 0)) < price:
+                await websocket.send(json.dumps({"type":"error","scope":"store","message":f"VIP costs ${price:,} in-game chips for {VIP_DURATION_DAYS} days."}))
+                continue
+            now = time.time()
+            base = max(now, float(account.get("vip_until", 0) or 0))
+            account["vip_until"] = base + VIP_DURATION_DAYS * 86400
+            account["vip_purchases"] = int(account.get("vip_purchases", 0) or 0) + 1
+            for owned_key, item_id in (("owned_profile_frames","vip_crown"),("owned_profile_backgrounds","vip_private"),("owned_profile_titles","vip_member"),("owned_casino_items","room_vip_private")):
+                account[owned_key] = sorted(set(account.get(owned_key, [])) | {item_id})
+            account["money"] = int(account.get("money", 0)) - price
+            save_accounts()
+            await websocket.send(json.dumps({"type":"vip_purchased","vip":vip_payload(account),"store":store_payload(account),"profile":profile_payload(account)}))
+            await websocket.send(json.dumps({"type":"balance","balance":int(account.get("money",0))}))
+            continue
+
         if kind == "buy_cosmetic":
             key=TOKENS.get(msg.get("token")); account=ACCOUNTS.get(key); category=str(msg.get("category","")); item_id=str(msg.get("id",""))
-            catalogs={"theme":COSMETIC_THEMES,"chip":COSMETIC_CHIPS,"deck":COSMETIC_DECKS,"table":COSMETIC_TABLES,"ball":COSMETIC_BALLS}
-            owned_keys={"theme":"owned_themes","chip":"owned_chips","deck":"owned_decks","table":"owned_tables","ball":"owned_balls"}
-            catalog=catalogs.get(category,{}); owned_key=owned_keys.get(category)
-            if account is not None and owned_key and item_id in catalog:
-                item=catalog[item_id]; owned=set(account.get(owned_key,[]))
-                if item_id in owned: await websocket.send(json.dumps({"type":"store","store":store_payload(account)}))
-                elif item.get("admin_only"): await websocket.send(json.dumps({"type":"error","scope":"store","message":"That item can only be granted by an authorized admin."}))
-                elif item.get("limited"): await websocket.send(json.dumps({"type":"error","scope":"store","message":"Limited items are earned through the active season."}))
-                elif int(account.get("money",0)) < int(item.get("price",0)): await websocket.send(json.dumps({"type":"error","scope":"store","message":"Not enough chips."}))
+            meta=STORE_CATALOGS.get(category)
+            if account is not None and meta:
+                catalog, owned_key, equipped_key = meta
+                ensure_wealth_progress(account)
+                if item_id not in catalog:
+                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"That item does not exist."}))
+                    continue
+                item=catalog[item_id]
+                owned=set(account.get(owned_key,[]))
+                if item_id in owned:
+                    await websocket.send(json.dumps({"type":"store","store":store_payload(account)}))
+                elif item.get("admin_only"):
+                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"That item can only be granted by an authorized admin."}))
+                elif item.get("limited"):
+                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"Limited items are earned through the active season."}))
+                elif item.get("vip_only") and not vip_active(account):
+                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"That item is reserved for active VIP members."}))
+                elif int(account.get("money",0)) < int(item.get("price",0)):
+                    await websocket.send(json.dumps({"type":"error","scope":"store","message":"Not enough chips for that purchase."}))
                 else:
-                    account["money"]-=int(item.get("price",0)); owned.add(item_id); account[owned_key]=sorted(owned); save_accounts()
+                    account["money"] = int(account.get("money",0)) - int(item.get("price",0))
+                    owned.add(item_id); account[owned_key]=sorted(owned)
+                    save_accounts()
                     await websocket.send(json.dumps({"type":"store","store":store_payload(account),"purchased":item_id}))
                     await websocket.send(json.dumps({"type":"profile","profile":profile_payload(account)}))
                     await websocket.send(json.dumps({"type":"balance","balance":int(account.get("money",0))}))
@@ -2985,14 +3302,22 @@ async def ws_handler(websocket):
 
         if kind == "equip_cosmetic":
             key=TOKENS.get(msg.get("token")); account=ACCOUNTS.get(key); category=str(msg.get("category","")); item_id=str(msg.get("id",""))
-            catalogs={"theme":COSMETIC_THEMES,"chip":COSMETIC_CHIPS,"deck":COSMETIC_DECKS,"table":COSMETIC_TABLES,"ball":COSMETIC_BALLS}
-            owned_keys={"theme":"owned_themes","chip":"owned_chips","deck":"owned_decks","table":"owned_tables","ball":"owned_balls"}
-            equipped_keys={"theme":"equipped_theme","chip":"equipped_chip","deck":"equipped_deck","table":"equipped_table","ball":"equipped_ball"}
-            if account is not None and category in catalogs and item_id in catalogs[category] and item_id in set(account.get(owned_keys[category],[])):
-                account[equipped_keys[category]]=item_id; save_accounts()
+            meta=STORE_CATALOGS.get(category)
+            if account is not None and meta:
+                catalog, owned_key, equipped_key = meta
+                ensure_wealth_progress(account)
+                if item_id not in catalog or item_id not in set(account.get(owned_key,[])):
+                    continue
+                if category == "casino":
+                    slot = catalog[item_id].get("slot", "feature")
+                    equipped = dict(account.get(equipped_key, {})); equipped[slot] = item_id; account[equipped_key] = equipped
+                else:
+                    account[equipped_key] = item_id
+                save_accounts()
                 for r in rooms.values():
                     for p in r.get("players",[]):
-                        if p.get("username_key")==key: p.setdefault("cosmetics",{})[category]=item_id
+                        if p.get("username_key")==key:
+                            p.setdefault("cosmetics",{})[category]=item_id
                 await websocket.send(json.dumps({"type":"store","store":store_payload(account),"equipped":item_id}))
                 await websocket.send(json.dumps({"type":"profile","profile":profile_payload(account)}))
                 for r in rooms.values():
@@ -4005,9 +4330,15 @@ async def ws_handler(websocket):
                     "avatar": target.get("avatar"),
                     "avatarColor": target.get("avatar_color"),
                     "isBot": bool(target.get("is_bot")),
+                    "wealth": {"cash":0,"collectionValue":0,"netWorth":0,"rank":"ROOKIE","nextThreshold":10000,"ownedItems":0},
+                    "vip": {"active":False,"price":VIP_PRICE,"durationDays":VIP_DURATION_DAYS,"until":0,"daysLeft":0,"dailyBonus":VIP_DAILY_BONUS,"xpMultiplier":VIP_XP_MULTIPLIER},
+                    "cosmetics": {"profileFrame":"classic","profileBackground":"classic","title":"rookie"},
+                    "casino": {"equipped":{"room":"room_lounge","floor":"classic_floor","wall":"classic_wall","feature":"feature_none"},"owned":["room_lounge","classic_floor","classic_wall","feature_none"]},
+                    "achievementsCount": 0, "collectionCount": 1, "isSelf": False,
                 }
             else:
                 ensure_account_progress(acc)
+                ensure_wealth_progress(acc)
                 level, title = account_level(int(acc.get("xp", 0)))
                 games = int(acc.get("games_played", 0))
                 wins = int(acc.get("wins", 0))
@@ -4024,6 +4355,13 @@ async def ws_handler(websocket):
                     "avatar": acc.get("avatar") or target.get("avatar"),
                     "avatarColor": acc.get("avatar_color") or target.get("avatar_color"),
                     "isBot": False,
+                    "wealth": wealth_payload(acc),
+                    "vip": vip_payload(acc),
+                    "cosmetics": {"profileFrame":acc.get("equipped_profile_frame","classic"),"profileBackground":acc.get("equipped_profile_background","classic"),"title":acc.get("equipped_profile_title","rookie")},
+                    "casino": {"equipped":dict(acc.get("equipped_casino_items",{})),"owned":list(acc.get("owned_casino_items",[]))},
+                    "achievementsCount": len(acc.get("achievements",[])),
+                    "collectionCount": len({item for _, (_, key, _) in STORE_CATALOGS.items() for item in set(acc.get(key,[]))}),
+                    "isSelf": bool(player and player.get("username_key") == target.get("username_key")),
                 }
             # Extra fields for admins viewing
             if is_authorized_admin(websocket, room, player) or (player and ACCOUNTS.get(player.get("username_key"), {}).get("is_admin")):
@@ -4144,48 +4482,165 @@ async def ws_handler(websocket):
         elif kind == "admin_give_item":
             if not is_authorized_admin(websocket, room, player):
                 continue
-            target = find_player(room, msg.get("targetId"))
-            item_id = str(msg.get("itemId", ""))
-            # Map grant ids → catalog category + owned list
-            item_catalog = {
-                "admin_star": {"name": "Admin Star", "category": "theme", "owned_key": "owned_themes"},
-                "admin_blackout": {"name": "Admin Blackout", "category": "theme", "owned_key": "owned_themes"},
-                "founder": {"name": "Casino X Founder", "category": "theme", "owned_key": "owned_themes"},
-                "admin_chip": {"name": "Admin Chip", "category": "chip", "owned_key": "owned_chips"},
-            }
-            item = item_catalog.get(item_id)
-            if not target or not item:
-                await websocket.send(json.dumps({"type": "error", "scope": "admin", "message": "Invalid item or player."}))
+            target = find_player(room, msg.get("targetId")) if msg.get("targetId") else None
+            target_username = str(msg.get("targetUsername") or "").strip()
+            target_key = target.get("username_key") if target else username_key(target_username)
+            account = ACCOUNTS.get(target_key)
+            category = str(msg.get("category") or "").strip()
+            item_id = str(msg.get("itemId") or "").strip()
+            legacy = {"admin_star": "theme", "admin_blackout": "theme", "founder": "theme", "admin_chip": "chip"}
+            if (not category or category not in STORE_CATALOGS) and item_id in legacy:
+                category = legacy[item_id]
+            meta = STORE_CATALOGS.get(category)
+            if not account or not meta:
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Invalid player or item category."}))
                 continue
-            account = ACCOUNTS.get(target.get("username_key"))
-            if not account:
-                await websocket.send(json.dumps({"type": "error", "scope": "admin", "message": "Player account not found."}))
+            catalog, owned_key, _ = meta
+            if item_id not in catalog:
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"That item does not exist in the selected category."}))
                 continue
-            ensure_account_progress(account)
-            owned_key = item["owned_key"]
+            ensure_account_progress(account); ensure_wealth_progress(account)
             account[owned_key] = sorted(set(account.get(owned_key, [])) | {item_id})
             save_accounts()
-            # Confirm to admin
-            await websocket.send(json.dumps({
-                "type": "admin_ok",
-                "message": f"Granted {item['name']} to {account.get('username')}"
-            }))
-            await send_admin_data(websocket, room)
-            # Push updated store + profile to the TARGET so inventory updates live
-            target_ws = target.get("ws") or USER_SOCKETS.get(target.get("username_key"))
+            item_name = catalog[item_id].get("name", item_id)
+            await websocket.send(json.dumps({"type":"admin_ok","message":f"Granted {item_name} to {account.get('username')}"}))
+            target_ws = (target.get("ws") if target else None) or USER_SOCKETS.get(target_key)
             if target_ws:
                 try:
-                    await target_ws.send(json.dumps({
-                        "type": "store",
-                        "store": store_payload(account),
-                        "granted": item_id,
-                    }))
-                    await target_ws.send(json.dumps({
-                        "type": "profile",
-                        "profile": profile_payload(account),
-                    }))
+                    await target_ws.send(json.dumps({"type":"store","store":store_payload(account),"granted":item_id}))
+                    await target_ws.send(json.dumps({"type":"profile","profile":profile_payload(account)}))
                 except Exception:
                     pass
+            await send_admin_data(websocket, room)
+
+        elif kind == "admin_grant_vip":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            target = find_player(room, msg.get("targetId")) if msg.get("targetId") else None
+            target_username = str(msg.get("targetUsername") or "").strip()
+            target_key = target.get("username_key") if target else username_key(target_username)
+            account = ACCOUNTS.get(target_key)
+            try:
+                days = int(msg.get("days", VIP_DURATION_DAYS))
+            except (TypeError, ValueError):
+                days = VIP_DURATION_DAYS
+            if not account or days not in (30,90,365,36500):
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Invalid player or VIP duration."}))
+                continue
+            ensure_account_progress(account); ensure_wealth_progress(account)
+            base = max(time.time(), float(account.get("vip_until", 0) or 0))
+            account["vip_until"] = base + days * 86400
+            for owned_key, item_id in (("owned_profile_frames","vip_crown"),("owned_profile_backgrounds","vip_private"),("owned_profile_titles","vip_member"),("owned_casino_items","room_vip_private")):
+                account[owned_key] = sorted(set(account.get(owned_key, [])) | {item_id})
+            save_accounts()
+            await websocket.send(json.dumps({"type":"admin_ok","message":f"Granted VIP ({days} days) to {account.get('username')}"}))
+            target_ws = (target.get("ws") if target else None) or USER_SOCKETS.get(target_key)
+            if target_ws:
+                try:
+                    await target_ws.send(json.dumps({"type":"vip_granted","vip":vip_payload(account),"profile":profile_payload(account),"store":store_payload(account)}))
+                except Exception:
+                    pass
+            await send_admin_data(websocket, room)
+
+        elif kind == "admin_dev_item":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            category = str(msg.get("category") or "").strip()
+            item_id = str(msg.get("itemId") or "").strip()
+            patch = msg.get("patch") if isinstance(msg.get("patch"), dict) else {}
+            if not apply_catalog_override(category, item_id, patch):
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Invalid developer item or category."}))
+                continue
+            DEVELOPER_SETTINGS.setdefault("catalog_overrides", {})[f"{category}:{item_id}"] = {k:v for k,v in patch.items() if k in {"name","price","desc","rarity","admin_only","vip_only","limited","season"}}
+            save_developer_settings()
+            await websocket.send(json.dumps({"type":"admin_dev_ok","message":f"Updated {item_id}.","developer":developer_admin_payload()}))
+            continue
+
+        elif kind == "admin_dev_vip":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            try: price = max(1_000_000, int(msg.get("price", VIP_PRICE)))
+            except Exception: price = VIP_PRICE
+            DEVELOPER_SETTINGS["vip_price"] = price
+            save_developer_settings()
+            await websocket.send(json.dumps({"type":"admin_dev_ok","message":f"VIP price set to ${price:,} for 30 days.","developer":developer_admin_payload()}))
+            continue
+
+        elif kind == "admin_dev_layout":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            target = str(msg.get("target") or "").strip()
+            mode = str(msg.get("mode") or "desktop").lower()
+            if target not in DEV_UI_TARGETS or mode not in ("desktop","mobile"):
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Invalid UI target or mode."}))
+                continue
+            try: x=max(-1200,min(1200,float(msg.get("x",0))))
+            except Exception: x=0
+            try: y=max(-1200,min(1200,float(msg.get("y",0))))
+            except Exception: y=0
+            try: scale=max(0.5,min(1.8,float(msg.get("scale",1))))
+            except Exception: scale=1
+            DEVELOPER_SETTINGS.setdefault("ui_layout", {}).setdefault(target,{})[mode] = {"x":x,"y":y,"scale":scale}
+            save_developer_settings()
+            payload=json.dumps({"type":"developer_ui","developer":developer_public_payload()})
+            for key, ws in list(USER_SOCKETS.items()):
+                try: await ws.send(payload)
+                except Exception: pass
+            await websocket.send(json.dumps({"type":"admin_dev_ok","message":f"{target} {mode} position saved.","developer":developer_admin_payload()}))
+            continue
+
+        elif kind == "admin_dev_custom_layout":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            selector = str(msg.get("selector") or "").strip()[:100]
+            if not selector or not (selector.startswith("#") or selector.startswith(".")) or any(ch in selector for ch in "<>;{}()[]="):
+                await websocket.send(json.dumps({"type":"error","scope":"admin","message":"Use a safe CSS #id or .class selector."}))
+                continue
+            mode = str(msg.get("mode") or "desktop").lower()
+            if mode not in ("desktop","mobile"):
+                mode = "desktop"
+            try: x=max(-1200,min(1200,float(msg.get("x",0))))
+            except Exception: x=0
+            try: y=max(-1200,min(1200,float(msg.get("y",0))))
+            except Exception: y=0
+            try: scale=max(0.5,min(1.8,float(msg.get("scale",1))))
+            except Exception: scale=1
+            DEVELOPER_SETTINGS.setdefault("custom_ui", {}).setdefault(selector,{})[mode]={"x":x,"y":y,"scale":scale}
+            save_developer_settings()
+            payload=json.dumps({"type":"developer_ui","developer":developer_public_payload()})
+            for ws in list(USER_SOCKETS.values()):
+                try: await ws.send(payload)
+                except Exception: pass
+            await websocket.send(json.dumps({"type":"admin_dev_ok","message":f"Custom {selector} {mode} position saved.","developer":developer_admin_payload()}))
+            continue
+
+        elif kind == "admin_dev_reset_layout":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            DEVELOPER_SETTINGS["ui_layout"] = json.loads(json.dumps(DEFAULT_DEVELOPER_SETTINGS["ui_layout"]))
+            DEVELOPER_SETTINGS["custom_ui"] = {}
+            save_developer_settings()
+            payload=json.dumps({"type":"developer_ui","developer":developer_public_payload()})
+            for key, ws in list(USER_SOCKETS.items()):
+                try: await ws.send(payload)
+                except Exception: pass
+            await websocket.send(json.dumps({"type":"admin_dev_ok","message":"UI positions reset to safe defaults.","developer":developer_admin_payload()}))
+            continue
+
+        elif kind == "admin_dev_flag":
+            if not is_authorized_admin(websocket, room, player):
+                continue
+            flag = str(msg.get("flag") or "").strip()
+            if flag not in DEFAULT_DEVELOPER_SETTINGS["feature_flags"]:
+                continue
+            DEVELOPER_SETTINGS.setdefault("feature_flags", {})[flag] = bool(msg.get("enabled"))
+            save_developer_settings()
+            payload=json.dumps({"type":"developer_ui","developer":developer_public_payload()})
+            for key, ws in list(USER_SOCKETS.items()):
+                try: await ws.send(payload)
+                except Exception: pass
+            await websocket.send(json.dumps({"type":"admin_dev_ok","message":f"{flag}: {'ON' if msg.get('enabled') else 'OFF'}","developer":developer_admin_payload()}))
+            continue
 
         elif kind == "admin_fun":
             if not is_authorized_admin(websocket, room, player) or not room:

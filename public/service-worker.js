@@ -1,4 +1,4 @@
-const CACHE_NAME = 'casino-x-v1';
+const CACHE_NAME = 'casino-x-v25';
 
 // Files to cache for offline use
 const ASSETS = [

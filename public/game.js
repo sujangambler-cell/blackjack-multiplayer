@@ -68,6 +68,8 @@ let friendRequests = [];
 let friendOutgoing = [];
 let chatMuted = localStorage.getItem("bj_chat_muted") === "1";
 let storeData = null;
+let developerData = null;
+let pendingStorePurchase = null;
 let seasonData = null;
 let appearanceData = null;
 let pokerAnimationTimer = null;
@@ -166,8 +168,14 @@ function triggerPokerResult(state, me) {
 // ---------------------------------------------------------------------------
 // Update Log — versioned changelog shown once per account after update
 // ---------------------------------------------------------------------------
-const UPDATE_LOG_VERSION = 5;
+const UPDATE_LOG_VERSION = 8;
 const UPDATE_LOG_ENTRIES = [
+  { icon:"👑", title:"VIP Membership", body:"A new VIP membership costs $250,000,000 in-game chips for 30 days. VIP unlocks exclusive profile looks, the VIP lounge, a daily VIP cash bonus, a VIP badge, and 1.25× XP." },
+  { icon:"🎁", title:"Admins Can Gift Anything", body:"Authorized admins can now grant money, profile frames, backgrounds, titles, Casino items, luxury cosmetics, and VIP membership to any account — even when that player is offline." },
+  { icon:"📰", title:"What’s New Opens Once", body:"After this update, the What’s New notebook opens automatically once for each account/browser. Close it with GOT IT and reopen it any time from the Update Log button." },
+  { icon:"💰", title:"Wealth & Flex Update", body:"Money is now the main long-term grind. New profile cosmetics, luxury items, wealth value, VIP ranks, a net-worth leaderboard, and a personal Casino showcase give your chips a reason to matter." },
+  { icon:"🏠", title:"My Casino", body:"Build your own room with high-end rooms, floors, walls and luxury features. Your equipped room appears when other players visit your profile." },
+  { icon:"👑", title:"Profile Flex", body:"Buy and equip profile frames, backgrounds and titles. Player profiles now show off wealth, collection size, achievements and your equipped look." },
   {
     title: "Table Features Pack",
     body: "Reactions, hand history, PIN-locked private tables, poker side pots, player bounties, spectator betting, auto-rebuy, and admin announcement banners — all mobile-safe."
@@ -914,6 +922,7 @@ function connect() {
       $("#join-error").textContent = "";
       showMainMenu();
       if (msg.profile) updateProfileUI(msg.profile);
+      if (msg.developer) { developerData = msg.developer; applyDeveloperUI(developerData); }
       // Load season pass so theme + UI work immediately after login
       try { send({ type: "season", token: authToken }); } catch (e) {}
       localStorage.setItem("bj_username_hint", loggedUsername);
@@ -1086,7 +1095,9 @@ function connect() {
     if (msg.type === "daily_claimed") {
       updateProfileUI(msg.profile);
       SFX.win();
-      renderDaily(false, msg.profile.dailyChallenges ? buildChallengeObjects(msg.profile.dailyChallenges) : []);
+      renderDaily(true, msg.profile.dailyChallenges ? buildChallengeObjects(msg.profile.dailyChallenges) : []);
+      const vipNote = Number(msg.vipBonus || 0) > 0 ? ` • VIP +$${Number(msg.vipBonus).toLocaleString()}` : "";
+      pushSideNotif({icon:"💰",kind:"vip",title:"DAILY CLAIMED",body:`+$${Number(msg.amount || 0).toLocaleString()} chips${vipNote}`,ttl:7000});
       return;
     }
     if (msg.type === "store") {
@@ -1148,6 +1159,12 @@ function connect() {
       if (msg.claimedTier) { play("win"); centerBanner("SEASON REWARD CLAIMED", "win"); }
       return;
     }
+    if (msg.type === "developer_ui") {
+      developerData = msg.developer || developerData;
+      applyDeveloperUI(developerData);
+      if (isAdmin && msg.developer) renderDeveloperControls(msg.developer);
+      return;
+    }
     if (msg.type === "admin_ok") {
       isAdmin = true;
       $("#admin-login-box").classList.add("hidden");
@@ -1155,8 +1172,16 @@ function connect() {
       $("#btn-admin-float").classList.remove("hidden"); $("#btn-admin-table").classList.remove("hidden"); $("#poker-admin").classList.remove("hidden");
       return;
     }
+    if (msg.type === "vip_purchased" || msg.type === "vip_granted") {
+      if (msg.profile) updateProfileUI(msg.profile);
+      if (msg.store) { storeData = msg.store; renderStore(); }
+      const days = Number(msg.vip?.daysLeft || 30);
+      pushSideNotif({icon:"👑",kind:"vip",title:"VIP ACTIVE",body:`VIP benefits are active for ${days} day${days===1?"":"s"}.`,ttl:9000});
+      try { play("win"); } catch(e) {}
+      return;
+    }
     if (msg.type === "admin_data") {
-      renderAdminUsers(msg.users || [], msg.tablePlayers || [], msg.dealerPreviewActive, msg.dealerPreview, msg.tableLuck);
+      renderAdminUsers(msg.users || [], msg.tablePlayers || [], msg.dealerPreviewActive, msg.dealerPreview, msg.tableLuck, msg.adminCatalog || [], msg.developer || null);
       return;
     }
     if (msg.type === "player_profile_peek") {
@@ -1662,201 +1687,105 @@ function formatPlayTime(sec) {
   return m + "m";
 }
 
-function showPlayerProfilePopup(profile) {
-  if (!profile) return;
-  let pop = document.getElementById("player-profile-popup");
-  if (!pop) {
-    pop = document.createElement("div");
-    pop.id = "player-profile-popup";
-    pop.className = "player-profile-popup";
-    document.body.appendChild(pop);
-    document.addEventListener("click", (e) => {
-      if (!pop.classList.contains("open")) return;
-      if (pop.contains(e.target)) return;
-      if (e.target.closest(".seat-slot") || e.target.closest(".poker-seat")) return;
-      pop.classList.remove("open");
-    });
-  }
-  const adminBadge = profile.isAdmin ? '<span class="admin-crown" title="Admin">♛</span>' : '';
-  const adminClass = profile.isAdmin ? " admin-glow" : "";
-  let adminExtras = "";
-  if (profile.adminView) {
-    adminExtras = `<div class="ppp-admin-row">
-      <span>Chips: $${Number(profile.money||0).toLocaleString()}</span>
-      <span>Luck: ${profile.luckStrength||0}%</span>
-      <button class="btn secondary ppp-give" data-id="${profile.id}">GIVE $</button>
-      <button class="btn secondary ppp-luck" data-id="${profile.id}">TOGGLE LUCK</button>
-    </div>`;
-  }
-  pop.innerHTML = `
-    <div class="ppp-card${adminClass}">
-      <div class="ppp-header">
-        <div class="ppp-avatar" style="background:${profile.avatarColor||'#6366f1'}">${(profile.username||'?')[0]?.toUpperCase()||'?'}</div>
-        <div>
-          <div class="ppp-name">${adminBadge}${escapeHtml(profile.username||'Player')}</div>
-          <div class="ppp-level">Lv ${profile.level||1} · ${escapeHtml(profile.levelTitle||'')}</div>
-        </div>
-      </div>
-      <div class="ppp-stats">
-        <div><span>Win rate</span><strong>${profile.winRate||0}%</strong></div>
-        <div><span>Biggest win</span><strong>$${Number(profile.biggestWin||0).toLocaleString()}</strong></div>
-        <div><span>Play time</span><strong>${formatPlayTime(profile.playSeconds)}</strong></div>
-        <div><span>Games</span><strong>${profile.gamesPlayed||0}</strong></div>
-      </div>
-      ${adminExtras}
-    </div>`;
-  pop.classList.add("open");
-  pop.querySelector(".ppp-give")?.addEventListener("click", () => {
-    const n = Number(prompt("Chips to give:", "500"));
-    if (Number.isInteger(n) && n > 0 && n <= 1000000) send({type:"admin_give_table_money", targetId: profile.id, amount: n});
-  });
-  pop.querySelector(".ppp-luck")?.addEventListener("click", () => {
-    const cur = Number(profile.luckStrength||0);
-    const next = cur > 0 ? 0 : 75;
-    send({type:"admin_set_player_luck", targetId: profile.id, strength: next});
-    profile.luckStrength = next;
-  });
+function profileVisualStyle(profile){const c=profile?.cosmetics||{},bg=previewCosmetic("profile_background",c.profileBackground||"classic").split(","),frame=previewCosmetic("profile_frame",c.profileFrame||"classic").split(",");return{bgA:bg[0],bgB:bg[1],frameA:frame[0],frameB:frame[1]};}
+function renderFlexProfile(){const p=myProfile;if(!p)return;const wealth=p.wealth||{},c=p.cosmetics||{},frame=previewCosmetic("profile_frame",c.profileFrame||"classic").split(","),bg=previewCosmetic("profile_background",c.profileBackground||"classic").split(","),titleName=(storeData?.profileTitles||[]).find(x=>x.id===(c.title||"rookie"))?.name||String(c.title||"ROOKIE").replace(/_/g," ").toUpperCase();const host=$("#profile-flex-summary");if(host)host.innerHTML=`<div class="flex-profile-card" style="--flex-bg-a:${bg[0]};--flex-bg-b:${bg[1]}"><div class="flex-profile-head"><div class="flex-frame" style="--frame-a:${frame[0]};--frame-b:${frame[1]}"><div class="flex-avatar">${escapeHtml((p.username||"?")[0]?.toUpperCase()||"?")}</div></div><div><strong>${escapeHtml(p.username||"PLAYER")} ${p.vip?.active?'<span class="vip-badge">VIP</span>':''}</strong><span>${escapeHtml(titleName)} • ${escapeHtml(wealth.rank||"ROOKIE")}</span></div></div><div class="flex-profile-money"><span>NET WORTH</span><b>${formatMoney(wealth.netWorth||p.balance)}</b></div><div class="flex-profile-actions"><button class="btn secondary" id="btn-profile-flex-shop">CUSTOMIZE</button><button class="btn" id="btn-profile-flex-casino">VISIT MY CASINO</button></div></div>`;wireButton($("#btn-profile-flex-shop"),()=>{window.storeTab="profile";window.storeOwnedOnly=false;closeProgress("#profile-overlay");openProgress("#store-overlay");send({type:"store",token:authToken});});wireButton($("#btn-profile-flex-casino"),()=>openCasinoViewer(p,true));}
+function openCasinoViewer(profile,own=false){
+  const ov=$("#casino-viewer-overlay"),view=$("#casino-viewer"); if(!ov||!view||!profile)return;
+  const eq=profile.casino?.equipped||{}, wealth=profile.wealth||{};
+  const room=eq.room||"room_lounge", floor=eq.floor||"classic_floor", wall=eq.wall||"classic_wall", feature=eq.feature||"feature_none";
+  const items=storeData?.casinoItems||[]; const item=id=>items.find(x=>x.id===id);
+  const roomItem=item(room), featureItem=item(feature);
+  const roomName=roomItem?.name||"Casino Lounge";
+  const floorStyle=previewCosmetic("casino",floor).split(","), wallStyle=previewCosmetic("casino",wall).split(",");
+  const ownedCount=profile.casino?.owned?.length||1;
+  const featureClass=feature.replace(/[^a-z0-9_-]/gi,"");
+  view.innerHTML=`<div class="casino-view-card casino-room-v2" style="--casino-wall-a:${wallStyle[0]};--casino-wall-b:${wallStyle[1]};--casino-floor-a:${floorStyle[0]};--casino-floor-b:${floorStyle[1]}">
+    <div class="casino-view-top">
+      <div><span class="store-kicker">CASINO X • PRIVATE PROPERTY</span><h2>${escapeHtml(profile.username||"PLAYER")}’S CASINO</h2><small>${escapeHtml(roomName)} • ${escapeHtml(wealth.rank||"ROOKIE")} • NET WORTH ${formatMoney(wealth.netWorth||0)}</small></div>
+      <button class="icon-btn" id="btn-casino-view-close" aria-label="Close">×</button>
+    </div>
+    <div class="casino-room-scene casino-room-v2-scene room-${escapeAttr(room)} floor-${escapeAttr(floor)} wall-${escapeAttr(wall)} feature-${escapeAttr(featureClass)}">
+      <div class="casino-window"><div class="city-sky"></div><div class="city-glow"></div><div class="city-buildings"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="window-frame vertical v1"></div><div class="window-frame vertical v2"></div><div class="window-frame horizontal h1"></div><div class="window-frame horizontal h2"></div></div>
+      <div class="room-ceiling-glow"></div>
+      <div class="room-art-deco-sign"><span>♛</span> CASINO X <span>♛</span></div>
+      <div class="room-plant left"><i></i><b></b></div><div class="room-plant right"><i></i><b></b></div>
+      <div class="room-couch couch-left"></div><div class="room-couch couch-right"></div>
+      <div class="room-coffee-table"><span>♠</span></div>
+      <div class="casino-table-prop"><span>HOUSE TABLE</span></div>
+      <div class="room-rug"></div>
+      <div class="room-feature feature-${escapeAttr(featureClass)}">${feature==="feature_chandelier"?"<div class=\"room-chandelier\"><i></i><b></b><em></em></div>":feature==="feature_statue"?"<div class=\"room-statue\">♛</div>":feature==="feature_bar"?"<div class=\"room-bar\"><i></i><b>DIAMOND BAR</b></div>":feature==="feature_blackjack"?"<div class=\"room-private-table\">PRIVATE<br>BLACKJACK</div>":"<div class=\"room-feature-empty\">STARTER ROOM</div>"}</div>
+      <div class="room-floor-label">${escapeHtml(roomName)} • ${ownedCount} ITEMS OWNED</div>
+    </div>
+    <div class="casino-room-footer"><div><span class="casino-footer-kicker">PROPERTY SHOWCASE</span><strong>${escapeHtml(featureItem?.name||"Starter Showcase")}</strong></div><div class="casino-room-stats"><span>${escapeHtml(wealth.rank||"ROOKIE")}</span><b>${formatMoney(wealth.netWorth||0)}</b></div></div>
+    ${own?'<button class="btn casino-edit-btn" id="btn-casino-edit">EDIT CASINO</button>':''}
+  </div>`;
+  ov.classList.add("open");
+  wireButton($("#btn-casino-view-close"),()=>ov.classList.remove("open"));
+  wireButton($("#btn-casino-edit"),()=>{ov.classList.remove("open");closeProgress("#profile-overlay");window.storeTab="casino";window.storeOwnedOnly=false;openProgress("#store-overlay");send({type:"store",token:authToken});});
 }
-
-function renderAdminUsers(users, tablePlayers = [], previewActive = false, preview = null, tableLuck = null) {
-  const box = $("#admin-users");
-  if (!box) return;
-  box.innerHTML = "";
-  if (!tablePlayers.length) {
-    box.appendChild(el("div", "admin-empty", "No players currently at this table."));
-  }
-  tablePlayers.forEach((u) => {
-    const row = el("div", "admin-user");
-    const badge = u.isAdmin ? ' ♛' : '';
-    const info = el("div", null, `${u.username}${badge} • $${Number(u.money).toLocaleString()}${u.lucky ? " • LUCKY" : ""}`);
-    const actions = el("div", "admin-user-actions");
-    const input = document.createElement("input");
-    input.type = "number"; input.min = "1"; input.max = "1000000"; input.placeholder = "Chips";
-    const add = el("button", "btn secondary", "GIVE");
-    add.addEventListener("click", () => {
-      const n = Number(input.value);
-      if (Number.isInteger(n) && n > 0 && n <= 1000000) send({type:"admin_give_table_money",targetId:u.id,amount:n});
-    });
-    const bounty = el("button", "btn secondary", u.bounty ? (`BOUNTY $${u.bounty}`) : "BOUNTY");
-    bounty.addEventListener("click", () => {
-      const n = Number(prompt("Bounty amount (0 to clear):", String(u.bounty || 500)));
-      if (Number.isInteger(n) && n >= 0 && n <= 1000000) send({type:"admin_set_bounty",targetId:u.id,amount:n});
-    });
-    actions.append(input, add, bounty);
-    row.append(info, actions); box.appendChild(row);
-  });
-  $("#admin-preview-toggle")?.classList.toggle("on", !!previewActive);
-  const pv=$("#admin-preview"); if (pv) { pv.innerHTML="";
-  if(previewActive && preview){
-    pv.appendChild(el("div","admin-section-title","DEALER PREVIEW"));
-    const hand=el("div","admin-preview-cards"); preview.forEach(c=>hand.appendChild(buildCard(c))); pv.appendChild(hand);
-  }}
-
-  // Luck pane
-  const luckBox = $("#admin-luck-controls");
-  if (luckBox) {
-    luckBox.innerHTML = "";
-    const luckSection=el("div","admin-table-luck");
-    luckSection.innerHTML=`<div class="admin-control-row"><strong>TABLE LUCK ${tableLuck?.active?"• ACTIVE":"• OFF"}</strong><input class="admin-number" id="admin-table-luck-strength" type="number" min="0" max="100" value="${Number(tableLuck?.strength||0)}" placeholder="0–100"><button class="btn secondary" id="admin-table-luck-set">SET 5 MIN</button></div>`;
-    luckBox.appendChild(luckSection);
-    $("#admin-table-luck-set")?.addEventListener("click",()=>{const n=Number($("#admin-table-luck-strength").value);if(Number.isInteger(n)&&n>=0&&n<=100)send({type:"admin_set_table_luck",strength:n,duration:300});});
-    tablePlayers.forEach(u => {
-      const row = el("div", "admin-control-row");
-      row.innerHTML = `<strong>${escapeHtml(u.username)}</strong><input class="admin-number" type="range" min="0" max="100" value="${Number(u.luckStrength||0)}"><span class="luck-val">${Number(u.luckStrength||0)}</span><button class="btn secondary">SET</button>`;
-      const range = row.querySelector("input");
-      const val = row.querySelector(".luck-val");
-      range.addEventListener("input", () => { val.textContent = range.value; });
-      row.querySelector("button").addEventListener("click", () => {
-        const n = Number(range.value);
-        if (Number.isInteger(n) && n>=0 && n<=100) send({type:"admin_set_player_luck",targetId:u.id,strength:n});
-      });
-      luckBox.appendChild(row);
-    });
-    if (!tablePlayers.length) luckBox.appendChild(el("div","admin-empty","No players at table."));
-  }
-
-  // Card selector pane
-  renderAdminCardSelector(tablePlayers);
-
-  const season = $("#admin-season-controls");
-  const items = $("#admin-item-controls");
-  if (!season || !items) return;
-  season.innerHTML = ""; items.innerHTML = "";
-  tablePlayers.forEach(u => {
-    const xpRow=el("div","admin-control-row");
-    xpRow.innerHTML=`<strong>${escapeHtml(u.username)}</strong><input class="admin-number" type="number" min="1" max="1000000" placeholder="XP"><button class="btn secondary">GIVE XP</button>`;
-    xpRow.querySelector("button").addEventListener("click",()=>{const n=Number(xpRow.querySelector("input").value);if(Number.isInteger(n)&&n>0&&n<=1000000)send({type:"admin_give_season_xp",targetId:u.id,amount:n});});
-    season.appendChild(xpRow);
-    const rewardRow=el("div","admin-control-row");
-    rewardRow.innerHTML=`<strong>Reward</strong><select class="admin-select">${Array.from({length:10},(_,i)=>`<option value="${i+1}">TIER ${i+1}</option>`).join("")}</select><button class="btn secondary">GIVE REWARD</button>`;
-    rewardRow.querySelector("button").addEventListener("click",()=>send({type:"admin_claim_season_reward",targetId:u.id,tier:Number(rewardRow.querySelector("select").value)}));
-    season.appendChild(rewardRow);
-
-    const itemRow=el("div","admin-control-row");
-    itemRow.innerHTML=`<strong>${escapeHtml(u.username)}</strong><select class="admin-select">
-      <option value="admin_star">ADMIN STAR THEME</option>
-      <option value="admin_blackout">ADMIN BLACKOUT</option>
-      <option value="founder">FOUNDER THEME</option>
-      <option value="admin_chip">ADMIN CHIP</option>
-    </select><button class="btn secondary">GIVE ITEM</button>`;
-    itemRow.querySelector("button").addEventListener("click",()=>send({type:"admin_give_item",targetId:u.id,itemId:itemRow.querySelector("select").value}));
-    items.appendChild(itemRow);
-  });
-  if (!tablePlayers.length) {
-    season.appendChild(el("div","admin-empty","No players available."));
-    items.appendChild(el("div","admin-empty","No players available."));
-  }
-}
-
-window.__adminForcedAssignments = window.__adminForcedAssignments || {};
-
-function renderAdminCardSelector(tablePlayers) {
-  const box = $("#admin-card-selector");
-  if (!box) return;
-  const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
-  const suits = [{s:"S",sym:"♠",red:false},{s:"H",sym:"♥",red:true},{s:"D",sym:"♦",red:true},{s:"C",sym:"♣",red:false}];
-  if (!window.__adminCardTarget) window.__adminCardTarget = "dealer";
-  const opts = [`<option value="dealer">DEALER</option>`]
-    .concat((tablePlayers||[]).map(u => `<option value="${u.id}">${escapeHtml(u.username)}</option>`));
-  box.innerHTML = `<div class="admin-card-target"><label>Assign to</label><select id="admin-card-target">${opts.join("")}</select>
-    <div id="admin-card-assigned" style="margin-top:6px;font-size:12px;opacity:.8"></div></div>
-    <div class="admin-card-grid" id="admin-card-grid"></div>`;
-  const sel = $("#admin-card-target");
-  if (sel) {
-    sel.value = window.__adminCardTarget;
-    sel.addEventListener("change", () => { window.__adminCardTarget = sel.value; updateAssignedLabel(); });
-  }
-  const grid = $("#admin-card-grid");
-  suits.forEach(su => {
-    ranks.forEach(r => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "admin-card-pick" + (su.red ? " red" : "");
-      btn.textContent = r + su.sym;
-      btn.dataset.rank = r;
-      btn.dataset.suit = su.s;
-      btn.addEventListener("click", () => {
-        const target = window.__adminCardTarget || "dealer";
-        const list = window.__adminForcedAssignments[target] || [];
-        list.push({rank: r, suit: su.s});
-        window.__adminForcedAssignments[target] = list;
-        updateAssignedLabel();
-      });
-      grid.appendChild(btn);
-    });
-  });
-  function updateAssignedLabel() {
-    const t = window.__adminCardTarget || "dealer";
-    const list = window.__adminForcedAssignments[t] || [];
-    const label = $("#admin-card-assigned");
-    if (label) label.textContent = list.length ? ("Queued: " + list.map(c => c.rank + c.suit).join(", ")) : "No cards queued for this target.";
-  }
-  updateAssignedLabel();
-}
-
 // ---------------------------------------------------------------------------
-// Progression UI — stats, rankings, achievements, daily rewards/challenges
+// Developer controls + server-driven safe UI layout
 // ---------------------------------------------------------------------------
+const DEV_UI_SELECTORS = {
+  updateLog:"#btn-update-log", storeButton:"#btn-store", settingsButton:"#btn-settings",
+  hostButton:"#btn-host", adminTableButton:"#btn-admin-table", adminFloatButton:"#btn-admin-float",
+  pokerAdminButton:"#poker-admin", shoe:"#shoe", mobileModeToggle:"#toggle-mobile",
+  chatButton:"#btn-chat-open", historyButton:"#btn-history-open", storeHeroBrowse:"#store-hero-browse-main", storeOwnedToggle:"#store-owned-toggle"
+};
+function applyDeveloperUI(dev){
+  developerData=dev||developerData||{};
+  const layout=developerData.uiLayout||developerData.ui_layout||{};
+  const mobile=document.documentElement.getAttribute("data-mobile")==="1";
+  const mode=mobile?"mobile":"desktop";
+  Object.entries(DEV_UI_SELECTORS).forEach(([key,sel])=>{
+    const el=document.querySelector(sel); const cfg=layout?.[key]?.[mode]; if(!el||!cfg)return;
+    const x=Math.max(-1200,Math.min(1200,Number(cfg.x)||0)),y=Math.max(-1200,Math.min(1200,Number(cfg.y)||0)),scale=Math.max(.5,Math.min(1.8,Number(cfg.scale)||1));
+    el.style.setProperty("--dev-x",x+"px"); el.style.setProperty("--dev-y",y+"px"); el.style.setProperty("--dev-scale",String(scale));
+    el.classList.add("dev-positioned");
+  });
+  const custom=developerData.customUi||developerData.custom_ui||{};
+  Object.entries(custom).forEach(([selector,modes])=>{
+    const cfg=modes?.[mode]; if(!cfg)return; let els=[]; try{els=Array.from(document.querySelectorAll(selector));}catch(e){return;}
+    els.forEach(el=>{const x=Math.max(-1200,Math.min(1200,Number(cfg.x)||0)),y=Math.max(-1200,Math.min(1200,Number(cfg.y)||0)),scale=Math.max(.5,Math.min(1.8,Number(cfg.scale)||1));el.style.setProperty("--dev-x",x+"px");el.style.setProperty("--dev-y",y+"px");el.style.setProperty("--dev-scale",String(scale));el.classList.add("dev-positioned");});
+  });
+}
+function renderDeveloperControls(dev, adminCatalog=[]){
+  const box=$("#admin-developer-controls"); if(!box)return;
+  const d=dev||developerData||{}; developerData=d;
+  const overrides=d.catalogOverrides||d.catalog_overrides||{};
+  const options=[];
+  if(Array.isArray(adminCatalog) && adminCatalog.length){adminCatalog.forEach(x=>options.push({c:x.category,id:x.id,name:x.name,price:x.price,rarity:x.rarity,vipOnly:x.vipOnly,adminOnly:x.adminOnly,desc:x.desc||""}));}
+  else {
+    (storeData?.themes||[]).forEach(x=>options.push({c:"theme",id:x.id,name:x.name,price:x.price,rarity:x.rarity}));
+    (storeData?.chips||[]).forEach(x=>options.push({c:"chip",id:x.id,name:x.name,price:x.price,rarity:x.rarity}));
+    (storeData?.decks||[]).forEach(x=>options.push({c:"deck",id:x.id,name:x.name,price:x.price,rarity:x.rarity}));
+    (storeData?.tables||[]).forEach(x=>options.push({c:"table",id:x.id,name:x.name,price:x.price,rarity:x.rarity}));
+    (storeData?.balls||[]).forEach(x=>options.push({c:"ball",id:x.id,name:x.name,price:x.price,rarity:x.rarity}));
+    (storeData?.profileFrames||[]).forEach(x=>options.push({c:"profile_frame",id:x.id,name:x.name,price:x.price,rarity:x.rarity}));
+    (storeData?.profileBackgrounds||[]).forEach(x=>options.push({c:"profile_background",id:x.id,name:x.name,price:x.price,rarity:x.rarity}));
+    (storeData?.profileTitles||[]).forEach(x=>options.push({c:"profile_title",id:x.id,name:x.name,price:x.price,rarity:x.rarity}));
+    (storeData?.casinoItems||[]).forEach(x=>options.push({c:"casino",id:x.id,name:x.name,price:x.price,rarity:x.rarity,desc:x.desc||""}));
+  }
+  const itemOpts=options.map(x=>`<option value="${escapeAttr(x.c+"|"+x.id)}">${escapeHtml(x.name)} • ${escapeHtml(x.c)}</option>`).join("");
+  const targetOpts=Object.entries(DEV_UI_SELECTORS).map(([k])=>`<option value="${escapeAttr(k)}">${escapeHtml(k.replace(/([A-Z])/g," $1").toUpperCase())}</option>`).join("");
+  box.innerHTML=`<div class="dev-panel-grid"><section class="dev-box"><div class="admin-section-title">STORE ITEM EDITOR</div><label>ITEM<select id="dev-item">${itemOpts}</select></label><div class="dev-inline-2"><label>PRICE<input id="dev-price" type="number" min="0" step="1"></label><label>RARITY<select id="dev-rarity"><option>COMMON</option><option>UNCOMMON</option><option>RARE</option><option>EPIC</option><option>LEGENDARY</option><option>ULTRA</option><option>ADMIN</option><option>VIP</option></select></label></div><label>NAME<input id="dev-name" maxlength="80"></label><label>DESCRIPTION<input id="dev-desc" maxlength="120"></label><div class="dev-inline-checks"><label><input id="dev-admin-only" type="checkbox"> Admin only</label><label><input id="dev-vip-only" type="checkbox"> VIP only</label><label><input id="dev-hidden" type="checkbox"> Limited/hidden</label></div><button class="btn" id="dev-save-item">SAVE ITEM</button></section><section class="dev-box"><div class="admin-section-title">VIP PRICE</div><p class="settings-help">In-game chips • 30 days • change anytime.</p><label>VIP PRICE<input id="dev-vip-price" type="number" min="1000000" step="1000000" value="${Number(d.vipPrice||250000000)}"></label><button class="btn" id="dev-save-vip">SAVE VIP PRICE</button></section><section class="dev-box"><div class="admin-section-title">SAFE UI POSITIONING</div><p class="settings-help">Move supported icons/buttons separately for PC and Mobile.</p><div class="dev-inline-2"><label>TARGET<select id="dev-ui-target">${targetOpts}</select></label><label>MODE<select id="dev-ui-mode"><option value="desktop">PC / DESKTOP</option><option value="mobile">MOBILE</option></select></label></div><div class="dev-inline-3"><label>X<input id="dev-ui-x" type="number" value="0"></label><label>Y<input id="dev-ui-y" type="number" value="0"></label><label>SCALE<input id="dev-ui-scale" type="number" min="0.5" max="1.8" step="0.05" value="1"></label></div><div class="dev-inline-2"><button class="btn" id="dev-save-ui">SAVE POSITION</button><button class="btn secondary" id="dev-reset-ui">RESET ALL UI</button></div></section><section class="dev-box"><div class="admin-section-title">CUSTOM ELEMENT POSITION</div><p class="settings-help">Use any safe HTML selector such as <b>#some-button</b> or <b>.some-icon</b>. Desktop and Mobile are independent.</p><div class="dev-inline-2"><label>SELECTOR<input id="dev-custom-selector" maxlength="100" placeholder="#element-id or .class"></label><label>MODE<select id="dev-custom-mode"><option value="desktop">PC / DESKTOP</option><option value="mobile">MOBILE</option></select></label></div><div class="dev-inline-3"><label>X<input id="dev-custom-x" type="number" value="0"></label><label>Y<input id="dev-custom-y" type="number" value="0"></label><label>SCALE<input id="dev-custom-scale" type="number" min="0.5" max="1.8" step="0.05" value="1"></label></div><div class="dev-inline-2"><button class="btn secondary" id="dev-preview-custom">PREVIEW</button><button class="btn" id="dev-save-custom">SAVE CUSTOM POSITION</button></div></section><section class="dev-box"><div class="admin-section-title">FEATURE FLAGS</div><label class="dev-switch"><input id="dev-store-redesign" type="checkbox" ${d.featureFlags?.store_redesign!==false?"checked":""}> Store redesign</label><label class="dev-switch"><input id="dev-purchase-preview" type="checkbox" ${d.featureFlags?.store_purchase_preview!==false?"checked":""}> Purchase preview</label></section></div><div class="settings-help dev-status" id="dev-status">Developer changes are server-authoritative.</div>`;
+  const selected=()=>{const v=$("#dev-item")?.value||"",[c,id]=v.split("|");return options.find(x=>x.c===c&&x.id===id)||null;};
+  const sync=()=>{const it=selected();if(!it)return;const o=overrides[`${it.c}:${it.id}`]||{};$("#dev-price").value=Number(o.price??it.price??0);$("#dev-rarity").value=o.rarity||it.rarity||"COMMON";$("#dev-name").value=o.name||it.name||"";$("#dev-desc").value=o.desc||it.desc||"";$("#dev-admin-only").checked=!!o.admin_only;$("#dev-vip-only").checked=!!o.vip_only;$("#dev-hidden").checked=!!o.limited;};
+  $("#dev-item")?.addEventListener("change",sync);sync();
+  $("#dev-save-item")?.addEventListener("click",()=>{const it=selected();if(!it)return;send({type:"admin_dev_item",category:it.c,itemId:it.id,patch:{price:Number($("#dev-price").value||0),rarity:$("#dev-rarity").value,name:$("#dev-name").value,desc:$("#dev-desc").value,admin_only:$("#dev-admin-only").checked,vip_only:$("#dev-vip-only").checked,limited:$("#dev-hidden").checked}});});
+  $("#dev-save-vip")?.addEventListener("click",()=>send({type:"admin_dev_vip",price:Number($("#dev-vip-price").value||250000000)}));
+  const syncPos=()=>{const k=$("#dev-ui-target").value,m=$("#dev-ui-mode").value,c=d.uiLayout?.[k]?.[m]||{x:0,y:0,scale:1};$("#dev-ui-x").value=Number(c.x||0);$("#dev-ui-y").value=Number(c.y||0);$("#dev-ui-scale").value=Number(c.scale||1);};
+  $("#dev-ui-target")?.addEventListener("change",syncPos);$("#dev-ui-mode")?.addEventListener("change",syncPos);syncPos();
+  $("#dev-save-ui")?.addEventListener("click",()=>send({type:"admin_dev_layout",target:$("#dev-ui-target").value,mode:$("#dev-ui-mode").value,x:Number($("#dev-ui-x").value||0),y:Number($("#dev-ui-y").value||0),scale:Number($("#dev-ui-scale").value||1)}));
+  $("#dev-reset-ui")?.addEventListener("click",()=>send({type:"admin_dev_reset_layout"}));
+  const customSync=()=>{const s=$("#dev-custom-selector")?.value.trim(),m=$("#dev-custom-mode")?.value,cfg=d.customUi?.[s]?.[m]||{x:0,y:0,scale:1};$("#dev-custom-x").value=Number(cfg.x||0);$("#dev-custom-y").value=Number(cfg.y||0);$("#dev-custom-scale").value=Number(cfg.scale||1);};
+  $("#dev-custom-selector")?.addEventListener("change",customSync);$("#dev-custom-mode")?.addEventListener("change",customSync);
+  $("#dev-preview-custom")?.addEventListener("click",()=>{const s=$("#dev-custom-selector").value.trim();if(!s)return;try{document.querySelectorAll(s).forEach(el=>{el.style.setProperty("--dev-x",Number($("#dev-custom-x").value||0)+"px");el.style.setProperty("--dev-y",Number($("#dev-custom-y").value||0)+"px");el.style.setProperty("--dev-scale",String(Number($("#dev-custom-scale").value||1)));el.classList.add("dev-positioned");});}catch(e){}});
+  $("#dev-save-custom")?.addEventListener("click",()=>send({type:"admin_dev_custom_layout",selector:$("#dev-custom-selector").value.trim(),mode:$("#dev-custom-mode").value,x:Number($("#dev-custom-x").value||0),y:Number($("#dev-custom-y").value||0),scale:Number($("#dev-custom-scale").value||1)}));
+  $("#dev-store-redesign")?.addEventListener("change",e=>send({type:"admin_dev_flag",flag:"store_redesign",enabled:e.target.checked}));
+  $("#dev-purchase-preview")?.addEventListener("change",e=>send({type:"admin_dev_flag",flag:"store_purchase_preview",enabled:e.target.checked}));
+}
+
 
 function formatMoney(n) {
   return "$" + Number(n || 0).toLocaleString();
@@ -1918,6 +1847,7 @@ function renderStats() {
 function rankValue(row, key) {
   if (key === "winRate") return `${row.winRate}%`;
   if (key === "balance") return "$" + Number(row.balance || 0).toLocaleString();
+  if (key === "netWorth") return "$" + Number(row.netWorth || 0).toLocaleString();
   return Number(row[key] || 0).toLocaleString();
 }
 function renderLeaderboard() {
@@ -1969,7 +1899,9 @@ function buildChallengeObjects(values) {
   return defs.map(d => ({...d, progress: Math.min(d.target, Number(values[d.id] || 0)), complete: Number(values[d.id] || 0) >= d.target}));
 }
 function renderDaily(claimed, challenges) {
-  $("#daily-reward-box").innerHTML = claimed ? '<strong>✓ CLAIMED</strong><span>Come back tomorrow for +250 chips.</span>' : '<strong>+250 CHIPS</strong><span>Daily free reward</span><button class="btn" id="btn-claim-daily">CLAIM REWARD</button>';
+  const vipBonus = Number(myProfile?.vip?.active ? (myProfile.vip.dailyBonus || 10000000) : 0);
+  const claimLabel = claimed ? `<strong>✓ CLAIMED</strong><span>Come back tomorrow for +${(250 + vipBonus).toLocaleString()} chips${vipBonus ? " (VIP bonus included)" : ""}.</span>` : `<strong>+250 CHIPS${vipBonus ? ` + $${vipBonus.toLocaleString()} VIP` : ""}</strong><span>Daily free reward${vipBonus ? " • VIP active" : ""}</span><button class="btn" id="btn-claim-daily">CLAIM REWARD</button>`;
+  $("#daily-reward-box").innerHTML = claimLabel;
   const btn = $("#btn-claim-daily");
   if (btn) wireButton(btn, () => { send({type:"claim_daily", token:authToken}); btn.disabled=true; });
   $("#challenge-list").innerHTML = challenges.length ? challenges.map(c => `<div class="challenge ${c.complete ? "complete" : ""}"><div><strong>${c.title}</strong><span>${c.desc}</span></div><div class="challenge-right"><b>${c.progress}/${c.target}</b><small>+${c.reward} chips</small></div></div>`).join("") : '<div class="admin-empty">No challenges today.</div>';
@@ -2035,7 +1967,7 @@ function applySeasonalUI(enabled){
   localStorage.setItem("bj_seasonal_ui", enabled ? "1" : "0");
   applySeasonTheme();
 }
-function previewCosmetic(cat,id){const maps={theme:{classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",emerald:"#0d3d28,#06140e",royal:"#6a326c,#160916",neon:"#16877f,#060f12",crimson:"#8b1e2d,#1a0508",golden:"#d7b56d,#3c2413",celestial:"#66cfff,#030711",casino1927:"#d7b56d,#183b2a",crimson_royale:"#8b1e2d,#12060a",admin_star:"#f472b6,#1a0510",admin_blackout:"#222,#000",founder:"#d4af37,#1a1005"},chip:{classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",emerald_chip:"#2f6d4b,#0c281b",gold:"#e5c56d,#6c4c13",diamond:"#1a1a1a,#444",royal_vault:"#d4af37,#1a1008",casino1927:"#d7b56d,#3c2413",crimson_velvet:"#8b1e2d,#f3ede2",admin_chip:"#f472b6,#1a0510"},deck:{classic:"#f7f0df,#2b2a29",midnight:"#252a35,#050609",emerald_deck:"#0d3d28,#c8e6c9",crimson_deck:"#8b1e2d,#f3ede2",celestial_deck:"#0a1628,#66cfff",casino1927:"#d7b56d,#173d2a",crimson_royale_deck:"#8b1e2d,#f3ede2"},table:{classic:"#2f6d4b,#0c281b",royal:"#496c35,#1c2b16",casino1927:"#6d5130,#123a28",crimson_table:"#8b1e2d,#f3ede2"},ball:{classic:"#f4f4f4,#777",brass1927:"#f1d28a,#8f5c1a",crimson_back:"#8b1e2d,#d4b87a"}};return (maps[cat]&&maps[cat][id])||maps[cat]?.classic||"#17191d,#050506";}
+function previewCosmetic(cat,id){const maps={theme:{classic:"#1c1f23,#050506",midnight:"#24516e,#06101a",emerald:"#0d3d28,#06140e",royal:"#6a326c,#160916",neon:"#16877f,#060f12",crimson:"#8b1e2d,#1a0508",golden:"#d7b56d,#3c2413",celestial:"#66cfff,#030711",casino1927:"#d7b56d,#183b2a",crimson_royale:"#8b1e2d,#12060a",admin_star:"#f472b6,#1a0510",admin_blackout:"#222,#000",founder:"#d4af37,#1a1005"},chip:{classic:"#17191d,#050506",silver:"#bfc8d0,#343b44",emerald_chip:"#2f6d4b,#0c281b",gold:"#e5c56d,#6c4c13",diamond:"#1a1a1a,#444",royal_vault:"#d4af37,#1a1008",casino1927:"#d7b56d,#3c2413",crimson_velvet:"#8b1e2d,#f3ede2",admin_chip:"#f472b6,#1a0510"},deck:{classic:"#f7f0df,#2b2a29",midnight:"#252a35,#050609",emerald_deck:"#0d3d28,#c8e6c9",crimson_deck:"#8b1e2d,#f3ede2",celestial_deck:"#0a1628,#66cfff",casino1927:"#d7b56d,#173d2a",crimson_royale_deck:"#8b1e2d,#f3ede2"},table:{classic:"#2f6d4b,#0c281b",royal:"#496c35,#1c2b16",casino1927:"#6d5130,#123a28",crimson_table:"#8b1e2d,#f3ede2"},ball:{classic:"#f4f4f4,#777",brass1927:"#f1d28a,#8f5c1a",crimson_back:"#8b1e2d,#d4b87a"},profile_frame:{classic:"#3a3d44,#111",silver:"#c8cdd5,#343942",gold:"#f0cf72,#6d4b13",diamond:"#9fe6ff,#315c82",crimson:"#ff4b5e,#4b0710",royal:"#f3d47a,#5a3410","1927":"#f4d88b,#173d2d"},profile_background:{classic:"#17191d,#050506",velvet:"#452a40,#0a0710",neon:"#16877f,#071014",crimson:"#8b1e2d,#170609",vault:"#363b45,#0a0b0e","1927":"#6d5130,#143d2b"},profile_title:{rookie:"#444,#111",card_shark:"#4d6d9e,#151d2c",high_roller:"#9f641d,#211508",vip:"#6f4aa8,#14091c",whale:"#b57cf5,#1a0824",casino_royalty:"#f1c95f,#3a2107"},casino:{classic_floor:"#2e302f,#0c0d0d",classic_wall:"#24262b,#090a0d",feature_none:"#222,#090909",room_lounge:"#244c3c,#07130e",room_suite:"#4d334a,#120914",room_vip:"#6f4b24,#17100a",room_penthouse:"#1e3c5a,#050b13",room_royal:"#654b20,#100b04",floor_marble:"#4b4d52,#16171a",floor_ruby:"#6e1c2b,#180509",floor_gold:"#8f6724,#2d1b06",wall_1927:"#6d5130,#173d2b",wall_velvet:"#692430,#16070a",wall_vault:"#343a44,#0b0d10",feature_blackjack:"#244a35,#07120d",feature_chandelier:"#b99a58,#30220d",feature_statue:"#d0a52c,#4a2d05",feature_bar:"#74d9ff,#0b1c24"}};return (maps[cat]&&maps[cat][id])||maps[cat]?.classic||"#17191d,#050506";}
 function renderAppearance(){
   const cats={
     theme:[...(storeData?.themes||[]),...(storeData?.adminThemes||[])],
@@ -2068,63 +2000,60 @@ function renderAppearance(){
     });
   });
 }
-function renderStore(){
-  if(!storeData) return;
-  // Include admin-only items (granted) so they appear in inventory
-  const catalog = [
-    ...(storeData.themes||[]).map(x=>({...x,category:"theme",categoryLabel:"THEME"})),
-    ...(storeData.adminThemes||[]).map(x=>({...x,category:"theme",categoryLabel:"THEME",adminOnly:true})),
-    ...(storeData.chips||[]).map(x=>({...x,category:"chip",categoryLabel:"CHIPS"})),
-    ...(storeData.adminChips||[]).map(x=>({...x,category:"chip",categoryLabel:"CHIPS",adminOnly:true})),
-    ...(storeData.decks||[]).map(x=>({...x,category:"deck",categoryLabel:"BLACKJACK"})),
-    ...(storeData.tables||[]).map(x=>({...x,category:"table",categoryLabel:"TABLE"})),
-    ...(storeData.balls||[]).map(x=>({...x,category:"ball",categoryLabel:"CARD BACKS"}))
-  ];
-  $("#store-balance").textContent="$"+Number(storeData.balance||0).toLocaleString();
-  const activeTab = window.storeTab || "all";
-  const ownedOnly = !!window.storeOwnedOnly;
-  document.querySelectorAll(".store-tab").forEach(b=>b.classList.toggle("active",b.dataset.storeTab===activeTab));
-  const forceOwned = activeTab==="inventory" || ownedOnly; const visible = catalog.filter(x=>(activeTab==="all"||activeTab==="inventory"||x.category===activeTab) && (!forceOwned||x.owned));
-  $("#store-results-title").textContent = activeTab==="all" ? "HOUSE COLLECTION" : ({theme:"THEMES",chip:"CASINO CHIPS",deck:"BLACKJACK DECKS",table:"TABLE SKINS",ball:"CARD BACKS"}[activeTab]||"COLLECTION");
-  $("#store-results-count").textContent = visible.length+" ITEM"+(visible.length===1?"":"S");
-  $("#store-owned-toggle").classList.toggle("active",ownedOnly);
-  $("#store-owned-toggle").setAttribute("aria-pressed",String(ownedOnly));
-  const catalogEl=$("#store-catalog"), empty=$("#store-empty");
-  empty.classList.toggle("hidden",visible.length!==0);
-  catalogEl.innerHTML=visible.map(x=>{
-    const colors=previewCosmetic(x.category,x.id).split(",");
-    const state=x.equipped?"EQUIPPED":x.owned?"OWNED":x.limited?"SEASONAL REWARD":"AVAILABLE";
-    let action="";
-    if(x.equipped) action='<button class="store-action secondary" disabled>✓ EQUIPPED</button>';
-    else if(x.owned) action=`<button class="store-action" data-store-equip="${escapeAttr(x.category)}" data-id="${escapeAttr(x.id)}">EQUIP</button>`;
-    else if(x.limited) action='<button class="store-action seasonal" disabled>CLAIM IN SEASON</button>';
-    else action=`<button class="store-action" data-store-buy="${escapeAttr(x.category)}" data-id="${escapeAttr(x.id)}">BUY <span>$${Number(x.price||0).toLocaleString()}</span></button>`;
-    const rarity=x.rarity||"COMMON"; return `<article class="store-product rarity-border-${rarity} ${x.equipped?"is-equipped":""} ${x.owned?"is-owned":""} ${x.limited?"is-seasonal":""}">
-      <div class="store-product-art" style="--preview-a:${colors[0]};--preview-b:${colors[1]}">
-        <span class="store-item-rarity rarity-${rarity}">${rarity}</span><span class="store-product-category">${escapeHtml(x.categoryLabel)}</span>
-        <div class="store-product-mark">${escapeHtml(x.category==="chip"?"✦":x.category==="ball"?"●":x.category==="deck"?"♠":x.category==="table"?"▰":"✥")}</div>
-        ${x.limited?`<span class="store-season-ribbon">SEASON ${x.season||2}</span>`:""}
-      </div>
-      <div class="store-product-copy">
-        <div class="store-product-top"><span>${escapeHtml(state)}</span><span>${x.price?("$"+Number(x.price).toLocaleString()):"FREE"}</span></div>
-        <h3>${escapeHtml(x.name)}</h3>
-        <p>${x.limited?"Limited Season 1 reward • permanent once claimed.":x.owned?"Already in your permanent collection.":"Permanent item • available anytime."}</p>
-      </div>
-      ${action}
-    </article>`;
-  }).join("");
-  document.querySelectorAll("[data-store-buy]").forEach(b=>wireButton(b,()=>{
-    b.disabled=true; b.classList.add("loading");
-    send({type:"buy_cosmetic",token:authToken,category:b.dataset.storeBuy,id:b.dataset.id});
-  }));
-  document.querySelectorAll("[data-store-equip]").forEach(b=>wireButton(b,()=>{
-    b.disabled=true; b.classList.add("loading");
-    send({type:"equip_cosmetic",token:authToken,category:b.dataset.storeEquip,id:b.dataset.id});
-  }));
-  applyCosmeticTheme(myProfile?.cosmetics?.theme||"classic");
-  applyGameCosmetics(myProfile?.cosmetics||{});
-  renderAppearance();
+function openStorePurchase(item){
+  if(!item) return;
+  pendingStorePurchase=item;
+  const ov=$("#store-purchase-overlay"); if(!ov) return;
+  const colors=previewCosmetic(item.category,item.id).split(","), rarity=item.rarity||"COMMON";
+  const visual=$("#store-purchase-visual");
+  visual.style.setProperty("--preview-a", colors[0]||"#222"); visual.style.setProperty("--preview-b", colors[1]||"#111");
+  visual.innerHTML=`<span class="store-item-rarity rarity-${escapeHtml(rarity)}">${escapeHtml(rarity)}</span><div class="purchase-mark">${item.category==="chip"?"✦":item.category==="deck"?"♠":item.category==="table"?"▰":item.category==="profile_frame"?"◉":item.category==="profile_background"?"▧":item.category==="profile_title"?"✦":item.category==="casino"?"⌂":"✥"}</div>`;
+  $("#store-purchase-rarity").className=`store-item-rarity rarity-${rarity}`; $("#store-purchase-rarity").textContent=rarity;
+  $("#store-purchase-category").textContent=item.categoryLabel||item.category.toUpperCase();
+  $("#store-purchase-name").textContent=item.name||item.id;
+  $("#store-purchase-desc").textContent=item.desc||"Permanent item • available anytime.";
+  $("#store-purchase-price").textContent=item.price?formatMoney(item.price):"FREE";
+  const gp=$("#store-purchase-game-preview");
+  gp.style.setProperty("--preview-a", colors[0]||"#222"); gp.style.setProperty("--preview-b",colors[1]||"#111");
+  gp.innerHTML=`<div class="game-preview-sample sample-${escapeAttr(item.category)}"><span>${escapeHtml(item.name||"ITEM")}</span><b>${item.category==="theme"?"CASINO X":item.category==="chip"?"● ● ●":item.category==="deck"?"A♠ K♥":item.category==="profile_frame"?"◎":item.category==="profile_background"?"1927":item.category==="profile_title"?"HIGH ROLLER":item.category==="casino"?"♛ CASINO X":"HOUSE TABLE"}</b></div>`;
+  const buy=$("#store-purchase-buy"); buy.textContent=item.owned?"OWNED":item.limited?"SEASONAL REWARD":item.vipOnly && !(storeData?.vip?.active)?"VIP REQUIRED":"BUY NOW"; buy.disabled=!!item.owned||!!item.limited||(!!item.vipOnly && !(storeData?.vip?.active));
+  ov.classList.add("open");
 }
+function closeStorePurchase(){ pendingStorePurchase=null; $("#store-purchase-overlay")?.classList.remove("open"); }
+
+// Store v3 hero controls: both desktop and mobile entry points use the same featured tab.
+function wireStoreV3Hero(){
+  [$("#store-hero-browse"),$("#store-hero-browse-main")].filter(Boolean).forEach(b=>wireButton(b,()=>{window.storeTab="all";window.storeOwnedOnly=false;renderStore();document.querySelector(".store-main")?.scrollTo({top:0,behavior:"smooth"});}));
+}
+
+function renderStore(){
+  if(!storeData)return;
+  const tab=window.storeTab||"all", ownedOnly=!!window.storeOwnedOnly;
+  const balance=Number(storeData.balance||0), wealth=storeData.wealth||{}, vip=storeData.vip||{}, vipActive=!!vip.active, vipPrice=Number(vip.price||developerData?.vipPrice||250000000);
+  const ff=developerData?.featureFlags||{};
+  const hero=document.querySelector(".store-hero-banner"); if(hero) hero.classList.toggle("hidden",ff.store_redesign===false);
+  $("#store-balance").innerHTML=`${formatMoney(balance)}<small>NET WORTH ${formatMoney(wealth.netWorth||balance)}</small>`;
+  const vipStatus=$("#store-vip-status"); if(vipStatus) vipStatus.textContent=vipActive?`♛ VIP ACTIVE • ${Number(vip.daysLeft||0)}D LEFT`:`♛ VIP AVAILABLE`;
+  document.querySelectorAll(".store-tab").forEach(b=>b.classList.toggle("active",b.dataset.storeTab===tab));
+  const catalog=[...(storeData.themes||[]).map(x=>({...x,category:"theme",categoryLabel:"GAME COSMETIC"})),...(storeData.adminThemes||[]).map(x=>({...x,category:"theme",categoryLabel:"GAME COSMETIC",adminOnly:true})),...(storeData.chips||[]).map(x=>({...x,category:"chip",categoryLabel:"CHIPS"})),...(storeData.decks||[]).map(x=>({...x,category:"deck",categoryLabel:"BLACKJACK"})),...(storeData.tables||[]).map(x=>({...x,category:"table",categoryLabel:"TABLE"})),...(storeData.balls||[]).map(x=>({...x,category:"ball",categoryLabel:"CARD BACK"})),...(storeData.profileFrames||[]).map(x=>({...x,category:"profile_frame",categoryLabel:"PROFILE"})),...(storeData.profileBackgrounds||[]).map(x=>({...x,category:"profile_background",categoryLabel:"PROFILE"})),...(storeData.profileTitles||[]).map(x=>({...x,category:"profile_title",categoryLabel:"PROFILE"})),...(storeData.casinoItems||[]).map(x=>({...x,category:"casino",categoryLabel:(x.slot||"CASINO").toUpperCase()}))];
+  let visible=catalog.filter(x=>{if(tab==="inventory")return x.owned;if(tab==="vip")return x.vipOnly;if(tab==="profile")return ["profile_frame","profile_background","profile_title"].includes(x.category);if(tab==="luxury")return Number(x.price||0)>=1000000;if(tab==="casino")return x.category==="casino";if(tab==="all")return true;return x.category===tab;});
+  if(ownedOnly)visible=visible.filter(x=>x.owned);
+  const titles={all:"FEATURED ITEMS",theme:"GAME COSMETICS",chip:"CHIPS",deck:"BLACKJACK",table:"TABLES",ball:"CARD BACKS",profile:"PROFILE FLEX",casino:"MY CASINO",luxury:"LUXURY",vip:"VIP MEMBERSHIP",inventory:"YOUR COLLECTION"};
+  $("#store-results-title").textContent=titles[tab]||"HOUSE COLLECTION"; $("#store-results-count").textContent=`${visible.length} ITEM${visible.length===1?"":"S"}`;
+  const catalogEl=$("#store-catalog"),empty=$("#store-empty"); empty.classList.toggle("hidden",visible.length!==0);
+  const membershipCard=(tab==="all"||tab==="vip")?`<article class="vip-membership-card store-vip-deal ${vipActive?"is-active":""}"><div class="vip-deal-main"><div class="vip-deal-crown">♛</div><div><span class="vip-kicker">CASINO X • MEMBERSHIP</span><h3>VIP MEMBERSHIP</h3><p>${vipActive?"Your VIP access is active.":"Become one of the rarest players in the House."}</p></div></div><div class="vip-deal-price"><span>30 DAYS</span><strong>${formatMoney(vipPrice)}</strong></div><div class="vip-benefit-grid"><span>👑 VIP badge</span><span>💎 Exclusive cosmetics</span><span>🏠 VIP lounge</span><span>💰 +${formatMoney(vip.dailyBonus||10000000)} daily</span><span>⚡ ${Number(vip.xpMultiplier||1.25)}× XP</span><span>✨ VIP profile treatment</span></div><div class="vip-card-bottom">${vipActive?`<strong>ACTIVE • ${Number(vip.daysLeft||0)} DAYS LEFT</strong>`:`<strong>INSANE FLEX • 30 DAYS</strong>`}${vipActive?"":`<button class="store-action vip-buy-btn" id="btn-buy-vip">BUY VIP</button>`}</div></article>`:"";
+  catalogEl.innerHTML=membershipCard+visible.map(x=>{
+    const colors=previewCosmetic(x.category,x.id).split(","),state=x.equipped?"EQUIPPED":x.owned?"OWNED":x.limited?"SEASONAL":x.vipOnly&&!vipActive?"VIP ONLY":"AVAILABLE";
+    const action=x.equipped?'<button class="store-action secondary" disabled>✓ EQUIPPED</button>':x.owned?`<button class="store-action" data-store-equip="${escapeAttr(x.category)}" data-id="${escapeAttr(x.id)}">EQUIP</button>`:x.limited?'<button class="store-action seasonal" disabled>SEASONAL</button>':x.vipOnly&&!vipActive?'<button class="store-action vip-locked" disabled>VIP REQUIRED</button>':`<button class="store-action" data-store-buy="${escapeAttr(x.category)}" data-id="${escapeAttr(x.id)}">BUY</button>`;
+    const rarity=x.rarity||"COMMON",mark=x.category==="chip"?"✦":x.category==="ball"?"●":x.category==="deck"?"♠":x.category==="table"?"▰":x.category==="profile_frame"?"◉":x.category==="profile_background"?"▧":x.category==="profile_title"?"✦":x.category==="casino"?"⌂":"✥";
+    return `<article class="store-product store-product-v3 rarity-border-${escapeAttr(rarity)} ${x.equipped?"is-equipped":""} ${x.owned?"is-owned":""} ${x.limited?"is-seasonal":""} ${x.vipOnly?"is-vip-only":""} ${Number(x.price||0)>=1000000?"is-luxury":""}"><div class="store-product-art" style="--preview-a:${colors[0]};--preview-b:${colors[1]}"><span class="store-item-rarity rarity-${escapeAttr(rarity)}">${escapeHtml(rarity)}</span><span class="store-product-category">${escapeHtml(x.categoryLabel)}</span><div class="store-product-mark">${mark}</div>${x.limited?`<span class="store-season-ribbon">LIMITED</span>`:""}</div><div class="store-product-copy"><div class="store-product-top"><span>${escapeHtml(state)}</span><span>${Number(x.price||0)>=1000000?"LUXURY":""}</span></div><h3>${escapeHtml(x.name)}</h3></div>${action}</article>`;
+  }).join("");
+  wireButton($("#btn-buy-vip"),()=>send({type:"buy_vip",token:authToken}));
+  document.querySelectorAll("[data-store-buy]").forEach(b=>wireButton(b,()=>{const item=catalog.find(x=>x.category===b.dataset.storeBuy&&x.id===b.dataset.id);if(!item)return;if(ff.store_purchase_preview===false)send({type:"buy_cosmetic",token:authToken,category:item.category,id:item.id});else openStorePurchase(item);}));
+  document.querySelectorAll("[data-store-equip]").forEach(b=>wireButton(b,()=>{b.disabled=true;b.classList.add("loading");send({type:"equip_cosmetic",token:authToken,category:b.dataset.storeEquip,id:b.dataset.id});}));
+  wireStoreV3Hero();
+}
+
 function formatCountdown(sec){let s=Math.max(0,Math.floor(Number(sec||0))),d=Math.floor(s/86400);s%=86400;let h=Math.floor(s/3600);s%=3600;let m=Math.floor(s/60);return `${d}D ${String(h).padStart(2,"0")}H ${String(m).padStart(2,"0")}M`;}
 function renderSeason(){
   if (!seasonData) {
@@ -2337,13 +2266,12 @@ function populateEmojiBar() {
 // Profile / friends / public tables / chat
 // ---------------------------------------------------------------------------
 function renderProfile() {
-  const p = myProfile;
-  if (!p) return;
-  $("#profile-hero").innerHTML = `<div><strong>${escapeHtml(p.username)}</strong><span>LEVEL ${p.level} • ${escapeHtml(p.levelTitle)}</span></div><b>$${Number(p.balance||0).toLocaleString()}</b>`;
-  const st = p.stats || {};
-  const vals = [["CASINO GAMES",st.gamesPlayed],["CASINO WINS",st.wins],["LOSSES",st.losses],["BLACKJACKS",st.blackjacks],["POKER GAMES",st.pokerGames||0],["POKER WINS",st.pokerWins||0],["WIN RATE",(st.winRate||0)+"%"],["BIGGEST WIN","$"+Number(st.biggestWin||0).toLocaleString()]];
-  $("#profile-stats-grid").innerHTML = vals.map(([a,b])=>`<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
-  renderProfileFriends();
+  const p=myProfile;if(!p)return;const wealth=p.wealth||{};
+  $("#profile-hero").innerHTML=`<div><strong>${escapeHtml(p.username)}</strong><span>LEVEL ${p.level} • ${escapeHtml(p.levelTitle)}</span></div><b>${formatMoney(p.balance)}</b>`;
+  const st=p.stats||{},vals=[["CASINO GAMES",st.gamesPlayed],["CASINO WINS",st.wins],["LOSSES",st.losses],["BLACKJACKS",st.blackjacks],["POKER GAMES",st.pokerGames||0],["POKER WINS",st.pokerWins||0],["WIN RATE",(st.winRate||0)+"%"],["BIGGEST WIN",formatMoney(st.biggestWin)]];
+  $("#profile-stats-grid").innerHTML=vals.map(([a,b])=>`<div class="stat-box"><span>${a}</span><strong>${b}</strong></div>`).join("");
+  const wh=$("#profile-wealth-summary");if(wh)wh.innerHTML=`<div class="wealth-mini"><div><span>CASH</span><strong>${formatMoney(wealth.cash||p.balance)}</strong></div><div><span>COLLECTION VALUE</span><strong>${formatMoney(wealth.collectionValue)}</strong></div><div><span>NET WORTH</span><strong>${formatMoney(wealth.netWorth||p.balance)}</strong></div><div><span>STATUS</span><strong>${escapeHtml(wealth.rank||"ROOKIE")}</strong></div></div>`;
+  renderFlexProfile();renderProfileFriends();
 }
 function renderProfileFriends(){
   const box=$("#profile-friends"); if(!box) return;
@@ -3014,6 +2942,7 @@ function applyMobileMode(enabled) {
   $("#toggle-mobile")?.classList.toggle("on", on);
   $("#toggle-mobile-auth")?.classList.toggle("on", on);
   localStorage.setItem("bj_mobile", on ? "1" : "0");
+  applyDeveloperUI(developerData);
   if (typeof pokerState !== "undefined" && pokerState && $("#screen-poker")?.classList.contains("active")) {
     renderPokerState(pokerState);
   }
@@ -3731,6 +3660,10 @@ function initJoin() {
   wireButton($("#btn-achievements-close"), () => closeProgress("#achievements-overlay"));
   wireButton($("#btn-daily-close"), () => closeProgress("#daily-overlay"));
   wireButton($("#btn-store-close"), () => closeProgress("#store-overlay"));
+  wireButton($("#store-purchase-cancel"), () => closeStorePurchase());
+  wireButton($("#store-purchase-buy"), () => { if(pendingStorePurchase && !$("#store-purchase-buy").disabled){ const x=pendingStorePurchase; closeStorePurchase(); send({type:"buy_cosmetic",token:authToken,category:x.category,id:x.id}); } });
+  wireButton($("#store-hero-browse"),()=>{window.storeTab="all";window.storeOwnedOnly=false;renderStore();});
+  $("#store-purchase-overlay")?.addEventListener("click",e=>{if(e.target===$("#store-purchase-overlay"))closeStorePurchase();});
   window.storeTab = "all";
   window.storeOwnedOnly = false;
   document.querySelectorAll(".store-tab").forEach(btn => wireButton(btn, () => {

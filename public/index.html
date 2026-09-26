@@ -522,7 +522,7 @@
     <div class="overlay-card progress-card">
       <div class="overlay-title">PLAYER PROFILE</div>
       <div class="profile-hero" id="profile-hero"></div>
-      <div class="section-mini-title">AVATAR</div>
+      <div class="section-mini-title">WEALTH</div><div id="profile-wealth-summary" class="profile-wealth-summary"></div><div class="section-mini-title">PROFILE FLEX</div><div id="profile-flex-summary"></div><div class="section-mini-title">AVATAR</div>
       <div class="avatar-editor">
         <div class="avatar-preview" id="avatar-preview">?</div>
         <div class="avatar-presets" id="avatar-presets"></div>
@@ -586,7 +586,7 @@
       <div class="overlay-title">HIGH ROLLERS</div>
       <div class="auth-sub" style="margin-bottom:10px">RICHEST PLAYERS • UPDATES EVERY 20 MIN</div>
       <div class="rank-tabs" id="rank-tabs">
-        <button class="rank-tab active" data-rank="balance">BALANCE</button>
+        <button class="rank-tab active" data-rank="balance">BALANCE</button><button class="rank-tab" data-rank="netWorth">NET WORTH</button>
         <button class="rank-tab" data-rank="wins">WINS</button>
         <button class="rank-tab" data-rank="blackjacks">BLACKJACKS</button>
         <button class="rank-tab" data-rank="winRate">WIN RATE</button>
@@ -619,45 +619,77 @@
   </div>
 
   <div class="overlay" id="store-overlay" aria-hidden="true">
-    <div class="overlay-card progress-card store-card store-redesign">
-      <header class="store-header">
-        <div>
-          <span class="store-kicker">CASINO X • HOUSE COLLECTION</span>
-          <h2>THE STORE</h2>
-          <p>Own it forever. Equip it everywhere it belongs.</p>
+    <div class="overlay-card progress-card store-card store-redesign store-v3-shell">
+      <header class="store-header store-v3-header">
+        <div class="store-brand-block">
+          <span class="store-kicker">♛ CASINO X</span>
+          <h2>STORE</h2>
+          <p>Build your collection. Spend big. Make the House yours.</p>
         </div>
         <div class="store-wallet">
           <span>YOUR CHIPS</span>
           <strong id="store-balance">$0</strong>
+          <small id="store-vip-status">♛ VIP AVAILABLE</small>
         </div>
       </header>
-      <nav class="store-tabs" aria-label="Store categories">
-        <button class="store-tab active" data-store-tab="all">ALL</button>
-        <button class="store-tab" data-store-tab="theme">THEMES</button>
-        <button class="store-tab" data-store-tab="chip">CHIPS</button>
-        <button class="store-tab" data-store-tab="deck">BLACKJACK</button>
-        <button class="store-tab" data-store-tab="table">TABLES</button>
-        <button class="store-tab" data-store-tab="ball">CARD BACKS</button>
-        <button class="store-tab" data-store-tab="inventory">INVENTORY</button>
-      </nav>
-      <div class="store-toolbar">
-        <div>
-          <strong id="store-results-title">HOUSE COLLECTION</strong>
-          <small id="store-results-count">0 ITEMS</small>
-        </div>
-        <button class="store-owned-toggle" id="store-owned-toggle" type="button" aria-pressed="false">SHOW OWNED ONLY</button>
+      <div class="store-v3-layout">
+        <aside class="store-sidebar">
+          <div class="store-side-label">SHOP</div>
+          <nav class="store-tabs" aria-label="Store categories">
+            <button class="store-tab active" data-store-tab="all"><b>☆</b><span>Featured</span></button>
+            <button class="store-tab" data-store-tab="theme"><b>◈</b><span>Game Cosmetics</span></button>
+            <button class="store-tab" data-store-tab="profile"><b>◉</b><span>Profile</span></button>
+            <button class="store-tab" data-store-tab="casino"><b>⌂</b><span>Casino</span></button>
+            <button class="store-tab" data-store-tab="luxury"><b>◇</b><span>Luxury</span></button>
+            <button class="store-tab vip-store-tab" data-store-tab="vip"><b>♛</b><span>VIP</span><em>NEW</em></button>
+            <button class="store-tab" data-store-tab="inventory"><b>▣</b><span>Inventory</span></button>
+          </nav>
+          <div class="store-side-promo">
+            <div class="store-side-promo-icon">♛</div>
+            <strong>HIGH ROLLER?</strong>
+            <span>Luxury items are waiting.</span>
+            <button class="store-hero-cta" id="store-hero-browse">EXPLORE</button>
+          </div>
+        </aside>
+        <main class="store-main">
+          <div class="store-hero-banner">
+            <div class="store-hero-copy">
+              <span>CASINO X • PREMIUM COLLECTION</span>
+              <strong>THE HOUSE IS YOURS.</strong>
+              <small>Rare cosmetics, high-value flex items and VIP benefits.</small>
+            </div>
+            <div class="store-hero-actions"><button class="store-hero-cta" id="store-hero-browse-main">EXPLORE NOW →</button></div>
+          </div>
+          <div class="store-content-head">
+            <div><span class="store-section-eyebrow">HOUSE COLLECTION</span><strong id="store-results-title">FEATURED ITEMS</strong><small id="store-results-count">0 ITEMS</small></div>
+            <button class="store-owned-toggle" id="store-owned-toggle" type="button" aria-pressed="false">SHOW OWNED ONLY</button>
+          </div>
+          <div id="store-catalog" class="store-catalog" aria-live="polite"></div>
+          <div class="store-empty hidden" id="store-empty"><strong>NOTHING HERE YET</strong><span>Try another category.</span></div>
+          <footer class="store-footer">
+            <div class="store-footer-note"><span>✦</span><span>Buy cards, tables, profile flex, casino furniture and luxury status items with in-game chips.</span></div>
+            <button class="btn panel-btn store-close-bottom" id="btn-store-close">CLOSE STORE</button>
+          </footer>
+        </main>
       </div>
-      <div id="store-catalog" class="store-catalog" aria-live="polite"></div>
-      <div class="store-empty hidden" id="store-empty">
-        <strong>NOTHING HERE YET</strong>
-        <span>Try another category.</span>
-      </div>
-      <footer class="store-footer">
-        <div class="store-footer-note"><span>✦</span><span>Seasonal rewards stay permanently in your collection after you claim them.</span></div>
-        <button class="btn panel-btn store-close-bottom" id="btn-store-close">CLOSE STORE</button>
-      </footer>
     </div>
   </div>
+
+  <div class="overlay" id="store-purchase-overlay" aria-hidden="true">
+    <div class="overlay-card store-purchase-card">
+      <div class="store-purchase-visual" id="store-purchase-visual"></div>
+      <div class="store-purchase-copy">
+        <span id="store-purchase-rarity" class="store-item-rarity"></span>
+        <small id="store-purchase-category" class="store-purchase-category"></small>
+        <h2 id="store-purchase-name">ITEM</h2>
+        <p id="store-purchase-desc">Preview this item before buying.</p>
+        <div class="store-purchase-live"><span>HOW IT LOOKS IN GAME</span><div id="store-purchase-game-preview"></div></div>
+        <div class="store-purchase-price"><span>PRICE</span><strong id="store-purchase-price">$0</strong></div>
+        <div class="store-purchase-actions"><button class="btn" id="store-purchase-buy">BUY NOW</button><button class="btn secondary" id="store-purchase-cancel">CANCEL</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="overlay" id="casino-viewer-overlay"><div id="casino-viewer" class="casino-viewer-shell"></div></div>
 
   <div class="overlay" id="season-overlay">
     <div class="overlay-card progress-card season-card season-crimson-pass">
@@ -857,8 +889,9 @@
             <button class="admin-tab" data-tab="luck">Luck</button>
             <button class="admin-tab" data-tab="cards">Cards</button>
             <button class="admin-tab" data-tab="fun">Fun</button>
-            <button class="admin-tab" data-tab="items">Give Items</button>
+            <button class="admin-tab" data-tab="items">Give & VIP</button>
             <button class="admin-tab" data-tab="season">Season</button>
+            <button class="admin-tab dev-admin-tab" data-tab="developer">Developer</button>
           </nav>
           <div class="admin-main">
             <div class="admin-actions">
@@ -911,6 +944,11 @@
             <section class="admin-pane" data-pane="season">
               <h3>SEASON</h3>
               <div id="admin-season-controls"></div>
+            </section>
+            <section class="admin-pane" data-pane="developer">
+              <h3>DEVELOPER CONTROLS</h3>
+              <p class="settings-help">Live tools for economy and safe UI placement. Changes are persisted server-side and broadcast to connected players.</p>
+              <div id="admin-developer-controls"></div>
             </section>
           </div>
         </div>

@@ -1,0 +1,10 @@
+{
+  "catalog_overrides": {},
+  "vip_price": 250000000,
+  "ui_layout": {},
+  "feature_flags": {
+    "store_redesign": true,
+    "store_purchase_preview": true,
+    "developer_controls": true
+  }
+}

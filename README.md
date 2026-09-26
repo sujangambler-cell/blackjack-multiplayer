@@ -67,3 +67,7 @@ Roulette is a server-authoritative European wheel (0–36) with red/black, odd/e
 - **Season 1 · 1927** pass restyle: art-deco rail, gold progress, single-column tiers; unclaimed tier unlocks slide in from the right (“You reached level X — claim it in the main menu”).
 - Side notification stack + invite toast layouts adjusted for phone so they fit cleanly.
 - Blackjack felt/seats given more vertical room and a wider arc so the table no longer feels squashed.
+
+
+## v25 Developer + Store 3.0
+Admin-only developer controls now provide safe live catalog editing (price/name/description/rarity/visibility), VIP pricing, and persisted PC/mobile UI offsets for supported controls. Store cards use BUY-only CTAs with a purchase preview modal.
